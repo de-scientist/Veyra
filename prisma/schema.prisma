@@ -665,7 +665,7 @@ model Delivery {
   shippingZoneId      String?
   assignedTo          String?
   internalReference   String            @unique @default(uuid())
-  trackingNumber      String?
+  trackingNumber      String?           @unique
   courierProvider     String?
   providerShipmentId  String?
   recipientName       String?

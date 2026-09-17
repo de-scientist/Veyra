@@ -4,7 +4,7 @@ import { DeliveryStatus } from '@prisma/client';
 
 import { requireOperationsAccess } from '../middleware/operations.js';
 import { getSessionUserId } from '../lib/shopping.js';
-import { customerDelivery, fulfillmentDetail, fulfillmentQueue, startFulfillment, pickFulfillment, packFulfillment, assignDelivery, transitionDelivery } from '../lib/fulfillment.js';
+import { customerDelivery, fulfillmentDetail, fulfillmentQueue, operationsUsers, startFulfillment, pickFulfillment, packFulfillment, assignDelivery, transitionDelivery } from '../lib/fulfillment.js';
 import { HttpError } from '../lib/errors.js';
 
 const noteSchema = z.object({ note: z.string().trim().max(500).optional() });
@@ -27,6 +27,10 @@ export async function fulfillmentRoutes(app: FastifyInstance) {
     const value = (request.query as { status?: string }).status;
     const status = value ? z.nativeEnum(DeliveryStatus).parse(value) : undefined;
     return { success: true, data: await fulfillmentQueue(status) };
+  });
+
+  app.get('/admin/operations-users', { preHandler: requireOperationsAccess }, async () => {
+    return { success: true, data: await operationsUsers() };
   });
 
   app.get('/admin/fulfillments/:orderNumber', { preHandler: requireOperationsAccess }, async (request) => {

@@ -206,3 +206,11 @@ export function updateFulfillment(orderNumber: string, action: 'start' | 'pick' 
 export function updateDeliveryStatus(deliveryId: string, status: string) {
   return request<Delivery>(`/admin/deliveries/${encodeURIComponent(deliveryId)}/status`, { method: 'POST', body: JSON.stringify({ status }) });
 }
+
+export function getOperationsUsers() {
+  return request<Array<{ id: string; firstName: string; lastName: string; email: string }>>('/admin/operations-users');
+}
+
+export function assignDelivery(deliveryId: string, assigneeId: string) {
+  return request<Delivery>(`/admin/deliveries/${encodeURIComponent(deliveryId)}/assign`, { method: 'POST', body: JSON.stringify({ assigneeId }) });
+}

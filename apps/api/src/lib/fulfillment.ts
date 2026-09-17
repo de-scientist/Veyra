@@ -91,6 +91,7 @@ async function moveDelivery(deliveryId: string, toStatus: DeliveryStatus, actor:
     if (toStatus === DeliveryStatus.READY_FOR_PICKUP && methodType !== 'PICKUP') throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Only pickup orders can be marked ready for pickup.');
     if (toStatus === DeliveryStatus.PICKED_UP && methodType !== 'PICKUP') throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Only pickup orders can be picked up.');
     if (deliveryStatuses.includes(toStatus) && methodType === 'PICKUP') throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Pickup orders do not enter delivery transit.');
+    if (toStatus === DeliveryStatus.IN_TRANSIT && methodType === 'LOCAL_DELIVERY' && delivery.status !== DeliveryStatus.ASSIGNED) throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Local deliveries must be assigned before shipping.');
 
     const now = new Date();
     const orderFulfillment = toStatus === DeliveryStatus.PICKED || toStatus === DeliveryStatus.PACKED
@@ -126,6 +127,18 @@ export async function fulfillmentQueue(status?: DeliveryStatus) {
     include: deliveryInclude,
   });
   return deliveries.map(serializeDelivery);
+}
+
+export async function operationsUsers() {
+  const users = await prisma.user.findMany({
+    where: {
+      status: 'ACTIVE',
+      roles: { some: { role: { slug: { in: ['staff', 'admin', 'super_admin', 'super-admin'] } } } },
+    },
+    select: { id: true, firstName: true, lastName: true, email: true },
+    orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+  });
+  return users;
 }
 
 export async function fulfillmentDetail(orderNumber: string) {
@@ -175,5 +188,11 @@ export async function customerDelivery(orderNumber: string, userId?: string, con
   const authorized = userId ? delivery.order.userId === userId : confirmationToken ? delivery.order.confirmationTokenHash === hashToken(confirmationToken) : false;
   if (!authorized) throw new HttpError(404, 'DELIVERY_NOT_FOUND', 'Delivery not found.');
   const safe = serializeDelivery(delivery);
-  return { ...safe, recipient: undefined, address: undefined };
+  return {
+    ...safe,
+    recipient: undefined,
+    address: undefined,
+    assignee: undefined,
+    history: safe.history.map((event) => ({ ...event, note: null })),
+  };
 }
