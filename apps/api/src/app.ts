@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -18,6 +19,11 @@ export async function buildApp(): Promise<FastifyInstance> {
         coerceTypes: true,
       },
     },
+  });
+
+  await app.register(cookie, {
+    secret: env.AUTH_SECRET,
+    parseOptions: {},
   });
 
   await app.register(cors, {

@@ -38,26 +38,26 @@ function serializeUser(user: {
   email: string;
   firstName: string;
   lastName: string;
-  phone: string | null;
-  avatarUrl: string | null;
-  status: string;
-  emailVerifiedAt: Date | null;
-  lastLoginAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  status?: string;
+  emailVerifiedAt?: Date | null;
+  lastLoginAt?: Date | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 }) {
   return {
     id: user.id,
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
-    phone: user.phone,
-    avatarUrl: user.avatarUrl,
-    status: user.status,
-    emailVerifiedAt: user.emailVerifiedAt,
-    lastLoginAt: user.lastLoginAt,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
+    phone: user.phone ?? null,
+    avatarUrl: user.avatarUrl ?? null,
+    status: user.status ?? 'ACTIVE',
+    emailVerifiedAt: user.emailVerifiedAt ?? null,
+    lastLoginAt: user.lastLoginAt ?? null,
+    createdAt: user.createdAt ?? new Date(),
+    updatedAt: user.updatedAt ?? new Date(),
   };
 }
 
@@ -185,7 +185,7 @@ export async function authRoutes(app: FastifyInstance) {
       success: true,
       data: {
         user: serializeUser(user),
-        roles: user.roles.map((entry) => entry.role.slug),
+        roles: user.roles.map((entry: { role: { slug: string } }) => entry.role.slug),
       },
     };
   });
@@ -253,7 +253,7 @@ export async function authRoutes(app: FastifyInstance) {
       success: true,
       data: {
         user: serializeUser(session.user),
-        roles: session.user.roles.map((entry) => entry.role.slug),
+        roles: session.user.roles.map((entry: { role: { slug: string } }) => entry.role.slug),
       },
     };
   });
