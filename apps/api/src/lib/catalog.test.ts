@@ -43,7 +43,9 @@ describe('catalogue rules', () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.errors).toContain('Product name is required.');
+    if (!result.ok) {
+      expect(result.errors).toContain('Product name is required.');
+    }
   });
 
   it('calculates available stock and low stock state', () => {
