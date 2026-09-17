@@ -37,6 +37,9 @@ async function main() {
     { name: 'Manage Categories', slug: 'categories.manage', resource: 'categories', action: 'manage' },
     { name: 'Manage Collections', slug: 'collections.manage', resource: 'collections', action: 'manage' },
     { name: 'Manage Orders', slug: 'orders.manage', resource: 'orders', action: 'manage' },
+    { name: 'View Fulfillment', slug: 'fulfillment.view', resource: 'fulfillment', action: 'read' },
+    { name: 'Process Fulfillment', slug: 'fulfillment.process', resource: 'fulfillment', action: 'manage' },
+    { name: 'Manage Delivery', slug: 'delivery.manage', resource: 'delivery', action: 'manage' },
     { name: 'View Audit Logs', slug: 'audit.read', resource: 'audit', action: 'read' },
   ];
 
@@ -85,6 +88,14 @@ async function main() {
       permissionId: permissionRecords.find((permission) => permission.slug === 'products.manage')?.id ?? '',
     },
   });
+
+  for (const permission of permissionRecords.filter((entry) => entry.slug.startsWith('fulfillment.') || entry.slug.startsWith('delivery.'))) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: staffRole.id, permissionId: permission.id } },
+      update: {},
+      create: { roleId: staffRole.id, permissionId: permission.id },
+    });
+  }
 
   const passwordHash = await bcrypt.hash('Admin123!', 10);
 
