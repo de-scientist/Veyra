@@ -5,8 +5,7 @@ import { ReturnCondition, ReturnDisposition, ReturnStatus, ReturnType } from '@p
 import { requireAuth } from '../middleware/auth.js';
 import { requireFinancialAccess, requireOperationsAccess } from '../middleware/operations.js';
 import { HttpError } from '../lib/errors.js';
-import { getSessionUserId } from '../lib/shopping.js';
-import { approveReturn, completeManualRefund, createReturn, customerReturns, inspectReturn, ownedReturnDetail, packFulfillment, receiveReturn, rejectReturn, requestRefund, returnQueue, reviewReturn } from '../lib/returns.js';
+import { approveReturn, completeManualRefund, createReturn, customerReturns, inspectReturn, ownedReturnDetail, receiveReturn, rejectReturn, requestRefund, returnDetail, returnQueue, reviewReturn } from '../lib/returns.js';
 
 const createSchema = z.object({
   orderNumber: z.string().min(8).max(40),
@@ -48,7 +47,7 @@ export async function returnRoutes(app: FastifyInstance) {
 
   app.get('/admin/returns/:returnId', { preHandler: requireOperationsAccess }, async (request) => {
     const { returnId } = request.params as { returnId: string };
-    return { success: true, data: await (await import('../lib/returns.js')).returnDetail(returnId) };
+    return { success: true, data: await returnDetail(returnId) };
   });
 
   app.post('/admin/returns/:returnId/review', { preHandler: requireOperationsAccess }, async (request) => {

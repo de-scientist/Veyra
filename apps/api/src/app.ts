@@ -14,6 +14,7 @@ import { shoppingRoutes } from './routes/shopping.js';
 import { checkoutRoutes } from './routes/checkout.js';
 import { paymentRoutes } from './routes/payments.js';
 import { fulfillmentRoutes } from './routes/fulfillment.js';
+import { returnRoutes } from './routes/returns.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -54,6 +55,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await checkoutRoutes(instance);
     await paymentRoutes(instance);
     await fulfillmentRoutes(instance);
+    await returnRoutes(instance);
   }, { prefix: '/api/v1' });
 
   app.setErrorHandler((error, request, reply) => {
