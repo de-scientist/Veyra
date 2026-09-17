@@ -14,6 +14,7 @@ export function OrderConfirmationClient({ orderNumber, confirmationToken }: Prop
   const [payment, setPayment] = useState<Payment | null>(null);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState('');
+  const [paymentAttemptKey, setPaymentAttemptKey] = useState(() => `payment-${orderNumber}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
     getOrder(orderNumber, confirmationToken).then(setOrder).catch((reason) => setError(reason instanceof Error ? reason.message : 'We could not load this order.'));
@@ -31,9 +32,10 @@ export function OrderConfirmationClient({ orderNumber, confirmationToken }: Prop
     setPaymentBusy(true);
     setPaymentMessage('');
     try {
-      const result = await initiateMpesaPayment(orderNumber, `payment-${orderNumber}-${Date.now()}-${Math.random().toString(36).slice(2)}`, confirmationToken);
+      const result = await initiateMpesaPayment(orderNumber, paymentAttemptKey, confirmationToken);
       setPayment(result.payment);
       setPaymentMessage(result.customerMessage);
+      if (result.payment.status === 'FAILED') setPaymentAttemptKey(`payment-${orderNumber}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     } catch (reason) {
       setPaymentMessage(reason instanceof Error ? reason.message : 'We could not start the M-Pesa payment.');
     } finally {
