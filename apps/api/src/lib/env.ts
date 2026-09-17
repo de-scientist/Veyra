@@ -17,6 +17,7 @@ const envSchema = z.object({
   M_PESA_CONSUMER_SECRET: z.string().optional(),
   M_PESA_SHORTCODE: z.string().optional(),
   M_PESA_PASSKEY: z.string().optional(),
+  RETURN_WINDOW_DAYS: z.coerce.number().int().positive().optional(),
 });
 
 export const env = envSchema.parse(process.env);
