@@ -281,7 +281,25 @@ export async function placeOrder(cartId: string, input: CheckoutInput, scope: st
         await transaction.inventoryMovement.create({ data: { variantId: item.variantId, movementType: 'RESERVED', quantity: item.quantity, reason: 'ORDER_CREATED', referenceType: 'ORDER', referenceId: createdOrder.id } });
       }
 
-      await transaction.delivery.create({ data: { orderId: createdOrder.id, shippingMethodId: shipping.method.id, status: 'UNFULFILLED' } });
+      await transaction.delivery.create({
+        data: {
+          orderId: createdOrder.id,
+          shippingMethodId: shipping.method.id,
+          shippingZoneId: shipping.zone.id,
+          status: 'PENDING',
+          recipientName: input.customerName.trim(),
+          recipientPhone: normalizedPhone,
+          deliveryAddress: address ? {
+            line1: address.line1,
+            line2: address.line2,
+            city: address.city,
+            state: address.state,
+            postalCode: address.postalCode,
+            country: address.country,
+          } : input.address ?? undefined,
+          deliveryInstructions: input.notes?.trim() || null,
+        },
+      });
       await transaction.orderStatusHistory.create({ data: { orderId: createdOrder.id, status: 'PENDING', changedBy: userId ?? null, note: 'Order created during checkout.' } });
       await transaction.cartItem.deleteMany({ where: { cartId: cart.id } });
       await transaction.cart.update({ where: { id: cart.id }, data: { status: 'CHECKED_OUT', deletedAt: new Date() } });

@@ -78,6 +78,8 @@ enum FulfillmentStatus {
 enum DeliveryStatus {
   PENDING
   PREPARING
+  PICKED
+  PACKED
   READY_FOR_PICKUP
   ASSIGNED
   IN_TRANSIT
