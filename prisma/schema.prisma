@@ -92,6 +92,60 @@ enum DeliveryStatus {
   RETURNED
 }
 
+enum ReturnStatus {
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  RETURN_INITIATED
+  RECEIVED
+  INSPECTING
+  APPROVED_FOR_RESOLUTION
+  RESOLVED
+  CANCELLED
+}
+
+enum ReturnType {
+  REFUND
+  EXCHANGE
+}
+
+enum ReturnCondition {
+  UNKNOWN
+  NEW
+  LIKE_NEW
+  USED
+  DAMAGED
+  DEFECTIVE
+  UNSELLABLE
+}
+
+enum ReturnDisposition {
+  RESTOCK
+  QUARANTINE
+  DAMAGED
+  UNSELLABLE
+}
+
+enum RefundStatus {
+  REQUESTED
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ExchangeStatus {
+  REQUESTED
+  APPROVED
+  ALLOCATED
+  FULFILLING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 enum PaymentProvider {
   MPESA
   CARD
@@ -155,6 +209,9 @@ model User {
   checkoutIdempotency CheckoutIdempotency[]
   assignedDeliveries  Delivery[] @relation("DeliveryAssignee")
   deliveryHistory     DeliveryStatusHistory[]
+  returnRequests      ReturnRequest[] @relation("ReturnRequester")
+  returnActions       ReturnRequest[] @relation("ReturnActor")
+  refundsCreated      Refund[] @relation("RefundCreator")
 }
 
 model Session {
@@ -338,6 +395,9 @@ model ProductVariant {
   inventoryReservations  InventoryReservation[]
   cartItems              CartItem[]
   orderItems             OrderItem[]
+  returnItems            ReturnItem[]
+  originalExchanges      Exchange[] @relation("OriginalExchangeVariant")
+  replacementExchanges   Exchange[] @relation("ReplacementExchangeVariant")
   images                 ProductImage[]
   variantAttributeValues VariantAttributeValue[]
 }
@@ -496,6 +556,8 @@ model Order {
   reservations  InventoryReservation[]
   couponUsages  CouponUsage[]
   idempotency   CheckoutIdempotency?
+  returnRequests ReturnRequest[]
+  refunds Refund[]
 }
 
 model CheckoutIdempotency {
@@ -531,6 +593,8 @@ model OrderItem {
 
   order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variant ProductVariant? @relation(fields: [variantId], references: [id])
+  returnItems ReturnItem[]
+  originalExchanges Exchange[]
 
   @@index([orderId])
 }
@@ -564,10 +628,151 @@ model Payment {
 
   order        Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
   transactions PaymentTransaction[]
+  refunds Refund[]
 
   @@index([orderId])
   @@index([providerReference])
   @@unique([orderId, provider])
+}
+
+model ReturnRequest {
+  id              String       @id @default(uuid())
+  returnNumber    String       @unique
+  orderId         String
+  userId          String
+  type            ReturnType
+  status          ReturnStatus  @default(REQUESTED)
+  reason          String
+  customerNote    String?
+  rejectionReason String?
+  requestedAt     DateTime     @default(now())
+  approvedAt      DateTime?
+  receivedAt      DateTime?
+  completedAt     DateTime?
+  rejectedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+  user User @relation("ReturnRequester", fields: [userId], references: [id])
+  actor User? @relation("ReturnActor", fields: [actorId], references: [id])
+  actorId String?
+  items ReturnItem[]
+  history ReturnStatusHistory[]
+  refund Refund?
+  exchange Exchange?
+
+  @@index([orderId, status])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model ReturnItem {
+  id              String            @id @default(uuid())
+  returnRequestId String
+  orderItemId     String
+  variantId       String?
+  quantity        Int
+  reason          String
+  condition       ReturnCondition   @default(UNKNOWN)
+  disposition     ReturnDisposition?
+  inspectionNote  String?
+  refundAmount    Decimal           @default(0.00) @db.Decimal(10, 2)
+  restockApplied  Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  returnRequest ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@unique([returnRequestId, orderItemId])
+  @@index([orderItemId])
+}
+
+model ReturnStatusHistory {
+  id              String       @id @default(uuid())
+  returnRequestId String
+  fromStatus      ReturnStatus?
+  toStatus        ReturnStatus
+  actorId         String?
+  note            String?
+  createdAt       DateTime     @default(now())
+
+  returnRequest ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+
+  @@index([returnRequestId, createdAt])
+}
+
+model Exchange {
+  id                 String         @id @default(uuid())
+  returnRequestId    String         @unique
+  originalOrderItemId String
+  originalVariantId  String?
+  replacementVariantId String
+  quantity           Int
+  status             ExchangeStatus @default(REQUESTED)
+  priceDifference    Decimal        @default(0.00) @db.Decimal(10, 2)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  returnRequest ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  originalOrderItem OrderItem @relation(fields: [originalOrderItemId], references: [id])
+  originalVariant ProductVariant? @relation("OriginalExchangeVariant", fields: [originalVariantId], references: [id])
+  replacementVariant ProductVariant @relation("ReplacementExchangeVariant", fields: [replacementVariantId], references: [id])
+
+  @@index([status, createdAt])
+}
+
+model Refund {
+  id              String       @id @default(uuid())
+  refundNumber    String       @unique
+  orderId         String
+  paymentId       String
+  returnRequestId String?      @unique
+  amount          Decimal      @db.Decimal(10, 2)
+  currency        String       @default("KES")
+  status          RefundStatus @default(REQUESTED)
+  provider        PaymentProvider @default(MPESA)
+  providerReference String?
+  reason          String
+  failureReason   String?
+  idempotencyKey  String       @unique
+  createdBy       String?
+  requestedAt     DateTime     @default(now())
+  processedAt     DateTime?
+  failedAt        DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+  payment Payment @relation(fields: [paymentId], references: [id])
+  returnRequest ReturnRequest? @relation(fields: [returnRequestId], references: [id])
+  creator User? @relation("RefundCreator", fields: [createdBy], references: [id])
+  transactions RefundTransaction[]
+
+  @@index([orderId, status])
+  @@index([paymentId, status])
+  @@index([provider, providerReference])
+}
+
+model RefundTransaction {
+  id              String       @id @default(uuid())
+  refundId        String
+  provider        PaymentProvider
+  providerReference String?
+  amount          Decimal      @db.Decimal(10, 2)
+  currency        String       @default("KES")
+  status          RefundStatus @default(PENDING)
+  rawResponse     Json?
+  failureReason   String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  refund Refund @relation(fields: [refundId], references: [id], onDelete: Cascade)
+
+  @@index([refundId, createdAt])
+  @@index([provider, providerReference])
 }
 
 model PaymentTransaction {
