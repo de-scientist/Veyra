@@ -37,9 +37,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'include',
     headers: { 'content-type': 'application/json', ...init?.headers },
   });
-  const body = await response.json().catch(() => null);
+  const body = await response.json().catch(() => null) as { data?: T; error?: { message?: string } } | null;
   if (!response.ok) throw new Error(body?.error?.message ?? 'Something went wrong. Please try again.');
-  return body.data as T;
+  return body?.data as T;
 }
 
 export function getCart() {

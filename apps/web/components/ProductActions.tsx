@@ -44,7 +44,7 @@ export function ProductActions({ productId, variants }: ProductActionsProps) {
       </div>
       <div className="quantity-row">
         <label htmlFor="quantity">Quantity</label>
-        <input id="quantity" type="number" min="1" max="20" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(20, Number(event.target.value) || 1)))} />
+        <input id="quantity" type="number" min="1" max="20" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(20, Number(event.currentTarget.value) || 1)))} />
       </div>
       <div className="cta-row">
         <button type="button" className="button" disabled={!selectedVariant?.inStock || busy} onClick={submit}>
