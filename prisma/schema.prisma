@@ -75,6 +75,21 @@ enum FulfillmentStatus {
   RETURNED
 }
 
+enum DeliveryStatus {
+  PENDING
+  PREPARING
+  READY_FOR_PICKUP
+  ASSIGNED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERY_ATTEMPTED
+  DELIVERED
+  PICKED_UP
+  FAILED
+  CANCELLED
+  RETURNED
+}
+
 enum PaymentProvider {
   MPESA
   CARD
@@ -136,6 +151,8 @@ model User {
   auditLogs           AuditLog[]
   wishlist            Wishlist?
   checkoutIdempotency CheckoutIdempotency[]
+  assignedDeliveries  Delivery[] @relation("DeliveryAssignee")
+  deliveryHistory     DeliveryStatusHistory[]
 }
 
 model Session {
@@ -605,6 +622,7 @@ model ShippingZone {
   updatedAt   DateTime @updatedAt
 
   rates ShippingRate[]
+  deliveries Delivery[]
 }
 
 model ShippingMethod {
@@ -618,6 +636,7 @@ model ShippingMethod {
   updatedAt   DateTime           @updatedAt
 
   rates ShippingRate[]
+  deliveries Delivery[]
 }
 
 model ShippingRate {
@@ -639,19 +658,53 @@ model ShippingRate {
 model Delivery {
   id                  String            @id @default(uuid())
   orderId             String
-  status              FulfillmentStatus @default(UNFULFILLED)
+  status              DeliveryStatus    @default(PENDING)
   shippingMethodId    String?
+  shippingZoneId      String?
+  assignedTo          String?
+  internalReference   String            @unique @default(uuid())
   trackingNumber      String?
   courierProvider     String?
+  providerShipmentId  String?
+  recipientName       String?
+  recipientPhone      String?
+  deliveryAddress     Json?
+  deliveryInstructions String?
   estimatedDeliveryAt DateTime?
+  shippedAt           DateTime?
+  pickedUpAt          DateTime?
   deliveredAt         DateTime?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  shippingMethod ShippingMethod? @relation(fields: [shippingMethodId], references: [id])
+  shippingZone ShippingZone? @relation(fields: [shippingZoneId], references: [id])
+  assignee User? @relation("DeliveryAssignee", fields: [assignedTo], references: [id])
+  history DeliveryStatusHistory[]
 
   @@index([orderId])
   @@index([trackingNumber])
+  @@index([status, createdAt])
+  @@index([assignedTo, status])
+  @@index([providerShipmentId])
+}
+
+model DeliveryStatusHistory {
+  id          String        @id @default(uuid())
+  deliveryId  String
+  fromStatus  DeliveryStatus?
+  toStatus    DeliveryStatus
+  actorId     String?
+  note        String?
+  providerEventReference String?
+  createdAt   DateTime      @default(now())
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([deliveryId, createdAt])
+  @@index([providerEventReference])
 }
 
 model Coupon {
