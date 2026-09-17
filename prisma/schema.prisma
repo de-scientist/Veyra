@@ -563,6 +563,7 @@ model PaymentTransaction {
   amount                Decimal         @db.Decimal(10, 2)
   currency              String           @default("KES")
   status                PaymentStatus   @default(PENDING)
+  failureReason         String?
   rawResponse           Json?
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
