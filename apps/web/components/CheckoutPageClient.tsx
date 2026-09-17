@@ -16,7 +16,7 @@ export function CheckoutPageClient() {
   const [preview, setPreview] = useState<CheckoutPreview | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ customerName: '', customerEmail: '', customerPhone: '', deliveryMethodId: '', shippingZoneCode: '', ...emptyAddress, notes: '' });
+  const [form, setForm] = useState({ customerName: '', customerEmail: '', customerPhone: '', deliveryMethodId: '', shippingZoneCode: '', ...emptyAddress, notes: '', confirmPriceChanges: false });
 
   useEffect(() => {
     Promise.all([getCart(), getCheckoutOptions()]).then(([loadedCart, loadedOptions]) => {
@@ -60,7 +60,7 @@ export function CheckoutPageClient() {
     try {
       const result = await placeCheckout(input(), `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       const token = result.confirmationToken ? `?token=${encodeURIComponent(result.confirmationToken)}` : '';
-      router.push(`/order-confirmation/${result.order.orderNumber}${token}`);
+      router.push(`/order-confirmation/${result.order.orderNumber}${token}` as never);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to place the order. Please review your cart.'); } finally { setBusy(false); }
   }
 
