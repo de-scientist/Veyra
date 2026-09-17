@@ -33,6 +33,10 @@ function isEligibleDelivery(order: ReturnWithDetails['order']) {
 }
 
 function assertReturnTransition(from: ReturnStatus, to: ReturnStatus) {
+  if (!isLegalReturnTransition(from, to)) throw new HttpError(409, 'INVALID_RETURN_TRANSITION', `Return cannot move from ${from} to ${to}.`);
+}
+
+export function isLegalReturnTransition(from: ReturnStatus, to: ReturnStatus) {
   const legal: Record<string, ReturnStatus[]> = {
     REQUESTED: [ReturnStatus.UNDER_REVIEW, ReturnStatus.CANCELLED],
     UNDER_REVIEW: [ReturnStatus.APPROVED, ReturnStatus.REJECTED],
@@ -42,7 +46,7 @@ function assertReturnTransition(from: ReturnStatus, to: ReturnStatus) {
     INSPECTING: [ReturnStatus.APPROVED_FOR_RESOLUTION],
     APPROVED_FOR_RESOLUTION: [ReturnStatus.RESOLVED],
   };
-  if (!legal[from]?.includes(to)) throw new HttpError(409, 'INVALID_RETURN_TRANSITION', `Return cannot move from ${from} to ${to}.`);
+  return legal[from]?.includes(to) ?? false;
 }
 
 function serializeReturn(returnRequest: ReturnWithDetails) {
