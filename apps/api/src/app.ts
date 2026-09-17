@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -62,7 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       error: {
         code,
         message: statusCode >= 500 ? 'Internal server error' : error.message,
-        details: statusCode >= 500 ? {} : error.details ?? error.validation ?? {},
+        details: statusCode >= 500 ? {} : (error as FastifyError & { details?: unknown }).details ?? error.validation ?? {},
       },
     });
   });

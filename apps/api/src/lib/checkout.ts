@@ -45,6 +45,7 @@ type CheckoutCart = Prisma.CartGetPayload<{
     };
   };
 }>;
+type DbClient = typeof prisma | Prisma.TransactionClient;
 
 const checkoutCartInclude = {
   items: {
@@ -104,7 +105,7 @@ function validateInput(input: CheckoutInput) {
   }
 }
 
-async function loadCart(cartId: string, client = prisma) {
+async function loadCart(cartId: string, client: DbClient = prisma) {
   return client.cart.findUnique({ where: { id: cartId }, include: checkoutCartInclude });
 }
 
@@ -126,7 +127,7 @@ function validateCartItems(cart: CheckoutCart, confirmPriceChanges = false) {
   if (issues.length) throw new HttpError(409, 'CHECKOUT_REQUIRES_UPDATE', 'Review the highlighted cart changes before placing your order.', { cartIssues: issues });
 }
 
-async function resolveShipping(input: CheckoutInput, subtotal: Prisma.Decimal, client = prisma) {
+async function resolveShipping(input: CheckoutInput, subtotal: Prisma.Decimal, client: DbClient = prisma) {
   const method = await client.shippingMethod.findFirst({ where: { id: input.deliveryMethodId, status: 'ACTIVE' } });
   if (!method) throw new HttpError(409, 'CHECKOUT_SHIPPING_UNAVAILABLE', 'The selected delivery method is unavailable.');
   if (!input.shippingZoneCode) throw new HttpError(400, 'CHECKOUT_INVALID_ADDRESS', 'Select a delivery zone.');
