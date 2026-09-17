@@ -48,7 +48,11 @@ function assertPaid(delivery: DeliveryWithContext) {
 }
 
 function assertTransition(from: DeliveryStatus, to: DeliveryStatus) {
-  if (!transitions[from]?.includes(to)) throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', `Delivery cannot move from ${from} to ${to}.`);
+  if (!isLegalDeliveryTransition(from, to)) throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', `Delivery cannot move from ${from} to ${to}.`);
+}
+
+export function isLegalDeliveryTransition(from: DeliveryStatus, to: DeliveryStatus) {
+  return transitions[from]?.includes(to) ?? false;
 }
 
 function serializeDelivery(delivery: DeliveryWithContext) {
