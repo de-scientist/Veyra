@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import { env } from './lib/env.js';
 import { logger } from './lib/logger.js';
 import { authRoutes } from './routes/auth.js';
+import { catalogueRoutes } from './routes/catalogue.js';
 import { healthRoute } from './routes/health.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -43,6 +44,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(async (instance) => {
     healthRoute(instance);
     await authRoutes(instance);
+    await catalogueRoutes(instance);
   }, { prefix: '/api/v1' });
 
   app.setErrorHandler((error, request, reply) => {
