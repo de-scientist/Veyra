@@ -60,7 +60,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       error: {
         code,
         message: statusCode >= 500 ? 'Internal server error' : error.message,
-        details: statusCode >= 500 ? {} : error.validation ?? {},
+        details: statusCode >= 500 ? {} : error.details ?? error.validation ?? {},
       },
     });
   });
