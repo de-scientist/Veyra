@@ -207,7 +207,17 @@ export async function getOrCreateCart(request: RequestWithPrincipal, reply: Fast
   const sessionId = guestSessionId ?? crypto.randomUUID();
   let cart = await loadCart({ sessionId });
   if (!cart || cart.status !== 'ACTIVE' || (cart.expiresAt && cart.expiresAt <= new Date())) {
-    cart = await createGuestCart(sessionId);
+    cart = cart
+      ? await prisma.cart.update({
+        where: { id: cart.id },
+        data: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          expiresAt: new Date(Date.now() + GUEST_CART_RETENTION_DAYS * 24 * 60 * 60 * 1000),
+        },
+        include: cartInclude,
+      })
+      : await createGuestCart(sessionId);
   }
 
   if (!guestSessionId) reply.setCookie(GUEST_CART_COOKIE, sessionId, cookieOptions());
