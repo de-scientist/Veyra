@@ -266,13 +266,14 @@ export async function placeOrder(cartId: string, input: CheckoutInput, scope: st
       const sortedItems = [...cart.items].sort((left, right) => left.variantId.localeCompare(right.variantId));
       for (const item of sortedItems) {
         const price = currentPrice(item);
-        const update = await transaction.inventory.updateMany({
-          where: { variantId: item.variantId, quantityOnHand: { gte: 0 }, quantityReserved: { lte: new Prisma.Decimal(0) as never } },
-          data: { quantityReserved: { increment: item.quantity } },
-        });
-        if (update.count !== 1) throw new HttpError(409, 'CHECKOUT_STOCK_UNAVAILABLE', 'Inventory changed. Please review your cart.');
-        const inventory = await transaction.inventory.findUnique({ where: { variantId: item.variantId } });
-        if (!inventory || inventory.quantityReserved > inventory.quantityOnHand) throw new HttpError(409, 'CHECKOUT_STOCK_UNAVAILABLE', 'Inventory changed. Please review your cart.');
+        const update = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          UPDATE "Inventory"
+          SET "quantityReserved" = "quantityReserved" + ${item.quantity}, "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "variantId" = ${item.variantId}
+            AND "quantityOnHand" - "quantityReserved" >= ${item.quantity}
+          RETURNING "id"
+        `);
+        if (update.length !== 1) throw new HttpError(409, 'CHECKOUT_STOCK_UNAVAILABLE', 'Inventory changed. Please review your cart.');
 
         await transaction.orderItem.create({ data: { orderId: createdOrder.id, variantId: item.variantId, productName: item.variant.product.name, sku: item.variant.sku, variantDescription: JSON.stringify(attributes(item)), unitPrice: price, discountAmount: 0, subtotal: price.mul(item.quantity), total: price.mul(item.quantity), quantity: item.quantity } });
         await transaction.inventoryReservation.create({ data: { variantId: item.variantId, orderId: createdOrder.id, quantity: item.quantity, status: 'ACTIVE' } });

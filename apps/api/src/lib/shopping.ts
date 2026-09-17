@@ -196,6 +196,12 @@ export async function getOrCreateCart(request: RequestWithPrincipal, reply: Fast
     let userCart = await loadCart({ userId });
     if (!userCart) {
       userCart = await prisma.cart.create({ data: { userId }, include: cartInclude });
+    } else if (userCart.status !== 'ACTIVE' || userCart.deletedAt) {
+      userCart = await prisma.cart.update({
+        where: { id: userCart.id },
+        data: { status: 'ACTIVE', deletedAt: null },
+        include: cartInclude,
+      });
     }
 
     if (guestSessionId) {
