@@ -110,18 +110,18 @@ enum AuditAction {
 }
 
 model User {
-  id            String       @id @default(uuid())
-  email         String       @unique
-  passwordHash  String
-  firstName     String
-  lastName      String
-  phone         String?
-  avatarUrl     String?
-  status        UserStatus   @default(ACTIVE)
-  lastLoginAt   DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  deletedAt     DateTime?
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  avatarUrl    String?
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
 
   roles         UserRole[]
   addresses     Address[]
@@ -134,11 +134,11 @@ model User {
 }
 
 model Role {
-  id        String       @id @default(uuid())
-  name      String       @unique
-  slug      String       @unique
-  createdAt DateTime     @default(now())
-  users     UserRole[]
+  id          String           @id @default(uuid())
+  name        String           @unique
+  slug        String           @unique
+  createdAt   DateTime         @default(now())
+  users       UserRole[]
   permissions RolePermission[]
 }
 
@@ -206,12 +206,12 @@ model Collection {
 }
 
 model ProductCollection {
-  id          String   @id @default(uuid())
-  productId   String
+  id           String   @id @default(uuid())
+  productId    String
   collectionId String
-  createdAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
 
-  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
 
   @@unique([productId, collectionId])
@@ -229,50 +229,50 @@ model Product {
   updatedAt   DateTime      @updatedAt
   deletedAt   DateTime?
 
-  category      Category?             @relation(fields: [categoryId], references: [id])
-  variants      ProductVariant[]
-  images        ProductImage[]
-  collections   ProductCollection[]
-  reviews       Review[]
+  category    Category?           @relation(fields: [categoryId], references: [id])
+  variants    ProductVariant[]
+  images      ProductImage[]
+  collections ProductCollection[]
+  reviews     Review[]
 }
 
 model ProductImage {
-  id          String   @id @default(uuid())
-  productId   String
-  variantId   String?
-  url         String
-  altText     String?
-  isPrimary   Boolean  @default(false)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  productId String
+  variantId String?
+  url       String
+  altText   String?
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
 
-  product Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   variant ProductVariant? @relation(fields: [variantId], references: [id])
 }
 
 model ProductVariant {
-  id               String                @id @default(uuid())
-  productId        String
-  sku              String                @unique
-  name             String?
-  status           ProductVariantStatus  @default(ACTIVE)
-  priceOverride    Decimal?              @db.Decimal(10, 2)
-  compareAtPrice   Decimal?              @db.Decimal(10, 2)
-  isDefault        Boolean               @default(false)
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  archivedAt       DateTime?
-  deletedAt        DateTime?
+  id             String               @id @default(uuid())
+  productId      String
+  sku            String               @unique
+  name           String?
+  status         ProductVariantStatus @default(ACTIVE)
+  priceOverride  Decimal?             @db.Decimal(10, 2)
+  compareAtPrice Decimal?             @db.Decimal(10, 2)
+  isDefault      Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  archivedAt     DateTime?
+  deletedAt      DateTime?
 
-  product                 Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  inventory               Inventory?
-  inventoryMovements      InventoryMovement[]
-  inventoryReservations    InventoryReservation[]
-  cartItems               CartItem[]
-  orderItems              OrderItem[]
-  wishlistItems           WishlistItem[]
-  images                  ProductImage[]
-  variantAttributeValues  VariantAttributeValue[]
+  product                Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventory              Inventory?
+  inventoryMovements     InventoryMovement[]
+  inventoryReservations  InventoryReservation[]
+  cartItems              CartItem[]
+  orderItems             OrderItem[]
+  wishlistItems          WishlistItem[]
+  images                 ProductImage[]
+  variantAttributeValues VariantAttributeValue[]
 }
 
 model Attribute {
@@ -282,8 +282,8 @@ model Attribute {
   type      String   @default("STRING")
   createdAt DateTime @default(now())
 
-  values             AttributeValue[]
-  variantMappings    VariantAttributeValue[]
+  values          AttributeValue[]
+  variantMappings VariantAttributeValue[]
 }
 
 model AttributeValue {
@@ -292,8 +292,8 @@ model AttributeValue {
   value       String
   createdAt   DateTime @default(now())
 
-  attribute      Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
-  variantValues  VariantAttributeValue[]
+  attribute     Attribute               @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  variantValues VariantAttributeValue[]
 
   @@unique([attributeId, value])
 }
@@ -305,9 +305,9 @@ model VariantAttributeValue {
   attributeValueId String
   createdAt        DateTime @default(now())
 
-  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  attribute       Attribute       @relation(fields: [attributeId], references: [id], onDelete: Cascade)
-  attributeValue  AttributeValue  @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+  variant        ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attribute      Attribute      @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  attributeValue AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
 
   @@unique([variantId, attributeId, attributeValueId])
 }
@@ -327,16 +327,16 @@ model Inventory {
 }
 
 model InventoryMovement {
-  id           String                 @id @default(uuid())
-  variantId    String
-  movementType InventoryMovementType
-  quantity     Int
-  reason       String
+  id            String                @id @default(uuid())
+  variantId     String
+  movementType  InventoryMovementType
+  quantity      Int
+  reason        String
   referenceType String?
-  referenceId  String?
-  note         String?
-  actorId      String?
-  createdAt    DateTime               @default(now())
+  referenceId   String?
+  note          String?
+  actorId       String?
+  createdAt     DateTime              @default(now())
 
   variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
@@ -344,15 +344,15 @@ model InventoryMovement {
 }
 
 model InventoryReservation {
-  id           String           @id @default(uuid())
-  variantId    String
-  orderId      String
-  quantity     Int
-  status       ReservationStatus @default(ACTIVE)
-  createdAt    DateTime         @default(now())
-  expiresAt    DateTime?
-  releasedAt   DateTime?
-  convertedAt  DateTime?
+  id          String            @id @default(uuid())
+  variantId   String
+  orderId     String
+  quantity    Int
+  status      ReservationStatus @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  expiresAt   DateTime?
+  releasedAt  DateTime?
+  convertedAt DateTime?
 
   variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
   order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -370,8 +370,8 @@ model Cart {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  user      User?      @relation(fields: [userId], references: [id])
-  items     CartItem[]
+  user  User?      @relation(fields: [userId], references: [id])
+  items CartItem[]
 
   @@index([userId])
   @@index([sessionId])
@@ -385,8 +385,8 @@ model CartItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  cart    Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  variant ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  cart    Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   @@unique([cartId, variantId])
   @@index([cartId])
@@ -394,51 +394,51 @@ model CartItem {
 }
 
 model Order {
-  id                    String      @id @default(uuid())
-  orderNumber           String      @unique
-  userId                String?
-  status                OrderStatus @default(PENDING)
-  paymentStatus         PaymentStatus @default(UNPAID)
-  fulfillmentStatus     FulfillmentStatus @default(UNFULFILLED)
-  subtotal              Decimal     @db.Decimal(10, 2)
-  discountTotal         Decimal     @default(0.00) @db.Decimal(10, 2)
-  shippingTotal         Decimal     @default(0.00) @db.Decimal(10, 2)
-  taxTotal              Decimal     @default(0.00) @db.Decimal(10, 2)
-  grandTotal            Decimal     @db.Decimal(10, 2)
-  currency              String      @default("KES")
-  customerEmail         String?
-  customerPhone         String?
+  id                      String            @id @default(uuid())
+  orderNumber             String            @unique
+  userId                  String?
+  status                  OrderStatus       @default(PENDING)
+  paymentStatus           PaymentStatus     @default(UNPAID)
+  fulfillmentStatus       FulfillmentStatus @default(UNFULFILLED)
+  subtotal                Decimal           @db.Decimal(10, 2)
+  discountTotal           Decimal           @default(0.00) @db.Decimal(10, 2)
+  shippingTotal           Decimal           @default(0.00) @db.Decimal(10, 2)
+  taxTotal                Decimal           @default(0.00) @db.Decimal(10, 2)
+  grandTotal              Decimal           @db.Decimal(10, 2)
+  currency                String            @default("KES")
+  customerEmail           String?
+  customerPhone           String?
   shippingAddressSnapshot Json?
   billingAddressSnapshot  Json?
-  notes                 String?
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
-  cancelledAt           DateTime?
+  notes                   String?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  cancelledAt             DateTime?
 
-  user                  User?                  @relation(fields: [userId], references: [id])
-  items                 OrderItem[]
-  statusHistory         OrderStatusHistory[]
-  payments              Payment[]
-  deliveries            Delivery[]
-  reservations          InventoryReservation[]
-  couponUsages          CouponUsage[]
+  user          User?                  @relation(fields: [userId], references: [id])
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  payments      Payment[]
+  deliveries    Delivery[]
+  reservations  InventoryReservation[]
+  couponUsages  CouponUsage[]
 }
 
 model OrderItem {
-  id                      String   @id @default(uuid())
-  orderId                 String
-  variantId               String?
-  productName             String
-  sku                     String
-  variantDescription      String?
-  unitPrice               Decimal  @db.Decimal(10, 2)
-  discountAmount          Decimal  @default(0.00) @db.Decimal(10, 2)
-  subtotal                Decimal  @db.Decimal(10, 2)
-  total                   Decimal  @db.Decimal(10, 2)
-  quantity                Int
-  createdAt               DateTime @default(now())
+  id                 String   @id @default(uuid())
+  orderId            String
+  variantId          String?
+  productName        String
+  sku                String
+  variantDescription String?
+  unitPrice          Decimal  @db.Decimal(10, 2)
+  discountAmount     Decimal  @default(0.00) @db.Decimal(10, 2)
+  subtotal           Decimal  @db.Decimal(10, 2)
+  total              Decimal  @db.Decimal(10, 2)
+  quantity           Int
+  createdAt          DateTime @default(now())
 
-  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variant ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@index([orderId])
@@ -458,20 +458,20 @@ model OrderStatusHistory {
 }
 
 model Payment {
-  id                String        @id @default(uuid())
+  id                String          @id @default(uuid())
   orderId           String
   provider          PaymentProvider @default(MPESA)
-  status            PaymentStatus @default(UNPAID)
-  amount            Decimal       @db.Decimal(10, 2)
-  currency          String        @default("KES")
+  status            PaymentStatus   @default(UNPAID)
+  amount            Decimal         @db.Decimal(10, 2)
+  currency          String          @default("KES")
   providerReference String?
   providerPaymentId String?
   failureReason     String?
   paidAt            DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
-  order      Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order        Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
   transactions PaymentTransaction[]
 
   @@index([orderId])
@@ -479,17 +479,17 @@ model Payment {
 }
 
 model PaymentTransaction {
-  id                  String        @id @default(uuid())
-  paymentId           String
-  provider            PaymentProvider
-  providerRequestId   String?
+  id                    String          @id @default(uuid())
+  paymentId             String
+  provider              PaymentProvider
+  providerRequestId     String?
   providerTransactionId String?
-  providerReference   String?
-  amount              Decimal       @db.Decimal(10, 2)
-  status              PaymentStatus @default(PENDING)
-  rawResponse         Json?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  providerReference     String?
+  amount                Decimal         @db.Decimal(10, 2)
+  status                PaymentStatus   @default(PENDING)
+  rawResponse           Json?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
   payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 
@@ -497,18 +497,18 @@ model PaymentTransaction {
 }
 
 model Address {
-  id          String    @id @default(uuid())
-  userId      String
-  label       String?
-  line1       String
-  line2       String?
-  city        String
-  state       String?
-  postalCode  String?
-  country     String    @default("KE")
-  isDefault   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String   @id @default(uuid())
+  userId     String
+  label      String?
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  postalCode String?
+  country    String   @default("KE")
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -527,14 +527,14 @@ model ShippingZone {
 }
 
 model ShippingMethod {
-  id          String            @id @default(uuid())
+  id          String             @id @default(uuid())
   name        String
-  code        String            @unique
+  code        String             @unique
   type        ShippingMethodType
-  status      String            @default("ACTIVE")
+  status      String             @default("ACTIVE")
   description String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   rates ShippingRate[]
 }
@@ -549,23 +549,23 @@ model ShippingRate {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  zone   ShippingZone  @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  zone   ShippingZone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
   method ShippingMethod @relation(fields: [methodId], references: [id], onDelete: Cascade)
 
   @@unique([zoneId, methodId])
 }
 
 model Delivery {
-  id                   String            @id @default(uuid())
-  orderId              String
-  status               FulfillmentStatus @default(UNFULFILLED)
-  shippingMethodId     String?
-  trackingNumber       String?
-  courierProvider      String?
-  estimatedDeliveryAt  DateTime?
-  deliveredAt          DateTime?
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  id                  String            @id @default(uuid())
+  orderId             String
+  status              FulfillmentStatus @default(UNFULFILLED)
+  shippingMethodId    String?
+  trackingNumber      String?
+  courierProvider     String?
+  estimatedDeliveryAt DateTime?
+  deliveredAt         DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -574,27 +574,27 @@ model Delivery {
 }
 
 model Coupon {
-  id          String    @id @default(uuid())
-  code        String    @unique
+  id           String    @id @default(uuid())
+  code         String    @unique
   discountType String    @default("PERCENTAGE")
-  value       Decimal   @db.Decimal(10, 2)
-  status      String    @default("ACTIVE")
-  validFrom   DateTime?
-  validUntil  DateTime?
-  maxUses     Int?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  value        Decimal   @db.Decimal(10, 2)
+  status       String    @default("ACTIVE")
+  validFrom    DateTime?
+  validUntil   DateTime?
+  maxUses      Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 
   usages CouponUsage[]
 }
 
 model CouponUsage {
-  id        String   @id @default(uuid())
-  couponId  String
-  userId    String?
-  orderId   String?
-  usedAt    DateTime @default(now())
+  id       String   @id @default(uuid())
+  couponId String
+  userId   String?
+  orderId  String?
+  usedAt   DateTime @default(now())
 
   coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
   order  Order? @relation(fields: [orderId], references: [id])
@@ -607,8 +607,8 @@ model Wishlist {
   userId    String   @unique
   createdAt DateTime @default(now())
 
-  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items  WishlistItem[]
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items WishlistItem[]
 }
 
 model WishlistItem {
@@ -618,22 +618,22 @@ model WishlistItem {
   createdAt  DateTime @default(now())
 
   wishlist Wishlist       @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
-  variant  ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variant  ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   @@unique([wishlistId, variantId])
 }
 
 model Review {
-  id               String   @id @default(uuid())
-  productId        String
-  userId           String
-  rating           Int
-  title            String?
-  body             String?
-  isVerifiedPurchase Boolean @default(false)
-  status           String   @default("APPROVED")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  productId          String
+  userId             String
+  rating             Int
+  title              String?
+  body               String?
+  isVerifiedPurchase Boolean  @default(false)
+  status             String   @default("APPROVED")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -642,14 +642,14 @@ model Review {
 }
 
 model Notification {
-  id        String          @id @default(uuid())
+  id        String           @id @default(uuid())
   userId    String
   type      NotificationType
   title     String
   body      String
   metadata  Json?
   readAt    DateTime?
-  createdAt DateTime        @default(now())
+  createdAt DateTime         @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
