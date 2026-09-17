@@ -13,6 +13,10 @@ const envSchema = z.object({
   MPESA_PASSKEY: z.string().optional(),
   MPESA_CALLBACK_URL: z.string().url().optional(),
   MPESA_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
+  M_PESA_CONSUMER_KEY: z.string().optional(),
+  M_PESA_CONSUMER_SECRET: z.string().optional(),
+  M_PESA_SHORTCODE: z.string().optional(),
+  M_PESA_PASSKEY: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

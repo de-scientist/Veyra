@@ -66,6 +66,17 @@ export type Order = {
   items: Array<{ productName: string; sku: string; variantDescription: string | null; quantity: number; unitPrice: number; subtotal: number; total: number }>;
 };
 
+export type Payment = {
+  id: string;
+  orderNumber: string;
+  provider: string;
+  status: 'PENDING' | 'PAID' | 'FAILED';
+  amount: number;
+  currency: string;
+  providerReference: string | null;
+  paidAt: string | null;
+};
+
 export type WishlistItem = {
   id: string;
   productId: string;
@@ -147,4 +158,17 @@ export function getSavedAddresses() {
 export function getOrder(orderNumber: string, confirmationToken?: string) {
   const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
   return request<Order>(`/orders/${encodeURIComponent(orderNumber)}${suffix}`);
+}
+
+export function initiateMpesaPayment(orderNumber: string, idempotencyKey: string, confirmationToken?: string) {
+  return request<{ payment: Payment; transactionId: string; providerRequestId: string | null; customerMessage: string; replayed: boolean }>(`/payments/mpesa/initiate${confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : ''}`, {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey, ...(confirmationToken ? { 'x-confirmation-token': confirmationToken } : {}) },
+    body: JSON.stringify({ orderNumber }),
+  });
+}
+
+export function getPaymentStatus(paymentId: string, confirmationToken?: string) {
+  const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
+  return request<Payment>(`/payments/${encodeURIComponent(paymentId)}/status${suffix}`);
 }

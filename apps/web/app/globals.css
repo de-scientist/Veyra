@@ -171,6 +171,11 @@ button, input {
   font-size: 0.9rem;
 }
 
+.success-message {
+  color: #1f6b45;
+  font-size: 0.9rem;
+}
+
 .muted-copy {
   color: var(--muted);
   line-height: 1.5;

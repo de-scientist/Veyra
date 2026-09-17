@@ -8,7 +8,11 @@ const productionBaseUrl = 'https://api.safaricom.co.ke';
 let accessToken: { value: string; expiresAt: number } | undefined;
 
 function configuration() {
-  const values = [env.MPESA_CONSUMER_KEY, env.MPESA_CONSUMER_SECRET, env.MPESA_SHORTCODE, env.MPESA_PASSKEY, env.MPESA_CALLBACK_URL];
+  const consumerKey = env.MPESA_CONSUMER_KEY ?? env.M_PESA_CONSUMER_KEY;
+  const consumerSecret = env.MPESA_CONSUMER_SECRET ?? env.M_PESA_CONSUMER_SECRET;
+  const shortcode = env.MPESA_SHORTCODE ?? env.M_PESA_SHORTCODE;
+  const passkey = env.MPESA_PASSKEY ?? env.M_PESA_PASSKEY;
+  const values = [consumerKey, consumerSecret, shortcode, passkey, env.MPESA_CALLBACK_URL];
   if (values.some((value) => !value || value === 'replace-me')) {
     throw new PaymentProviderError('MPESA_NOT_CONFIGURED', 'M-Pesa payment configuration is incomplete.', false);
   }
@@ -16,10 +20,10 @@ function configuration() {
     throw new PaymentProviderError('MPESA_PRODUCTION_CONFIGURATION', 'Production M-Pesa requires production mode and an HTTPS callback URL.', false);
   }
   return {
-    consumerKey: env.MPESA_CONSUMER_KEY,
-    consumerSecret: env.MPESA_CONSUMER_SECRET,
-    shortcode: env.MPESA_SHORTCODE,
-    passkey: env.MPESA_PASSKEY,
+    consumerKey,
+    consumerSecret,
+    shortcode,
+    passkey,
     callbackUrl: env.MPESA_CALLBACK_URL,
     baseUrl: env.MPESA_ENVIRONMENT === 'production' ? productionBaseUrl : sandboxBaseUrl,
   };
