@@ -423,6 +423,8 @@ model Cart {
   @@index([userId])
   @@index([sessionId])
   @@index([status, expiresAt])
+  @@unique([userId])
+  @@unique([sessionId])
 }
 
 model CartItem {

@@ -18,7 +18,7 @@ const cartInclude = {
     include: {
       variant: {
         include: {
-          product: true,
+          product: { include: { images: { orderBy: { sortOrder: 'asc' as const } } } },
           inventory: true,
           images: { orderBy: { sortOrder: 'asc' as const } },
           variantAttributeValues: {
