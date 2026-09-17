@@ -23,6 +23,7 @@ export type CheckoutInput = {
   deliveryMethodId: string;
   shippingZoneCode?: string;
   address?: { line1: string; line2?: string; city: string; state?: string; postalCode?: string; country?: string };
+  addressId?: string;
   notes?: string;
   confirmPriceChanges?: boolean;
 };
@@ -137,6 +138,10 @@ export function placeCheckout(input: CheckoutInput, idempotencyKey: string) {
     headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
+}
+
+export function getSavedAddresses() {
+  return request<Array<{ id: string; label: string | null; line1: string; line2: string | null; city: string; state: string | null; postalCode: string | null; country: string }>>('/checkout/saved-addresses');
 }
 
 export function getOrder(orderNumber: string, confirmationToken?: string) {

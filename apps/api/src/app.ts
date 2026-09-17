@@ -3,6 +3,7 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import { z } from 'zod';
 
 import { env } from './lib/env.js';
 import { logger } from './lib/logger.js';
@@ -52,6 +53,18 @@ export async function buildApp(): Promise<FastifyInstance> {
   }, { prefix: '/api/v1' });
 
   app.setErrorHandler((error, request, reply) => {
+    if (error instanceof z.ZodError) {
+      reply.status(400).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'The request contains invalid data.',
+          details: error.flatten(),
+        },
+      });
+      return;
+    }
+
     const statusCode = error.statusCode ?? 500;
     const code = error.code ?? 'INTERNAL_SERVER_ERROR';
 
