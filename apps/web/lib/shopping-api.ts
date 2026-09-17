@@ -77,6 +77,23 @@ export type Payment = {
   paidAt: string | null;
 };
 
+export type Delivery = {
+  id: string;
+  orderNumber: string;
+  status: string;
+  trackingNumber: string | null;
+  internalReference: string;
+  provider: string | null;
+  estimatedDeliveryAt: string | null;
+  shippedAt: string | null;
+  pickedUpAt: string | null;
+  deliveredAt: string | null;
+  method: { id: string; name: string; type: string } | null;
+  zone: { code: string; name: string } | null;
+  assignee: { id: string; firstName: string; lastName: string; email: string } | null;
+  history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }>;
+};
+
 export type WishlistItem = {
   id: string;
   productId: string;
@@ -171,4 +188,21 @@ export function initiateMpesaPayment(orderNumber: string, idempotencyKey: string
 export function getPaymentStatus(paymentId: string, confirmationToken?: string) {
   const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
   return request<Payment>(`/payments/${encodeURIComponent(paymentId)}/status${suffix}`);
+}
+
+export function getOrderDelivery(orderNumber: string, confirmationToken?: string) {
+  const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
+  return request<Delivery>(`/orders/${encodeURIComponent(orderNumber)}/delivery${suffix}`);
+}
+
+export function getFulfillmentQueue(status?: string) {
+  return request<Delivery[]>(`/admin/fulfillments${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+}
+
+export function updateFulfillment(orderNumber: string, action: 'start' | 'pick' | 'pack') {
+  return request<Delivery>(`/admin/fulfillments/${encodeURIComponent(orderNumber)}/${action}`, { method: 'POST', body: JSON.stringify({}) });
+}
+
+export function updateDeliveryStatus(deliveryId: string, status: string) {
+  return request<Delivery>(`/admin/deliveries/${encodeURIComponent(deliveryId)}/status`, { method: 'POST', body: JSON.stringify({ status }) });
 }
