@@ -34,6 +34,9 @@ const transitions: Record<string, DeliveryStatus[]> = {
   DELIVERY_ATTEMPTED: [DeliveryStatus.OUT_FOR_DELIVERY, DeliveryStatus.FAILED, DeliveryStatus.DELIVERED],
   READY_FOR_PICKUP: [DeliveryStatus.PICKED_UP],
 };
+const transitStatuses: DeliveryStatus[] = [DeliveryStatus.IN_TRANSIT, DeliveryStatus.OUT_FOR_DELIVERY];
+const terminalStatuses: DeliveryStatus[] = [DeliveryStatus.DELIVERED, DeliveryStatus.PICKED_UP];
+const deliveryStatuses: DeliveryStatus[] = [DeliveryStatus.ASSIGNED, ...transitStatuses];
 
 function trackingNumber() {
   return `VYR-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -83,20 +86,20 @@ async function moveDelivery(deliveryId: string, toStatus: DeliveryStatus, actor:
     const methodType = delivery.shippingMethod?.type;
     if (toStatus === DeliveryStatus.READY_FOR_PICKUP && methodType !== 'PICKUP') throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Only pickup orders can be marked ready for pickup.');
     if (toStatus === DeliveryStatus.PICKED_UP && methodType !== 'PICKUP') throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Only pickup orders can be picked up.');
-    if ([DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT, DeliveryStatus.OUT_FOR_DELIVERY].includes(toStatus) && methodType === 'PICKUP') throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Pickup orders do not enter delivery transit.');
+    if (deliveryStatuses.includes(toStatus) && methodType === 'PICKUP') throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Pickup orders do not enter delivery transit.');
 
     const now = new Date();
     const orderFulfillment = toStatus === DeliveryStatus.PICKED || toStatus === DeliveryStatus.PACKED
       ? toStatus === DeliveryStatus.PICKED ? FulfillmentStatus.PROCESSING : FulfillmentStatus.PACKED
-      : [DeliveryStatus.IN_TRANSIT, DeliveryStatus.OUT_FOR_DELIVERY].includes(toStatus) ? FulfillmentStatus.SHIPPED
-        : [DeliveryStatus.DELIVERED, DeliveryStatus.PICKED_UP].includes(toStatus) ? FulfillmentStatus.DELIVERED : undefined;
-    const orderStatus = [DeliveryStatus.DELIVERED, DeliveryStatus.PICKED_UP].includes(toStatus) ? OrderStatus.COMPLETED : toStatus === DeliveryStatus.PREPARING ? OrderStatus.PROCESSING : undefined;
+      : transitStatuses.includes(toStatus) ? FulfillmentStatus.SHIPPED
+        : terminalStatuses.includes(toStatus) ? FulfillmentStatus.DELIVERED : undefined;
+    const orderStatus = terminalStatuses.includes(toStatus) ? OrderStatus.COMPLETED : toStatus === DeliveryStatus.PREPARING ? OrderStatus.PROCESSING : undefined;
     const updated = await client.delivery.update({
       where: { id: deliveryId },
       data: {
         status: toStatus,
-        trackingNumber: [DeliveryStatus.IN_TRANSIT, DeliveryStatus.OUT_FOR_DELIVERY].includes(toStatus) ? delivery.trackingNumber ?? trackingNumber() : undefined,
-        shippedAt: [DeliveryStatus.IN_TRANSIT, DeliveryStatus.OUT_FOR_DELIVERY].includes(toStatus) ? delivery.shippedAt ?? now : undefined,
+        trackingNumber: transitStatuses.includes(toStatus) ? delivery.trackingNumber ?? trackingNumber() : undefined,
+        shippedAt: transitStatuses.includes(toStatus) ? delivery.shippedAt ?? now : undefined,
         pickedUpAt: toStatus === DeliveryStatus.PICKED_UP ? now : undefined,
         deliveredAt: toStatus === DeliveryStatus.DELIVERED || toStatus === DeliveryStatus.PICKED_UP ? now : undefined,
         history: { create: { fromStatus: delivery.status, toStatus, actorId: actor.id, note: note?.trim() || null } },
