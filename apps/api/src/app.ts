@@ -9,7 +9,7 @@ import { healthRoute } from './routes/health.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
-    logger,
+    logger: logger as any,
     ignoreTrailingSlash: true,
     ajv: {
       customOptions: {
