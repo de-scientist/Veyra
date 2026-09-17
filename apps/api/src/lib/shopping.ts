@@ -7,6 +7,7 @@ import { env } from './env.js';
 import { HttpError } from './errors.js';
 import { prisma } from './prisma.js';
 import { hashToken } from './auth.js';
+import { calculateAvailableQuantity } from './catalog.js';
 
 export const MAX_CART_ITEM_QUANTITY = 20;
 export const GUEST_CART_COOKIE = 'veyra_guest_cart';
@@ -73,13 +74,17 @@ function getGuestSessionId(request: FastifyRequest) {
 }
 
 function assertQuantity(quantity: number) {
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_CART_ITEM_QUANTITY) {
+  if (!isValidCartQuantity(quantity)) {
     throw new HttpError(400, 'INVALID_QUANTITY', `Quantity must be an integer between 1 and ${MAX_CART_ITEM_QUANTITY}.`);
   }
 }
 
+export function isValidCartQuantity(quantity: number) {
+  return Number.isInteger(quantity) && quantity >= 1 && quantity <= MAX_CART_ITEM_QUANTITY;
+}
+
 function availableQuantity(inventory: { quantityOnHand: number; quantityReserved: number } | null) {
-  return Math.max(0, (inventory?.quantityOnHand ?? 0) - (inventory?.quantityReserved ?? 0));
+  return calculateAvailableQuantity(inventory?.quantityOnHand ?? 0, inventory?.quantityReserved ?? 0);
 }
 
 function currentPrice(variant: CartWithItems['items'][number]['variant']) {
