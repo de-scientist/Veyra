@@ -145,15 +145,17 @@ Authenticated only. Returns only the current user's saved addresses without `use
 
 ## Testing and Verification
 
-The API and web typechecks were run after the checkout implementation. Existing Phase 5 tests remain green before the final Phase 6 additions. Full database-backed checkout tests and manual end-to-end tests remain blocked until PostgreSQL credentials are corrected and migrations can be applied.
+Fresh verification passed:
 
-Required final gates to run after database setup:
+- `npm run lint` — passed; Next reports only existing `<img>` optimization warnings in cart/wishlist components
+- `npm run typecheck` — passed
+- `npm test` — 11 tests passed
+- `npm run build` — passed
+- `npx prisma validate` — passed
 
-- `npm run lint`
-- `npm run typecheck`
-- `npm test`
-- `npm run build`
-- `npx prisma migrate deploy`
+`npx prisma migrate deploy` remains blocked by invalid local PostgreSQL credentials (`P1000` against `localhost:5432`). Full database-backed checkout tests and manual end-to-end tests remain blocked until PostgreSQL credentials are corrected and migrations can be applied.
+
+After database setup, run `npx prisma migrate deploy`, seed the development shipping configuration, and execute DB-backed guest, authenticated, idempotency, rollback, and concurrency tests.
 
 ## Performance
 
