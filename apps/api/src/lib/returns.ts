@@ -207,7 +207,8 @@ export async function completeManualRefund(refundId: string, actorId: string, pr
     const refund = await client.refund.findUnique({ where: { id: refundId }, include: { payment: true, returnRequest: true } });
     if (!refund) throw new HttpError(404, 'REFUND_NOT_FOUND', 'Refund not found.');
     if (refund.status === RefundStatus.SUCCEEDED) return refund;
-    if (![RefundStatus.REQUESTED, RefundStatus.PENDING, RefundStatus.PROCESSING].includes(refund.status)) throw new HttpError(409, 'REFUND_NOT_PROCESSABLE', 'This refund cannot be processed.');
+    const processableStatuses: RefundStatus[] = [RefundStatus.REQUESTED, RefundStatus.PENDING, RefundStatus.PROCESSING];
+    if (!processableStatuses.includes(refund.status)) throw new HttpError(409, 'REFUND_NOT_PROCESSABLE', 'This refund cannot be processed.');
     const successfulTotal = await client.refund.aggregate({ where: { paymentId: refund.paymentId, status: RefundStatus.SUCCEEDED }, _sum: { amount: true } });
     const total = (successfulTotal._sum.amount ?? new Prisma.Decimal(0)).add(refund.amount);
     if (total.gt(refund.payment.amount)) throw new HttpError(409, 'REFUND_AMOUNT_EXCEEDED', 'Refund exceeds the paid amount.');
