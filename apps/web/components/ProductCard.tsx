@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 import { PriceDisplay } from './PriceDisplay';
+import { WishlistButton } from './WishlistButton';
 import type { Product } from '../lib/storefront-data';
 
 type ProductCardProps = {
@@ -30,6 +31,7 @@ export function ProductCard({ product }: ProductCardProps) {
           <PriceDisplay price={product.price} compareAtPrice={product.compareAtPrice} className="product-card__price" />
         </div>
       </Link>
+      <div className="product-card__wishlist"><WishlistButton productId={product.id} /></div>
     </article>
   );
 }
