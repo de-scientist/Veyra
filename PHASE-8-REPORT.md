@@ -178,7 +178,16 @@ No notification provider exists in the repository. This phase creates durable st
 
 Added unit coverage for pickup, local-delivery, retry, bypass, and terminal transition rules. Existing auth, catalogue, shopping, and payment tests remain in place.
 
-Final repository checks should include `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npx prisma validate`, and live migration/integration tests after PostgreSQL credentials are corrected.
+Fresh verification completed:
+
+- `npm run lint` — passed; only existing Next `<img>` optimization warnings remain
+- `npm run typecheck` — passed
+- `npm test` — 16 tests passed
+- `npm run build` — passed
+- `npx prisma validate` — passed
+- `npx prisma migrate deploy` — blocked by PostgreSQL `P1000` authentication failure
+
+Live migration, database-backed transition tests, concurrency tests, and manual fulfillment QA remain pending until PostgreSQL credentials are corrected.
 
 ## Performance
 
