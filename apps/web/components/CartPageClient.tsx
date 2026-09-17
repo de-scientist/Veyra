@@ -49,7 +49,7 @@ export function CartPageClient() {
           ))}
         </div>
       </section>
-      <aside className="cart-summary"><p className="eyebrow">Summary</p><h2>Subtotal</h2><PriceDisplay price={cart.subtotal} /><p className="muted-copy">Shipping, taxes, and checkout totals will be confirmed in the next phase.</p><button type="button" className="button button--secondary" onClick={() => clearCart().then(setCart).catch(() => setError('Unable to clear your cart.'))}>Clear cart</button><Link href="/shop" className="text-button">Continue shopping</Link></aside>
+      <aside className="cart-summary"><p className="eyebrow">Summary</p><h2>Subtotal</h2><PriceDisplay price={cart.subtotal} /><p className="muted-copy">Delivery and the final total are calculated securely at checkout.</p><Link href="/checkout" className="button">Continue to checkout</Link><button type="button" className="button button--secondary" onClick={() => clearCart().then(setCart).catch(() => setError('Unable to clear your cart.'))}>Clear cart</button><Link href="/shop" className="text-button">Continue shopping</Link></aside>
     </div>
   );
 }
