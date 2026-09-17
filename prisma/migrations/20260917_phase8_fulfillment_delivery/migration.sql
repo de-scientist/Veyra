@@ -20,7 +20,7 @@ CREATE TYPE "DeliveryStatus" AS ENUM (
 ALTER TABLE "Delivery"
 ADD COLUMN "shippingZoneId" TEXT,
 ADD COLUMN "assignedTo" TEXT,
-ADD COLUMN "internalReference" TEXT NOT NULL DEFAULT gen_random_uuid(),
+ADD COLUMN "internalReference" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
 ADD COLUMN "providerShipmentId" TEXT,
 ADD COLUMN "recipientName" TEXT,
 ADD COLUMN "recipientPhone" TEXT,
