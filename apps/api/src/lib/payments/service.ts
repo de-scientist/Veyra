@@ -7,7 +7,6 @@ import { MpesaPaymentProvider, buildPaymentCorrelationKey } from './mpesa.js';
 import { PaymentProviderError } from './provider.js';
 
 const provider = new MpesaPaymentProvider();
-const orderInclude = { items: true, deliveries: true };
 
 type PaymentWithOrder = Prisma.PaymentGetPayload<{ include: { order: true } }>;
 
