@@ -146,12 +146,15 @@ Both are responsive, have loading/error/empty states, and are marked `noindex`. 
 
 Passed:
 
+- `npm run lint`
 - `npx prisma validate`
 - `npx prisma generate`
 - `npm run typecheck --workspace @veyra/api`
 - `npm run typecheck --workspace @veyra/web`
+- `npm test` — 11 tests passed
+- `npm run build`
 
-The database migration itself remains blocked until valid local PostgreSQL credentials are available. Full DB-backed integration tests and manual authenticated/guest flows therefore remain pending environmental setup.
+The migration file is present and schema validation passes, but `npx prisma migrate deploy` remains blocked by invalid local PostgreSQL credentials (`P1000` against `localhost:5432`). No database migration was applied in this environment. Full DB-backed integration tests and manual authenticated/guest flows therefore remain pending environmental setup.
 
 ## Performance
 

@@ -35,6 +35,12 @@ ALTER COLUMN "productId" SET NOT NULL;
 ALTER TABLE "WishlistItem"
 DROP COLUMN "variantId";
 
+DELETE FROM "WishlistItem" AS duplicate
+USING "WishlistItem" AS keeper
+WHERE duplicate."wishlistId" = keeper."wishlistId"
+	AND duplicate."productId" = keeper."productId"
+	AND (duplicate."createdAt", duplicate."id") > (keeper."createdAt", keeper."id");
+
 CREATE UNIQUE INDEX "WishlistItem_wishlistId_productId_key" ON "WishlistItem"("wishlistId", "productId");
 CREATE INDEX "WishlistItem_productId_idx" ON "WishlistItem"("productId");
 
