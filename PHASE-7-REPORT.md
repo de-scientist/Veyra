@@ -149,6 +149,15 @@ Fresh repository checks should include:
 
 Added provider-boundary tests cover deterministic opaque correlation keys and separation of order/attempt combinations. Database-backed callback, concurrency, rollback, and sandbox tests remain pending because local PostgreSQL authentication is still failing with `P1000`.
 
+Final verification in this environment:
+
+- `npm run lint` — passed; only pre-existing Next `<img>` optimization warnings remain
+- `npm run typecheck` — passed
+- `npm test` — 13 tests passed
+- `npm run build` — passed
+- `npx prisma validate` — passed
+- `npx prisma migrate deploy` — blocked by PostgreSQL `P1000` authentication failure
+
 No live M-Pesa sandbox request was executed: the environment contains placeholder credentials and no publicly reachable callback endpoint.
 
 ## Sandbox Configuration
