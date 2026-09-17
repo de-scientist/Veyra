@@ -64,7 +64,7 @@ export async function initiateMpesaPayment(orderNumber: string, idempotencyKey: 
   const order = await authorizedOrder(orderNumber, userId, confirmationToken);
   if (order.status === 'CANCELLED') throw new HttpError(409, 'PAYMENT_ORDER_CANCELLED', 'Cancelled orders cannot be paid.');
   if (order.paymentStatus === 'PAID') throw new HttpError(409, 'ALREADY_PAID', 'This order has already been paid.');
-  if (!order.customerPhone || order.grandTotal <= 0) throw new HttpError(409, 'PAYMENT_NOT_PAYABLE', 'This order is not ready for payment.');
+  if (!order.customerPhone || !order.grandTotal.gt(0)) throw new HttpError(409, 'PAYMENT_NOT_PAYABLE', 'This order is not ready for payment.');
   if (order.currency !== 'KES') throw new HttpError(409, 'MPESA_INVALID_CURRENCY', 'M-Pesa payments require a KES order.');
 
   const correlationKey = buildPaymentCorrelationKey(order.id, idempotencyKey);
@@ -84,7 +84,7 @@ export async function initiateMpesaPayment(orderNumber: string, idempotencyKey: 
     const amount = Number(payment.amount);
     const initiation = await provider.initialize({ amount, currency: payment.currency, phone: order.customerPhone, accountReference: order.orderNumber, transactionDescription: 'Veyra order', idempotencyKey: correlationKey });
     const updated = await prisma.$transaction(async (client) => {
-      await client.paymentTransaction.update({ where: { id: transaction.id }, data: { providerRequestId: initiation.providerRequestId, providerMerchantRequestId: initiation.providerMerchantRequestId, rawResponse: initiation.rawResponse, status: initiation.accepted ? 'PENDING' : 'FAILED', failureReason: initiation.accepted ? null : initiation.customerMessage } });
+      await client.paymentTransaction.update({ where: { id: transaction.id }, data: { providerRequestId: initiation.providerRequestId, providerMerchantRequestId: initiation.providerMerchantRequestId, rawResponse: initiation.rawResponse as Prisma.InputJsonValue, status: initiation.accepted ? 'PENDING' : 'FAILED', failureReason: initiation.accepted ? null : initiation.customerMessage } });
       return client.payment.update({ where: { id: payment.id }, data: { status: initiation.accepted ? 'PENDING' : 'FAILED', failureReason: initiation.accepted ? null : initiation.customerMessage }, include: { order: true } });
     });
     return { payment: serializePayment(updated), transactionId: transaction.id, providerRequestId: initiation.providerRequestId, customerMessage: initiation.customerMessage, replayed: false };
