@@ -9,6 +9,7 @@ import { logger } from './lib/logger.js';
 import { authRoutes } from './routes/auth.js';
 import { catalogueRoutes } from './routes/catalogue.js';
 import { healthRoute } from './routes/health.js';
+import { shoppingRoutes } from './routes/shopping.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -45,6 +46,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     healthRoute(instance);
     await authRoutes(instance);
     await catalogueRoutes(instance);
+    await shoppingRoutes(instance);
   }, { prefix: '/api/v1' });
 
   app.setErrorHandler((error, request, reply) => {
