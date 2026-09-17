@@ -178,6 +178,17 @@ Final verification should include:
 - `npx prisma validate`
 - DB-backed return/refund concurrency tests after PostgreSQL is available
 
+Fresh verification completed:
+
+- `npm run lint` — passed; existing Next image/autoprefixer warnings remain
+- `npm run typecheck` — passed
+- `npm test` — 18 tests passed
+- `npm run build` — passed
+- `npx prisma validate` — passed
+- `npx prisma migrate deploy` — blocked by PostgreSQL `P1000` authentication failure
+
+No Phase 9 migration was applied and DB-backed/manual return, exchange, restock, or refund QA remains pending until PostgreSQL credentials are corrected.
+
 ## Performance
 
 Return queue queries use status/date indexes and bounded includes. Customer return history is scoped by user and ordered by creation time. Item eligibility is calculated in one order query rather than one request per item.
