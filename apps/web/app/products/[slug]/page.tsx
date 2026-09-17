@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 
 import { PriceDisplay } from '../../../components/PriceDisplay';
 import { ProductCard } from '../../../components/ProductCard';
+import { ProductActions } from '../../../components/ProductActions';
 import { getProductBySlug, getPublicProducts } from '../../../lib/storefront-data';
 
 export default function ProductPage({ params }: { params: { slug: string } }) {
@@ -41,23 +42,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
           <PriceDisplay price={selectedVariant?.price ?? product.price} compareAtPrice={selectedVariant?.compareAtPrice ?? product.compareAtPrice} />
           <p className="product-summary__description">{product.description}</p>
 
-          <div className="variant-panel">
-            <h2>Available options</h2>
-            <div className="variant-list">
-              {product.variants.map((variant) => (
-                <button key={variant.id} type="button" className={`variant-pill ${variant.inStock ? '' : 'is-disabled'}`} disabled={!variant.inStock}>
-                  {variant.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="cta-row">
-            <button type="button" className="button" disabled={!selectedVariant?.inStock}>
-              {selectedVariant?.inStock ? 'Add to cart' : 'Out of stock'}
-            </button>
-            <button type="button" className="button button--secondary">Save for later</button>
-          </div>
+          <ProductActions productId={product.id} variants={product.variants} />
         </div>
       </div>
 

@@ -1,8 +1,18 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 import { categories } from '../lib/storefront-data';
+import { getCart } from '../lib/shopping-api';
 
 export function Header() {
+  const [cartCount, setCartCount] = useState(0);
+
+  useEffect(() => {
+    getCart().then((cart) => setCartCount(cart.itemCount)).catch(() => undefined);
+  }, []);
+
   return (
     <header className="site-header">
       <div className="container site-header__inner">
@@ -27,8 +37,11 @@ export function Header() {
           <Link href="/account" aria-label="Account">
             Account
           </Link>
-          <Link href="/cart" aria-label="Cart">
-            Cart
+          <Link href="/wishlist" aria-label="Wishlist">
+            Wishlist
+          </Link>
+          <Link href="/cart" aria-label={`Cart${cartCount ? `, ${cartCount} items` : ''}`}>
+            Cart{cartCount ? ` (${cartCount})` : ''}
           </Link>
         </div>
       </div>
