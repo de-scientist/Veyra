@@ -6,7 +6,7 @@ import { prisma } from '../lib/prisma.js';
 
 const authCookieName = 'veyra_session';
 
-export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
+export async function requireAuth(request: FastifyRequest, _reply: FastifyReply) {
   const rawCookieHeader = request.headers.cookie;
 
   if (!rawCookieHeader) {

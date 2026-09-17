@@ -25,26 +25,7 @@ function userId(request: FastifyRequest) {
   return user.id;
 }
 
-async function loadWishlist(id: string) {
-  return prisma.wishlist.findUnique({
-    where: { id },
-    include: {
-      items: {
-        orderBy: { createdAt: 'asc' },
-        include: {
-          product: {
-            include: {
-              images: { orderBy: { sortOrder: 'asc' } },
-              variants: { include: { inventory: true } },
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-function serializeWishlist(wishlist: NonNullable<Awaited<ReturnType<typeof loadWishlist>>>) {
+function serializeWishlist(wishlist: Awaited<ReturnType<typeof getWishlistForUser>>) {
   return {
     id: wishlist.id,
     items: wishlist.items.map((item) => {

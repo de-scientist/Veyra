@@ -56,7 +56,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get('/catalog/products/:id', async (_request, reply) => {
+  app.get('/catalog/products/:id', async (_request) => {
     const { id } = _request.params as { id: string };
     const product = await prisma.product.findUnique({
       where: { id },
