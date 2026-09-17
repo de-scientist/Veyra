@@ -4,6 +4,7 @@ dist
 .nuxt
 coverage
 .env
+.env.example
 .env.local
 .env.*.local
 *.log
