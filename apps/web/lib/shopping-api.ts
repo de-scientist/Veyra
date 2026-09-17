@@ -16,6 +16,55 @@ export type CartItem = {
 
 export type Cart = { id: string; items: CartItem[]; itemCount: number; subtotal: number };
 
+export type CheckoutInput = {
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  deliveryMethodId: string;
+  shippingZoneCode?: string;
+  address?: { line1: string; line2?: string; city: string; state?: string; postalCode?: string; country?: string };
+  notes?: string;
+  confirmPriceChanges?: boolean;
+};
+
+export type CheckoutOptions = {
+  methods: Array<{ id: string; name: string; code: string; type: 'PICKUP' | 'LOCAL_DELIVERY' | 'COURIER'; description: string | null }>;
+  zones: Array<{ code: string; name: string; country: string; description: string | null }>;
+};
+
+export type CheckoutPreview = {
+  items: Array<{ id: string; productName: string; variant: string; quantity: number; unitPrice: number; subtotal: number }>;
+  subtotal: number;
+  discountTotal: number;
+  shippingTotal: number;
+  taxTotal: number;
+  grandTotal: number;
+  currency: string;
+  shippingMethod: { id: string; name: string; type: string };
+  shippingZone: { code: string; name: string };
+  priceChangedItems: string[];
+  requiresPriceConfirmation: boolean;
+};
+
+export type Order = {
+  id: string;
+  orderNumber: string;
+  status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  subtotal: number;
+  shippingTotal: number;
+  discountTotal: number;
+  taxTotal: number;
+  grandTotal: number;
+  currency: string;
+  delivery: { method: string; status: string } | null;
+  items: Array<{ productName: string; sku: string; variantDescription: string | null; quantity: number; unitPrice: number; subtotal: number; total: number }>;
+};
+
 export type WishlistItem = {
   id: string;
   productId: string;
@@ -72,4 +121,25 @@ export function addToWishlist(productId: string) {
 
 export function removeWishlistItem(itemId: string) {
   return request<{ id: string; items: WishlistItem[] }>(`/wishlist/items/${itemId}`, { method: 'DELETE' });
+}
+
+export function getCheckoutOptions() {
+  return request<CheckoutOptions>('/checkout/options');
+}
+
+export function previewCheckout(input: CheckoutInput) {
+  return request<CheckoutPreview>('/checkout/preview', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function placeCheckout(input: CheckoutInput, idempotencyKey: string) {
+  return request<{ order: Order; confirmationToken?: string; replayed: boolean; nextAction: string }>('/checkout', {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
+    body: JSON.stringify(input),
+  });
+}
+
+export function getOrder(orderNumber: string, confirmationToken?: string) {
+  const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
+  return request<Order>(`/orders/${encodeURIComponent(orderNumber)}${suffix}`);
 }
