@@ -63,7 +63,7 @@ export type Order = {
   grandTotal: number;
   currency: string;
   delivery: { method: string; status: string } | null;
-  items: Array<{ productName: string; sku: string; variantDescription: string | null; quantity: number; unitPrice: number; subtotal: number; total: number }>;
+  items: Array<{ id: string; productName: string; sku: string; variantDescription: string | null; quantity: number; unitPrice: number; subtotal: number; total: number }>;
 };
 
 export type Payment = {
@@ -91,6 +91,21 @@ export type Delivery = {
   method: { id: string; name: string; type: string } | null;
   zone: { code: string; name: string } | null;
   assignee: { id: string; firstName: string; lastName: string; email: string } | null;
+  history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }>;
+};
+
+export type ReturnRequest = {
+  id: string;
+  returnNumber: string;
+  orderNumber: string;
+  type: 'REFUND' | 'EXCHANGE';
+  status: string;
+  reason: string;
+  customerNote: string | null;
+  requestedAt: string;
+  items: Array<{ id: string; orderItemId: string; productName: string; sku: string; variantDescription: string | null; quantity: number; reason: string; condition: string; disposition: string | null; refundAmount: number }>;
+  refund: { refundNumber: string; amount: number; currency: string; status: string; providerReference: string | null } | null;
+  exchange: { status: string; replacementVariantId: string; quantity: number } | null;
   history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }>;
 };
 
@@ -213,4 +228,40 @@ export function getOperationsUsers() {
 
 export function assignDelivery(deliveryId: string, assigneeId: string) {
   return request<Delivery>(`/admin/deliveries/${encodeURIComponent(deliveryId)}/assign`, { method: 'POST', body: JSON.stringify({ assigneeId }) });
+}
+
+export function getReturns() {
+  return request<ReturnRequest[]>('/returns');
+}
+
+export function createReturn(input: { orderNumber: string; type: 'REFUND' | 'EXCHANGE'; reason: string; customerNote?: string; items: Array<{ orderItemId: string; quantity: number; reason: string; replacementVariantId?: string }> }) {
+  return request<ReturnRequest>('/returns', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function getReturnQueue(status?: string) {
+  return request<ReturnRequest[]>(`/admin/returns${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+}
+
+export function reviewReturn(returnId: string) {
+  return request<ReturnRequest>(`/admin/returns/${returnId}/review`, { method: 'POST', body: JSON.stringify({}) });
+}
+
+export function approveReturn(returnId: string) {
+  return request<ReturnRequest>(`/admin/returns/${returnId}/approve`, { method: 'POST', body: JSON.stringify({}) });
+}
+
+export function rejectReturn(returnId: string, reason: string) {
+  return request<ReturnRequest>(`/admin/returns/${returnId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
+}
+
+export function receiveReturn(returnId: string) {
+  return request<ReturnRequest>(`/admin/returns/${returnId}/receive`, { method: 'POST', body: JSON.stringify({}) });
+}
+
+export function inspectReturn(returnId: string, items: Array<{ returnItemId: string; condition: 'NEW' | 'LIKE_NEW' | 'USED' | 'DAMAGED' | 'DEFECTIVE' | 'UNSELLABLE' | 'UNKNOWN'; disposition: 'RESTOCK' | 'QUARANTINE' | 'DAMAGED' | 'UNSELLABLE' }>) {
+  return request<ReturnRequest>(`/admin/returns/${returnId}/inspect`, { method: 'POST', body: JSON.stringify({ items }) });
+}
+
+export function requestRefund(returnId: string) {
+  return request<{ refundNumber: string; amount: number; currency: string; status: string }>(`/admin/returns/${returnId}/refund`, { method: 'POST', body: JSON.stringify({ idempotencyKey: `refund-${returnId}` }) });
 }

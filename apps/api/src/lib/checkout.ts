@@ -174,6 +174,7 @@ function serializeOrder(order: any) {
     currency: order.currency,
     delivery: order.deliveries[0] ? { method: order.deliveries[0].shippingMethodId, status: order.deliveries[0].status } : null,
     items: order.items.map((item: any) => ({
+      id: item.id,
       productName: item.productName,
       sku: item.sku,
       variantDescription: item.variantDescription,
