@@ -281,6 +281,7 @@ model Product {
   images      ProductImage[]
   collections ProductCollection[]
   reviews     Review[]
+  wishlistItems WishlistItem[]
 }
 
 model ProductImage {
@@ -349,7 +350,6 @@ model VariantAttributeValue {
   variantId        String
   attributeId      String
   attributeValueId String
-  wishlistItems WishlistItem[]
   createdAt        DateTime @default(now())
 
   variant        ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
