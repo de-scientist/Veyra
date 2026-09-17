@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { getSessionUserId } from '../lib/shopping.js';
 import { getOrCreateCart } from '../lib/shopping.js';
-import { getCheckoutContext, getOrderForConfirmation, placeOrder, previewCheckout, type CheckoutInput } from '../lib/checkout.js';
+import { getOrderForConfirmation, placeOrder, previewCheckout, type CheckoutInput } from '../lib/checkout.js';
 import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
