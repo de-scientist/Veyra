@@ -205,6 +205,18 @@ model Collection {
   products ProductCollection[]
 }
 
+model ProductCollection {
+  id          String   @id @default(uuid())
+  productId   String
+  collectionId String
+  createdAt   DateTime @default(now())
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, collectionId])
+}
+
 model Product {
   id          String        @id @default(uuid())
   name        String
@@ -270,7 +282,8 @@ model Attribute {
   type      String   @default("STRING")
   createdAt DateTime @default(now())
 
-  values AttributeValue[]
+  values             AttributeValue[]
+  variantMappings    VariantAttributeValue[]
 }
 
 model AttributeValue {
@@ -279,8 +292,8 @@ model AttributeValue {
   value       String
   createdAt   DateTime @default(now())
 
-  attribute Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
-  variantValues VariantAttributeValue[]
+  attribute      Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  variantValues  VariantAttributeValue[]
 
   @@unique([attributeId, value])
 }
@@ -292,9 +305,9 @@ model VariantAttributeValue {
   attributeValueId String
   createdAt        DateTime @default(now())
 
-  variant        ProductVariant    @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  attribute      Attribute          @relation(fields: [attributeId], references: [id], onDelete: Cascade)
-  attributeValue AttributeValue     @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attribute       Attribute       @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  attributeValue  AttributeValue  @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
 
   @@unique([variantId, attributeId, attributeValueId])
 }
