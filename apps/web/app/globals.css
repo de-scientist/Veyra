@@ -580,6 +580,23 @@ button, input {
 
 .confirmation-layout { grid-template-columns: 1fr 1fr; }
 
+.delivery-timeline {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.delivery-timeline h2 { font-size: 1.1rem; }
+.timeline-entry { display: flex; justify-content: space-between; gap: 1rem; color: var(--text); }
+.timeline-entry small { color: var(--muted); }
+
+.operations-page { display: grid; gap: 1.5rem; }
+.operations-list { display: grid; gap: 1rem; }
+.operations-item { display: flex; justify-content: space-between; gap: 1.5rem; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 1.2rem; }
+.operations-item h2 { margin: 0.25rem 0; font-size: 1.2rem; }
+.operations-item p { color: var(--muted); margin: 0.35rem 0; }
+
 .site-footer {
   border-top: 1px solid var(--line);
   background: #f7f4f1;
@@ -655,6 +672,8 @@ button, input {
   .form-grid { grid-template-columns: 1fr; }
 
   .status-row { display: grid; }
+
+  .operations-item { display: grid; }
 
   .cart-item img,
   .cart-item__placeholder,
