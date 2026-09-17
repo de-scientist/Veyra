@@ -135,6 +135,7 @@ model User {
   notifications       Notification[]
   auditLogs           AuditLog[]
   wishlist            Wishlist?
+  checkoutIdempotency CheckoutIdempotency[]
 }
 
 model Session {
@@ -459,6 +460,8 @@ model Order {
   currency                String            @default("KES")
   customerEmail           String?
   customerPhone           String?
+  customerName            String?
+  confirmationTokenHash   String?           @unique
   shippingAddressSnapshot Json?
   billingAddressSnapshot  Json?
   notes                   String?
@@ -473,6 +476,24 @@ model Order {
   deliveries    Delivery[]
   reservations  InventoryReservation[]
   couponUsages  CouponUsage[]
+  idempotency   CheckoutIdempotency?
+}
+
+model CheckoutIdempotency {
+  id            String   @id @default(uuid())
+  key           String   @unique
+  scope         String
+  requestHash   String
+  orderId       String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([scope, createdAt])
+  @@index([userId, createdAt])
 }
 
 model OrderItem {
