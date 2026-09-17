@@ -21,10 +21,10 @@ export function OrderConfirmationClient({ orderNumber, confirmationToken }: Prop
 
   useEffect(() => {
     if (!payment || payment.status === 'PAID' || payment.status === 'FAILED') return undefined;
-    const timer = window.setInterval(() => {
+    const timer = setInterval(() => {
       getPaymentStatus(payment.id, confirmationToken).then(setPayment).catch(() => undefined);
     }, 4000);
-    return () => window.clearInterval(timer);
+    return () => clearInterval(timer);
   }, [confirmationToken, payment]);
 
   async function startPayment() {
