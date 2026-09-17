@@ -43,7 +43,7 @@ export function CartPageClient() {
                 <p>{item.variant.name}</p>
                 {item.priceChanged ? <p className="inline-message">The price has changed since you added this item.</p> : null}
                 {item.availability !== 'AVAILABLE' ? <p className="inline-message">{item.availability === 'OUT_OF_STOCK' ? 'Currently out of stock.' : item.availability === 'LIMITED' ? `Only ${item.availableQuantity} currently available.` : 'This item is no longer available.'}</p> : null}
-                <div className="cart-item__footer"><PriceDisplay price={item.currentPrice} /><label>Quantity <input type="number" min="1" max="20" value={item.quantity} disabled={busyItem === item.id} onChange={(event) => update(item.id, Number((event.target as HTMLInputElement).value))} /></label><button type="button" className="text-button" onClick={() => remove(item.id)} disabled={busyItem === item.id}>Remove</button></div>
+                <div className="cart-item__footer"><PriceDisplay price={item.currentPrice} /><label>Quantity <input type="number" min="1" max="20" value={item.quantity} disabled={busyItem === item.id} onChange={(event) => update(item.id, Number((event.target as { value: string }).value))} /></label><button type="button" className="text-button" onClick={() => remove(item.id)} disabled={busyItem === item.id}>Remove</button></div>
               </div>
             </article>
           ))}
