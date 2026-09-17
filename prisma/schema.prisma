@@ -548,6 +548,7 @@ model Payment {
 
   @@index([orderId])
   @@index([providerReference])
+  @@unique([orderId, provider])
 }
 
 model PaymentTransaction {
@@ -555,9 +556,12 @@ model PaymentTransaction {
   paymentId             String
   provider              PaymentProvider
   providerRequestId     String?
+  providerMerchantRequestId String?
   providerTransactionId String?
   providerReference     String?
+  idempotencyKey        String?
   amount                Decimal         @db.Decimal(10, 2)
+  currency              String           @default("KES")
   status                PaymentStatus   @default(PENDING)
   rawResponse           Json?
   createdAt             DateTime        @default(now())
@@ -566,6 +570,10 @@ model PaymentTransaction {
   payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 
   @@index([paymentId, createdAt])
+  @@index([provider, providerRequestId])
+  @@index([provider, providerMerchantRequestId])
+  @@index([provider, providerTransactionId])
+  @@unique([provider, idempotencyKey])
 }
 
 model Address {

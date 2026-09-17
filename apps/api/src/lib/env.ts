@@ -7,6 +7,12 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   AUTH_SECRET: z.string().min(32).default('development-auth-secret-change-me-123456'),
   SESSION_SECRET: z.string().min(32).default('development-session-secret-change-me-123456'),
+  MPESA_CONSUMER_KEY: z.string().optional(),
+  MPESA_CONSUMER_SECRET: z.string().optional(),
+  MPESA_SHORTCODE: z.string().optional(),
+  MPESA_PASSKEY: z.string().optional(),
+  MPESA_CALLBACK_URL: z.string().url().optional(),
+  MPESA_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
 });
 
 export const env = envSchema.parse(process.env);
