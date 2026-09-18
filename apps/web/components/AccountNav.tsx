@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { Route } from 'next';
 
-const navigation = [
+const navigation: Array<{ href: Route; label: string; icon: string }> = [
   { href: '/account', label: 'Overview', icon: '🏠' },
   { href: '/account/profile', label: 'Profile', icon: '👤' },
   { href: '/account/addresses', label: 'Addresses', icon: '📍' },

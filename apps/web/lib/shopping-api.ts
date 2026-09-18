@@ -172,6 +172,7 @@ export type AccountOrderDelivery = {
   trackingNumber: string | null;
   estimatedDeliveryAt: string | null;
   shippedAt: string | null;
+  pickedUpAt: string | null;
   deliveredAt: string | null;
   method: { name: string; type: string } | null;
   history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }>;
@@ -515,7 +516,7 @@ export function getPayments() {
   return request<AccountPayment[]>('/account/payments');
 }
 
-export function getReturns() {
+export function getAccountReturns() {
   return request<AccountReturn[]>('/account/returns');
 }
 

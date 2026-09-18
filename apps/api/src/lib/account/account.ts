@@ -87,6 +87,7 @@ export type AccountOrderDTO = {
     trackingNumber: string | null;
     estimatedDeliveryAt: Date | null;
     shippedAt: Date | null;
+    pickedUpAt: Date | null;
     deliveredAt: Date | null;
     method: { name: string; type: string } | null;
     history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: Date }>;
@@ -744,6 +745,7 @@ function serializeOrderDetail(order: {
     trackingNumber: string | null;
     estimatedDeliveryAt: Date | null;
     shippedAt: Date | null;
+    pickedUpAt: Date | null;
     deliveredAt: Date | null;
     shippingMethod?: { name: string; type: string } | null;
     history?: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: Date }>;
@@ -783,6 +785,7 @@ function serializeOrderDetail(order: {
           trackingNumber: order.deliveries[0].trackingNumber,
           estimatedDeliveryAt: order.deliveries[0].estimatedDeliveryAt,
           shippedAt: order.deliveries[0].shippedAt,
+          pickedUpAt: order.deliveries[0].pickedUpAt ?? null,
           deliveredAt: order.deliveries[0].deliveredAt,
           method: order.deliveries[0].shippingMethod ? { name: order.deliveries[0].shippingMethod.name, type: order.deliveries[0].shippingMethod.type } : null,
           history: order.deliveries[0].history?.map((h) => ({ fromStatus: h.fromStatus, toStatus: h.toStatus, note: h.note, createdAt: h.createdAt })) ?? [],

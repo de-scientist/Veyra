@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getReturns, type AccountReturn } from '../../../lib/shopping-api';
+import { getAccountReturns, type AccountReturn } from '../../../lib/shopping-api';
 import { PriceDisplay } from '../../../components/PriceDisplay';
 
 export default function ReturnsPage() {
@@ -12,8 +12,8 @@ export default function ReturnsPage() {
 
   useEffect(() => {
     let mounted = true;
-    getReturns()
-      .then((r) => { if (mounted) setReturns(r); })
+    getAccountReturns()
+      .then((r: AccountReturn[]) => { if (mounted) setReturns(r); })
       .catch((e) => { if (mounted) setError(e instanceof Error ? e.message : 'Failed to load returns'); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };

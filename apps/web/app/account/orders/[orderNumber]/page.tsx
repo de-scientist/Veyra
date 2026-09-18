@@ -25,7 +25,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
     return () => { mounted = false; };
   }, [params]);
 
-  function formatDate(dateString: string | Date) {
+  function formatDate(dateString: string | Date | null) {
+    if (!dateString) return '—';
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
       month: 'short',
