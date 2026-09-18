@@ -245,6 +245,8 @@ enum AuditAction {
   CUSTOMER_UPDATED
   ORDER_CANCELLED
   VARIANT_UPDATED
+  REPORT_EXPORTED
+  CUSTOMER_REPORT_EXPORTED
 }
 
 model User {
@@ -829,6 +831,7 @@ model Refund {
   @@index([orderId, status])
   @@index([paymentId, status])
   @@index([provider, providerReference])
+  @@index([status, createdAt])
 }
 
 model RefundTransaction {
