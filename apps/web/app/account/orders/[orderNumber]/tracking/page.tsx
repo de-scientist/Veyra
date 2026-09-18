@@ -176,23 +176,3 @@ export default function TrackingPage({ params }: TrackingPageProps) {
     </div>
   );
 }
-
-function formatDate(dateString: string | null) {
-  if (!dateString) return '—';
-  return new Date(dateString).toLocaleDateString('en-KE', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function formatDateTime(dateString: string | null) {
-  if (!dateString) return '—';
-  return new Date(dateString).toLocaleString('en-KE', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}

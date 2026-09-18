@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { getOrders, type PaginatedOrders, type OrderSummary } from '../../../lib/shopping-api';
+import { getOrders, type PaginatedOrders } from '../../../lib/shopping-api';
 import { PriceDisplay } from '../../../components/PriceDisplay';
 
 const STATUSES = ['All', 'PENDING', 'CONFIRMED', 'PROCESSING', 'COMPLETED', 'CANCELLED'] as const;
@@ -206,12 +206,4 @@ export default function OrdersPage() {
       )}
     </div>
   );
-}
-
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString('en-KE', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
