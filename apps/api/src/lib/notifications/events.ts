@@ -29,6 +29,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'REFUND_FAILED',
   'PASSWORD_CHANGED',
   'ACCOUNT_DEACTIVATED',
+  'ORDER_READY_FOR_PICKUP',
   'LOW_STOCK_DETECTED',
 ] as const;
 
@@ -49,6 +50,11 @@ type DbClient = typeof prisma | Prisma.TransactionClient;
 
 export function buildEventId(): string {
   return `EVT-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
+}
+
+/** Stable event ids for at-most-once emission across retried callbacks. */
+export function deterministicEventId(...parts: Array<string | number>): string {
+  return `EVT-${crypto.createHash('sha256').update(parts.join(':')).digest('hex').slice(0, 24).toUpperCase()}`;
 }
 
 export function buildEvent(
