@@ -14,10 +14,6 @@ function formatDate(dateString: string) {
   });
 }
 
-function formatCurrency(amount: number, currency = 'KES') {
-  return new Intl.NumberFormat('en-KE', { style: 'currency', currency, minimumFractionDigits: 0 }).format(amount);
-}
-
 function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase().replace(/_/g, ' ');
   const colors: Record<string, string> = {

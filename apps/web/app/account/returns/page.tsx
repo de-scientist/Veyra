@@ -151,11 +151,3 @@ export default function ReturnsPage() {
     </div>
   );
 }
-
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString('en-KE', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
