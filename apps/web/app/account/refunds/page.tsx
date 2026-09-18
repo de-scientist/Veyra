@@ -95,7 +95,7 @@ export default function RefundsPage() {
                   <Link href={`/account/orders/${refund.orderNumber}`} className="account-order-link">
                     <strong>Order {refund.orderNumber}</strong>
                   </Link>
-                  <span className="account-refund-date">{formatDate(ref.requestedAt)}</span>
+                  <span className="account-refund-date">{formatDate(refund.requestedAt)}</span>
                 </div>
                 <div className="account-refund-card__status">
                   <PriceDisplay price={refund.amount} />
