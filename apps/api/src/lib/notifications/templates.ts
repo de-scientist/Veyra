@@ -116,6 +116,11 @@ const TEMPLATE_DEFAULTS: Record<NotificationEventType, ChannelTemplates> = {
     EMAIL: { subject: 'Refund update for {{orderNumber}}', body: 'Hi {{customerName}},\n\nThe refund of {{currency}} {{refundAmount}} for order {{orderNumber}} could not be completed automatically. Our team will review it.\n\nView it here: {{refundUrl}}', htmlBody: '<p>Hi {{customerName}},</p><p>The refund for order <strong>{{orderNumber}}</strong> needs manual review. Our team is on it.</p><p><a href="{{refundUrl}}">View your refunds</a></p>' },
     SMS: { body: '{{brand}}: Refund for {{orderNumber}} needs review. We will update you.' },
   },
+  ORDER_READY_FOR_PICKUP: {
+    IN_APP: { body: 'Order {{orderNumber}} is ready for pickup. Please bring your order confirmation when you collect it.' },
+    EMAIL: { subject: 'Order {{orderNumber}} ready for pickup', body: 'Hi {{customerName}},\n\nOrder {{orderNumber}} is ready for pickup. Please bring your order confirmation.\n\nView your order: {{orderUrl}}', htmlBody: '<p>Hi {{customerName}},</p><p>Order <strong>{{orderNumber}}</strong> is ready for pickup.</p><p><a href="{{orderUrl}}">View your order</a></p>' },
+    SMS: { body: '{{brand}}: Order {{orderNumber}} is ready for pickup. Bring your order confirmation.' },
+  },
   PASSWORD_CHANGED: {
     IN_APP: { body: 'Your account password was changed. If this was not you, secure your account and contact support immediately.' },
     EMAIL: { subject: 'Your password was changed', body: 'Hi {{customerName}},\n\nYour {{brand}} account password was just changed. If this was not you, please reset your password and contact support immediately.', htmlBody: '<p>Hi {{customerName}},</p><p>Your {{brand}} account password was just changed. If this was not you, please act immediately.</p>' },
