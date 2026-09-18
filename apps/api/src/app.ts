@@ -76,7 +76,51 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   });
 
+  // Handlers are registered inside the encapsulated API context: Fastify
+  // encapsulation means hook-thrown errors (e.g. auth guards in preHandler)
+  // would otherwise fall back to the framework default error shape.
   await app.register(async (instance) => {
+    instance.setNotFoundHandler((request, reply) => {
+      reply.status(404).send({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'The requested resource was not found.',
+          requestId: request.id,
+        },
+      });
+    });
+
+    instance.setErrorHandler((error, request, reply) => {
+      if (error instanceof z.ZodError) {
+        reply.status(400).send({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'The request contains invalid data.',
+            details: error.flatten(),
+            requestId: request.id,
+          },
+        });
+        return;
+      }
+
+      const statusCode = error.statusCode ?? 500;
+      const code = error.code ?? 'INTERNAL_SERVER_ERROR';
+
+      logger.error({ err: error, requestId: request.id }, 'Unhandled API error');
+
+      reply.status(statusCode).send({
+        success: false,
+        error: {
+          code,
+          message: statusCode >= 500 ? 'Internal server error' : error.message,
+          details: statusCode >= 500 ? {} : (error as FastifyError & { details?: unknown }).details ?? error.validation ?? {},
+          requestId: request.id,
+        },
+      });
+    });
+
     healthRoute(instance);
     await authRoutes(instance);
     await catalogueRoutes(instance);
@@ -90,47 +134,6 @@ export async function buildApp(): Promise<FastifyInstance> {
     await adminRoutes(instance);
     await analyticsRoutes(instance);
   }, { prefix: '/api/v1' });
-
-  app.setNotFoundHandler((request, reply) => {
-    reply.status(404).send({
-      success: false,
-      error: {
-        code: 'NOT_FOUND',
-        message: 'The requested resource was not found.',
-        requestId: request.id,
-      },
-    });
-  });
-
-  app.setErrorHandler((error, request, reply) => {
-    if (error instanceof z.ZodError) {
-      reply.status(400).send({
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'The request contains invalid data.',
-          details: error.flatten(),
-          requestId: request.id,
-        },
-      });
-      return;
-    }
-
-    const statusCode = error.statusCode ?? 500;
-    const code = error.code ?? 'INTERNAL_SERVER_ERROR';
-
-    logger.error({ err: error, requestId: request.id }, 'Unhandled API error');
-
-    reply.status(statusCode).send({
-      success: false,
-      error: {
-        code,
-        message: statusCode >= 500 ? 'Internal server error' : error.message,
-        details: statusCode >= 500 ? {} : (error as FastifyError & { details?: unknown }).details ?? error.validation ?? {},
-        requestId: request.id,
-      },
-    });
-  });
 
   return app;
 }
