@@ -17,6 +17,7 @@ import { fulfillmentRoutes } from './routes/fulfillment.js';
 import { returnRoutes } from './routes/returns.js';
 import { accountRoutes } from './routes/account.js';
 import { notificationRoutes } from './routes/notifications.js';
+import { adminRoutes } from './routes/admin.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -60,6 +61,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await returnRoutes(instance);
     await accountRoutes(instance);
     await notificationRoutes(instance);
+    await adminRoutes(instance);
   }, { prefix: '/api/v1' });
 
   app.setErrorHandler((error, request, reply) => {

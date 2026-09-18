@@ -234,6 +234,17 @@ enum AuditAction {
   GUEST_ORDER_CLAIMED
   NOTIFICATION_SENT
   NOTIFICATION_FAILED
+  CATEGORY_CREATED
+  CATEGORY_UPDATED
+  COLLECTION_CREATED
+  COLLECTION_UPDATED
+  ATTRIBUTE_CREATED
+  COUPON_CREATED
+  COUPON_UPDATED
+  REVIEW_MODERATED
+  CUSTOMER_UPDATED
+  ORDER_CANCELLED
+  VARIANT_UPDATED
 }
 
 model User {
@@ -618,6 +629,9 @@ model Order {
   refunds Refund[]
 
   @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([paymentStatus, createdAt])
+  @@index([fulfillmentStatus, createdAt])
 }
 
 model CheckoutIdempotency {
@@ -692,6 +706,7 @@ model Payment {
 
   @@index([orderId])
   @@index([providerReference])
+  @@index([status, createdAt])
   @@unique([orderId, provider])
 }
 
@@ -1183,4 +1198,6 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
 }
