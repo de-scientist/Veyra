@@ -9,6 +9,7 @@ import { getSessionUser, isOperationsRole, logout, type SessionUser } from '../.
 
 const NAVIGATION: Array<{ href: Route; label: string; icon: string }> = [
   { href: '/admin', label: 'Dashboard', icon: '📊' },
+  { href: '/admin/analytics', label: 'Analytics', icon: '📈' },
   { href: '/admin/orders', label: 'Orders', icon: '📦' },
   { href: '/admin/payments', label: 'Payments', icon: '💳' },
   { href: '/admin/fulfillment', label: 'Fulfillment', icon: '🚚' },
