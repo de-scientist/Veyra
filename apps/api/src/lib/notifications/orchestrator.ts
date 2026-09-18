@@ -168,7 +168,13 @@ export async function processEvent(event: DomainEvent) {
       entityId,
       templateKey: primary.key,
       templateVersion: primary.version,
-      metadata: { eventType, channels } as Prisma.InputJsonValue,
+      metadata: {
+        eventType,
+        channels,
+        orderNumber: typeof event.payload.orderNumber === 'string' ? event.payload.orderNumber : undefined,
+        returnId: typeof event.payload.returnId === 'string' ? event.payload.returnId : undefined,
+        returnNumber: typeof event.payload.returnNumber === 'string' ? event.payload.returnNumber : undefined,
+      } as Prisma.InputJsonValue,
     },
   });
 
