@@ -217,6 +217,7 @@ model User {
   notifications       Notification[]
   auditLogs           AuditLog[]
   wishlist            Wishlist?
+  preferences         UserPreference?
   checkoutIdempotency CheckoutIdempotency[]
   assignedDeliveries  Delivery[] @relation("DeliveryAssignee")
   deliveryHistory     DeliveryStatusHistory[]
@@ -570,7 +571,6 @@ model Order {
   returnRequests ReturnRequest[]
   refunds Refund[]
 
-  @@unique([orderNumber])
   @@index([userId, createdAt])
 }
 
