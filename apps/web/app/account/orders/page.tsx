@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { getOrders, type PaginatedOrders } from '../../../lib/shopping-api';
+import { claimGuestOrder, getOrders, type PaginatedOrders } from '../../../lib/shopping-api';
 import { PriceDisplay } from '../../../components/PriceDisplay';
 
 const STATUSES = ['All', 'PENDING', 'CONFIRMED', 'PROCESSING', 'COMPLETED', 'CANCELLED'] as const;
@@ -47,6 +47,24 @@ export default function OrdersPage() {
 
   const handlePageChange = (page: number) => {
     setParams((prev) => ({ ...prev, page }));
+  };
+
+  const handleClaim = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const orderNumber = String(form.get('claimOrderNumber') ?? '').trim();
+    const token = String(form.get('claimToken') ?? '').trim();
+    if (!orderNumber || !token) {
+      setError('Order number and confirmation token are both required to claim a guest order.');
+      return;
+    }
+    setError(null);
+    try {
+      await claimGuestOrder(orderNumber, token);
+      await loadOrders();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not claim guest order.');
+    }
   };
 
   function formatDate(dateString: string) {
@@ -112,6 +130,26 @@ export default function OrdersPage() {
       </header>
 
       {error && <div className="inline-message" role="alert">{error}</div>}
+
+      <details className="account-claim">
+        <summary>Claim a guest order</summary>
+        <p className="muted-copy">Placed an order as a guest? Link it to your account with the confirmation token from your order confirmation.</p>
+        <form onSubmit={handleClaim} className="account-form">
+          <div className="form-grid">
+            <label>
+              <span>Order number</span>
+              <input type="text" name="claimOrderNumber" required maxLength={40} placeholder="ORD-..." autoComplete="off" />
+            </label>
+            <label>
+              <span>Confirmation token</span>
+              <input type="text" name="claimToken" required maxLength={512} placeholder="From your confirmation page" autoComplete="off" />
+            </label>
+          </div>
+          <div className="form-actions">
+            <button type="submit" className="button button--secondary">Claim Order</button>
+          </div>
+        </form>
+      </details>
 
       <section className="account-filters">
         <form onSubmit={handleSearch} className="account-search">
