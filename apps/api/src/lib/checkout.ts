@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { hashToken } from './auth.js';
 import { calculateAvailableQuantity } from './catalog.js';
 import { HttpError } from './errors.js';
+import { afterCommitNotify, buildEvent, enqueueEvent } from './notifications/events.js';
 import { prisma } from './prisma.js';
 import { isValidCartQuantity, MAX_CART_ITEM_QUANTITY } from './shopping.js';
 
@@ -305,8 +306,16 @@ export async function placeOrder(cartId: string, input: CheckoutInput, scope: st
       await transaction.cartItem.deleteMany({ where: { cartId: cart.id } });
       await transaction.cart.update({ where: { id: cart.id }, data: { status: 'CHECKED_OUT', deletedAt: new Date() } });
       await transaction.checkoutIdempotency.update({ where: { key: idempotencyKey }, data: { orderId: createdOrder.id } });
+      await enqueueEvent(transaction, buildEvent('ORDER_PLACED', 'Order', createdOrder.id, {
+        orderId: createdOrder.id,
+        orderNumber: createdOrder.orderNumber,
+        orderTotal: Number(calculated.grandTotal),
+        currency: 'KES',
+      }, userId ?? null));
       return transaction.order.findUniqueOrThrow({ where: { id: createdOrder.id }, include: orderInclude });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    afterCommitNotify();
 
     return { order: serializeOrder(order), confirmationToken, replayed: false };
   } catch (error) {

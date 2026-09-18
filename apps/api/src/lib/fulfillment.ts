@@ -4,6 +4,7 @@ import { DeliveryStatus, FulfillmentStatus, OrderStatus, Prisma } from '@prisma/
 
 import { hashToken } from './auth.js';
 import { HttpError } from './errors.js';
+import { afterCommitNotify, buildEvent, enqueueEvent } from './notifications/events.js';
 import { prisma } from './prisma.js';
 
 const deliveryInclude = {
@@ -116,8 +117,37 @@ async function moveDelivery(deliveryId: string, toStatus: DeliveryStatus, actor:
       await client.order.update({ where: { id: delivery.orderId }, data: { fulfillmentStatus: orderFulfillment, status: orderStatus } });
       await client.orderStatusHistory.create({ data: { orderId: delivery.orderId, status: orderStatus ?? delivery.order.status, changedBy: actor.id, note: note?.trim() ?? `Delivery moved to ${toStatus}.` } });
     }
+    const customerEvent = deliveryEventFor(toStatus);
+    if (customerEvent) {
+      await enqueueEvent(client, buildEvent(customerEvent, 'Delivery', deliveryId, {
+        orderId: delivery.orderId,
+        orderNumber: delivery.order.orderNumber,
+        trackingNumber: updated.trackingNumber ?? '',
+        deliveryStatus: toStatus,
+      }, delivery.order.userId));
+    }
     return updated;
   });
+  afterCommitNotify();
+}
+
+const DELIVERY_STATUS_EVENTS = {
+  PREPARING: 'ORDER_PROCESSING',
+  PACKED: 'ORDER_PACKED',
+  READY_FOR_PICKUP: 'ORDER_READY_FOR_PICKUP',
+  ASSIGNED: 'ORDER_SHIPPED',
+  IN_TRANSIT: 'ORDER_SHIPPED',
+  OUT_FOR_DELIVERY: 'ORDER_OUT_FOR_DELIVERY',
+  DELIVERY_ATTEMPTED: 'DELIVERY_FAILED',
+  FAILED: 'DELIVERY_FAILED',
+  DELIVERED: 'ORDER_DELIVERED',
+  PICKED_UP: 'ORDER_DELIVERED',
+} as const;
+
+function deliveryEventFor(toStatus: DeliveryStatus) {
+  // PICKED is an internal step covered by the ORDER_PROCESSING notification.
+  if (toStatus === DeliveryStatus.PICKED) return null;
+  return (DELIVERY_STATUS_EVENTS as Record<string, 'ORDER_PROCESSING' | 'ORDER_PACKED' | 'ORDER_READY_FOR_PICKUP' | 'ORDER_SHIPPED' | 'ORDER_OUT_FOR_DELIVERY' | 'DELIVERY_FAILED' | 'ORDER_DELIVERED'>)[toStatus] ?? null;
 }
 
 export async function fulfillmentQueue(status?: DeliveryStatus) {
@@ -177,8 +207,15 @@ export async function assignDelivery(deliveryId: string, assigneeId: string, act
   if (delivery.status !== DeliveryStatus.PACKED) throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Only packed deliveries can be assigned.');
   const updated = await prisma.$transaction(async (client) => {
     const result = await client.delivery.update({ where: { id: deliveryId }, data: { assignedTo: assigneeId, status: DeliveryStatus.ASSIGNED, history: { create: { fromStatus: delivery.status, toStatus: DeliveryStatus.ASSIGNED, actorId: actor.id, note: 'Delivery assigned.' } } }, include: deliveryInclude });
+    await enqueueEvent(client, buildEvent('ORDER_SHIPPED', 'Delivery', deliveryId, {
+      orderId: delivery.orderId,
+      orderNumber: delivery.order.orderNumber,
+      trackingNumber: result.trackingNumber ?? '',
+      deliveryStatus: DeliveryStatus.ASSIGNED,
+    }, delivery.order.userId));
     return result;
   });
+  afterCommitNotify();
   return serializeDelivery(updated);
 }
 

@@ -5,6 +5,7 @@ import { Prisma, ReturnCondition, ReturnDisposition, ReturnStatus, ReturnType, R
 import { calculateAvailableQuantity } from './catalog.js';
 import { env } from './env.js';
 import { HttpError } from './errors.js';
+import { afterCommitNotify, buildEvent, enqueueEvent, type NotificationEventType } from './notifications/events.js';
 import { prisma } from './prisma.js';
 
 const activeReturnStatuses: ReturnStatus[] = [ReturnStatus.REQUESTED, ReturnStatus.UNDER_REVIEW, ReturnStatus.APPROVED, ReturnStatus.RETURN_INITIATED, ReturnStatus.RECEIVED, ReturnStatus.INSPECTING, ReturnStatus.APPROVED_FOR_RESOLUTION];

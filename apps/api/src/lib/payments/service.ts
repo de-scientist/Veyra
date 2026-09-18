@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import { hashToken } from '../auth.js';
 import { HttpError } from '../errors.js';
+import { afterCommitNotify, deterministicEventId, enqueueEvent } from '../notifications/events.js';
 import { prisma } from '../prisma.js';
 import { MpesaPaymentProvider, buildPaymentCorrelationKey } from './mpesa.js';
 import { PaymentProviderError } from './provider.js';
@@ -116,6 +117,21 @@ export async function handleMpesaCallback(body: unknown) {
     if (!successful) {
       await client.paymentTransaction.update({ where: { id: transaction.id }, data: { status: 'FAILED', providerMerchantRequestId: callback.merchantRequestId, providerReference: callback.receipt, rawResponse: callback.raw as Prisma.InputJsonValue, failureReason: callback.resultDescription } });
       await client.payment.update({ where: { id: transaction.paymentId }, data: { status: 'FAILED', providerReference: callback.receipt, failureReason: callback.resultDescription } });
+      await enqueueEvent(client, {
+        eventId: deterministicEventId('payment', transaction.id, callback.checkoutRequestId, callback.resultCode),
+        eventType: 'PAYMENT_FAILED',
+        eventVersion: 1,
+        aggregateType: 'Payment',
+        aggregateId: transaction.paymentId,
+        userId: transaction.payment.order.userId,
+        occurredAt: new Date().toISOString(),
+        payload: {
+          orderId: transaction.payment.orderId,
+          orderNumber: transaction.payment.order.orderNumber,
+          orderTotal: Number(transaction.payment.amount),
+          currency: transaction.payment.currency,
+        },
+      });
       return;
     }
 
@@ -131,7 +147,25 @@ export async function handleMpesaCallback(body: unknown) {
       await client.inventoryReservation.update({ where: { id: reservation.id }, data: { status: 'CONVERTED', convertedAt: new Date() } });
       await client.inventoryMovement.create({ data: { variantId: reservation.variantId, movementType: 'OUT', quantity: reservation.quantity, reason: 'PAYMENT_CONFIRMED', referenceType: 'ORDER', referenceId: transaction.payment.orderId } });
     }
+    await enqueueEvent(client, {
+      eventId: deterministicEventId('payment', transaction.id, callback.checkoutRequestId, callback.resultCode),
+      eventType: 'PAYMENT_CONFIRMED',
+      eventVersion: 1,
+      aggregateType: 'Payment',
+      aggregateId: transaction.paymentId,
+      userId: transaction.payment.order.userId,
+      occurredAt: new Date().toISOString(),
+      payload: {
+        orderId: transaction.payment.orderId,
+        orderNumber: transaction.payment.order.orderNumber,
+        orderTotal: Number(transaction.payment.amount),
+        currency: transaction.payment.currency,
+        providerReference: callback.receipt ?? null,
+      },
+    });
   });
+
+  afterCommitNotify();
 
   return { acknowledged: true, processed: true, successful };
 }
