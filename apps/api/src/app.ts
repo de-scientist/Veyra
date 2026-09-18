@@ -91,6 +91,17 @@ export async function buildApp(): Promise<FastifyInstance> {
     await analyticsRoutes(instance);
   }, { prefix: '/api/v1' });
 
+  app.setNotFoundHandler((request, reply) => {
+    reply.status(404).send({
+      success: false,
+      error: {
+        code: 'NOT_FOUND',
+        message: 'The requested resource was not found.',
+        requestId: request.id,
+      },
+    });
+  });
+
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof z.ZodError) {
       reply.status(400).send({
