@@ -20,10 +20,25 @@ import { notificationRoutes } from './routes/notifications.js';
 import { adminRoutes } from './routes/admin.js';
 import { analyticsRoutes } from './routes/analytics.js';
 
+const allowedOrigins = env.CORS_ORIGIN.split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter((origin) => origin.length > 0);
+
+export function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  try {
+    const normalized = new URL(origin).origin;
+    return allowedOrigins.includes(normalized);
+  } catch {
+    return false;
+  }
+}
+
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: logger as any,
     ignoreTrailingSlash: true,
+    bodyLimit: env.BODY_LIMIT_BYTES,
     ajv: {
       customOptions: {
         removeAdditional: 'all',
@@ -38,8 +53,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(cors, {
-    origin: true,
+    origin: (origin, callback) => {
+      callback(null, isAllowedOrigin(origin));
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Confirmation-Token', 'X-Provider-Signature'],
+    maxAge: 600,
   });
 
   await app.register(helmet, {
@@ -47,8 +67,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(rateLimit, {
-    max: 100,
-    timeWindow: '1 minute',
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: env.RATE_LIMIT_WINDOW_MS,
+    addHeaders: {
+      'x-ratelimit-limit': true,
+      'x-ratelimit-remaining': true,
+      'x-ratelimit-reset': true,
+    },
   });
 
   await app.register(async (instance) => {
@@ -74,6 +99,7 @@ export async function buildApp(): Promise<FastifyInstance> {
           code: 'VALIDATION_ERROR',
           message: 'The request contains invalid data.',
           details: error.flatten(),
+          requestId: request.id,
         },
       });
       return;
@@ -90,6 +116,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         code,
         message: statusCode >= 500 ? 'Internal server error' : error.message,
         details: statusCode >= 500 ? {} : (error as FastifyError & { details?: unknown }).details ?? error.validation ?? {},
+        requestId: request.id,
       },
     });
   });

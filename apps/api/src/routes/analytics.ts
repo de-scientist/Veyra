@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 
 import { HttpError } from '../lib/errors.js';
+import { authLimit } from '../lib/rateLimits.js';
 import { prisma } from '../lib/prisma.js';
 import { requireOperationsAccess } from '../middleware/operations.js';
 import { customerMetrics, customerSegments, topCustomers } from '../lib/analytics/customers.js';
@@ -162,7 +163,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
     return { success: true, data: { timezone: 'Africa/Nairobi', metrics: METRIC_DEFINITIONS } };
   });
 
-  app.get('/admin/analytics/export/:report', { preHandler: requireOperationsAccess }, async (request, reply) => {
+  app.get('/admin/analytics/export/:report', { preHandler: requireOperationsAccess, ...authLimit() }, async (request, reply) => {
     const { report } = request.params as { report: string };
     if (!(REPORT_KEYS as string[]).includes(report)) throw new HttpError(404, 'REPORT_NOT_FOUND', 'Unknown report.');
     const query = rangeSchema.extend({ format: z.enum(['csv']).default('csv'), exportLimit: z.coerce.number().int().min(1).max(5000).optional() }).parse(request.query);

@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../lib/errors.js';
+import { authLimit } from '../lib/rateLimits.js';
 import * as account from '../lib/account/account.js';
 
 const profileSchema = z.object({
@@ -153,7 +154,7 @@ export async function accountRoutes(app: FastifyInstance) {
     return { success: true, data: { sessions: await account.getSessions(userId(request), sessionId(request)) } };
   });
 
-  app.post('/account/security/password', { preHandler: requireAuth }, async (request) => {
+  app.post('/account/security/password', { preHandler: requireAuth, ...authLimit() }, async (request) => {
     const payload = passwordSchema.parse(request.body);
     return { success: true, data: await account.changePassword(userId(request), sessionId(request), payload) };
   });
@@ -179,11 +180,11 @@ export async function accountRoutes(app: FastifyInstance) {
     return { success: true, data: await account.updatePreferences(userId(request), payload) };
   });
 
-  app.post('/account/deactivate', { preHandler: requireAuth }, async (request) => {
+  app.post('/account/deactivate', { preHandler: requireAuth, ...authLimit() }, async (request) => {
     return { success: true, data: await account.deactivateAccount(userId(request)) };
   });
 
-  app.post('/account/delete', { preHandler: requireAuth }, async (request) => {
+  app.post('/account/delete', { preHandler: requireAuth, ...authLimit() }, async (request) => {
     return { success: true, data: await account.requestAccountDeletion(userId(request)) };
   });
 }

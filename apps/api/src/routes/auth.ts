@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { env } from '../lib/env.js';
+import { authLimit } from '../lib/rateLimits.js';
 import { hashPassword, hashToken, verifyPassword } from '../lib/auth.js';
 import { HttpError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
@@ -96,7 +97,7 @@ async function createSession(userId: string, userAgent: string | undefined, ipAd
 }
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post('/auth/register', async (request, reply) => {
+  app.post('/auth/register', authLimit(), async (request, reply) => {
     const payload = registerSchema.parse(request.body);
     const normalizedEmail = payload.email.toLowerCase();
 
@@ -154,7 +155,7 @@ export async function authRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/auth/login', async (request, reply) => {
+  app.post('/auth/login', authLimit(), async (request, reply) => {
     const payload = loginSchema.parse(request.body);
     const normalizedEmail = payload.email.toLowerCase();
 

@@ -5,6 +5,7 @@ import { ReturnCondition, ReturnDisposition, ReturnStatus, ReturnType } from '@p
 import { requireAuth } from '../middleware/auth.js';
 import { requireFinancialAccess, requireOperationsAccess } from '../middleware/operations.js';
 import { HttpError } from '../lib/errors.js';
+import { sensitiveLimit } from '../lib/rateLimits.js';
 import { approveReturn, completeManualRefund, createReturn, customerReturns, inspectReturn, ownedReturnDetail, receiveReturn, rejectReturn, requestRefund, returnDetail, returnQueue, reviewReturn } from '../lib/returns.js';
 
 const createSchema = z.object({
@@ -78,13 +79,13 @@ export async function returnRoutes(app: FastifyInstance) {
     return { success: true, data: await inspectReturn(returnId, currentUser(request), inspectSchema.parse(request.body).items) };
   });
 
-  app.post('/admin/returns/:returnId/refund', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/returns/:returnId/refund', { preHandler: requireOperationsAccess, ...sensitiveLimit() }, async (request) => {
     const { returnId } = request.params as { returnId: string };
     const payload = refundSchema.parse(request.body);
     return { success: true, data: await requestRefund(returnId, currentUser(request), payload.idempotencyKey) };
   });
 
-  app.post('/admin/refunds/:refundId/process', { preHandler: requireFinancialAccess }, async (request) => {
+  app.post('/admin/refunds/:refundId/process', { preHandler: requireFinancialAccess, ...sensitiveLimit() }, async (request) => {
     const { refundId } = request.params as { refundId: string };
     const payload = completeRefundSchema.parse(request.body);
     return { success: true, data: await completeManualRefund(refundId, currentUser(request), payload.providerReference) };

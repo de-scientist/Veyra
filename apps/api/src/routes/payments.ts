@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { getSessionUserId } from '../lib/shopping.js';
+import { sensitiveLimit } from '../lib/rateLimits.js';
 import { HttpError } from '../lib/errors.js';
 import { getPaymentStatus, handleMpesaCallback, initiateMpesaPayment } from '../lib/payments/service.js';
 
@@ -15,7 +16,7 @@ function confirmationToken(request: FastifyRequest) {
 }
 
 export async function paymentRoutes(app: FastifyInstance) {
-  app.post('/payments/mpesa/initiate', async (request) => {
+  app.post('/payments/mpesa/initiate', sensitiveLimit(), async (request) => {
     const payload = z.object({ orderNumber: z.string().min(8).max(40) }).parse(request.body);
     const key = headerValue(request, 'idempotency-key');
     if (!key || key.length < 16 || key.length > 200) throw new HttpError(400, 'PAYMENT_IDEMPOTENCY_REQUIRED', 'A valid Idempotency-Key header is required.');

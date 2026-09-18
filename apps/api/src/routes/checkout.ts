@@ -5,6 +5,7 @@ import { getSessionUserId } from '../lib/shopping.js';
 import { getOrCreateCart } from '../lib/shopping.js';
 import { getOrderForConfirmation, placeOrder, previewCheckout, type CheckoutInput } from '../lib/checkout.js';
 import { requireAuth } from '../middleware/auth.js';
+import { sensitiveLimit } from '../lib/rateLimits.js';
 import { HttpError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 
@@ -59,7 +60,7 @@ export async function checkoutRoutes(app: FastifyInstance) {
     return { success: true, data: await previewCheckout(cart.id, input) };
   });
 
-  app.post('/checkout', async (request, reply) => {
+  app.post('/checkout', sensitiveLimit(), async (request, reply) => {
     const key = headerValue(request, 'idempotency-key');
     if (!key || key.length < 16 || key.length > 200) throw new HttpError(400, 'CHECKOUT_IDEMPOTENCY_REQUIRED', 'A valid Idempotency-Key header is required.');
     const input = asInput(request.body);

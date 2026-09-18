@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { requireAuth } from '../middleware/auth.js';
 import { requireOperationsAccess } from '../middleware/operations.js';
 import { HttpError } from '../lib/errors.js';
+import { sensitiveLimit } from '../lib/rateLimits.js';
 import { drainOutbox } from '../lib/notifications/worker.js';
 import { retryDelivery } from '../lib/notifications/orchestrator.js';
 import { handleEmailCallback, handleSmsCallback } from '../lib/notifications/webhooks.js';
@@ -70,11 +71,11 @@ export async function notificationRoutes(app: FastifyInstance) {
     return { success: true, data: await notifications.adminQueue(query) };
   });
 
-  app.post('/admin/notifications/process', { preHandler: requireOperationsAccess }, async () => {
+  app.post('/admin/notifications/process', { preHandler: requireOperationsAccess, ...sensitiveLimit() }, async () => {
     return { success: true, data: await drainOutbox() };
   });
 
-  app.post('/admin/notifications/:id/resend', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/notifications/:id/resend', { preHandler: requireOperationsAccess, ...sensitiveLimit() }, async (request) => {
     const { id } = request.params as { id: string };
     const actor = userId(request);
     return { success: true, data: await retryDelivery(id, actor) };
