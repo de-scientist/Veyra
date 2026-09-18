@@ -1,7 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getPreferences, updatePreferences, type AccountPreferences } from '../../../lib/shopping-api';
+import {
+  getNotificationPreferences,
+  getPreferences,
+  updateNotificationPreference,
+  updatePreferences,
+  type AccountPreferences,
+  type NotificationPreferenceMatrix,
+} from '../../../lib/shopping-api';
+
+const CHANNEL_LABELS: Record<string, string> = { IN_APP: 'In-app', EMAIL: 'Email', SMS: 'SMS' };
+const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  TRANSACTIONAL: 'Order, payment, delivery, return, and refund updates',
+  SECURITY: 'Password changes and account security alerts',
+  MARKETING: 'Promotions and new collection announcements',
+};
 
 export default function PreferencesPage() {
   const [preferences, setPreferences] = useState<AccountPreferences | null>(null);
@@ -15,11 +29,12 @@ export default function PreferencesPage() {
     emailReturns: true,
     emailMarketing: false,
   });
+  const [channelMatrix, setChannelMatrix] = useState<NotificationPreferenceMatrix | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    getPreferences()
-      .then((p) => {
+    Promise.all([getPreferences(), getNotificationPreferences()])
+      .then(([p, matrix]) => {
         if (mounted) {
           setPreferences(p);
           setFormData({
@@ -28,12 +43,25 @@ export default function PreferencesPage() {
             emailReturns: p.emailReturns,
             emailMarketing: p.emailMarketing,
           });
+          setChannelMatrix(matrix);
         }
       })
       .catch((e) => { if (mounted) setError(e instanceof Error ? e.message : 'Failed to load preferences'); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, []);
+
+  const handleChannelToggle = async (category: string, channel: string, enabled: boolean) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const matrix = await updateNotificationPreference({ category, channel, enabled });
+      setChannelMatrix(matrix);
+      setSuccess('Channel preference updated');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update channel preference');
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = e.currentTarget;
@@ -152,6 +180,42 @@ export default function PreferencesPage() {
           </button>
         </div>
       </form>
+
+      <section className="account-preferences-section" aria-label="Notification channels">
+        <h2>Notification Channels</h2>
+        <p className="muted-copy">
+          Choose how you receive each type of update. Order, payment, delivery, return, refund, and security
+          notifications always appear in your account. SMS is currently in a limited rollout.
+        </p>
+        {!channelMatrix ? (
+          <p className="muted-copy">Loading channel preferences…</p>
+        ) : (
+          channelMatrix.map((group) => (
+            <div key={group.category} className="account-channel-group">
+              <h3>{group.category.toLowerCase()}</h3>
+              <p className="muted-copy">{CATEGORY_DESCRIPTIONS[group.category] ?? ''}</p>
+              {group.channels.map((entry) => (
+                <div key={entry.channel} className="account-preference-toggle">
+                  <div>
+                    <strong>{CHANNEL_LABELS[entry.channel] ?? entry.channel}</strong>
+                    {entry.locked && <p className="muted-copy">Always on for important updates</p>}
+                  </div>
+                  <label className="account-toggle">
+                    <input
+                      type="checkbox"
+                      checked={entry.enabled}
+                      disabled={entry.locked}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChannelToggle(group.category, entry.channel, e.currentTarget.checked)}
+                      aria-label={`${CHANNEL_LABELS[entry.channel] ?? entry.channel} notifications for ${group.category.toLowerCase()}`}
+                    />
+                    <span className="account-toggle-slider" />
+                  </label>
+                </div>
+              ))}
+            </div>
+          ))
+        )}
+      </section>
 
       {preferences && (
         <details className="account-meta">
