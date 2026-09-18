@@ -650,7 +650,17 @@ export async function updatePreferences(userId: string, input: { emailOrderUpdat
   if (input.emailDelivery !== undefined) data.emailDelivery = input.emailDelivery;
   if (input.emailReturns !== undefined) data.emailReturns = input.emailReturns;
   if (input.emailMarketing !== undefined) data.emailMarketing = input.emailMarketing;
-  await prisma.userPreference.upsert({ where: { userId }, update: data, create: { userId, ...(data as Prisma.UserPreferenceUncheckedCreateInput) } });
+  await prisma.userPreference.upsert({
+    where: { userId },
+    update: data,
+    create: {
+      userId,
+      emailOrderUpdates: input.emailOrderUpdates ?? true,
+      emailDelivery: input.emailDelivery ?? true,
+      emailReturns: input.emailReturns ?? true,
+      emailMarketing: input.emailMarketing ?? false,
+    },
+  });
   await prisma.auditLog.create({ data: { actorId: userId, action: AuditAction.PREFERENCES_UPDATED, entity: 'UserPreference', entityId: userId } });
   return getPreferences(userId);
 }
