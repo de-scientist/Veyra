@@ -1,0 +1,243 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { getOrderDetail, type AccountOrder } from '../../../../../lib/shopping-api';
+import { PriceDisplay } from '../../../../../components/PriceDisplay';
+
+export const metadata = { title: 'Order Detail | Veyra', robots: { index: false, follow: false } };
+
+interface OrderDetailPageProps {
+  params: Promise<{ orderNumber: string }>;
+}
+
+export default function OrderDetailPage({ params }: OrderDetailPageProps) {
+  const [order, setOrder] = useState<AccountOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    params.then(({ orderNumber }) => {
+      getOrderDetail(orderNumber)
+        .then((o) => { if (mounted) setOrder(o); })
+        .catch((e) => { if (mounted) setError(e instanceof Error ? e.message : 'Failed to load order'); })
+        .finally(() => { if (mounted) setLoading(false); });
+    });
+    return () => { mounted = false; };
+  }, [params]);
+
+  function formatDate(dateString: string | Date) {
+    return new Date(dateString).toLocaleDateString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  function formatDateTime(dateString: string | Date | null) {
+    if (!dateString) return '—';
+    return new Date(dateString).toLocaleString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  function StatusBadge({ status }: { status: string }) {
+    const normalized = status.toLowerCase().replace(/_/g, ' ');
+    const colors: Record<string, string> = {
+      paid: '#1f6b45',
+      completed: '#1f6b45',
+      delivered: '#1f6b45',
+      pending: '#7c5a45',
+      confirmed: '#7c5a45',
+      processing: '#7c5a45',
+      unpaid: '#b84d4d',
+      failed: '#b84d45',
+      cancelled: '#b84d45',
+      refunded: '#7c5a45',
+      'partially refunded': '#7c5a45',
+      unfulfilled: '#5f5a55',
+      packed: '#7c5a45',
+      shipped: '#7c5a45',
+      'out for delivery': '#7c5a45',
+      'delivery attempted': '#b84d45',
+      'ready for pickup': '#7c5a45',
+      'picked up': '#1f6b45',
+      returned: '#5f5a55',
+    };
+    const color = colors[normalized] || '#5f5a55';
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '0.25rem 0.6rem',
+          borderRadius: '999px',
+          fontSize: '0.7rem',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          background: `${color}15`,
+          color,
+        }}
+      >
+        {status.replace(/_/g, ' ')}
+      </span>
+    );
+  }
+
+  if (loading) return <div className="empty-state"><p>Loading order…</p></div>;
+  if (error) return <div className="empty-state"><h1>Order not found</h1><p>{error}</p><Link href="/account/orders" className="button">Back to Orders</Link></div>;
+  if (!order) return <div className="empty-state"><h1>Order not found</h1></div>;
+
+  return (
+    <div className="account-page">
+      <header className="account-page__header">
+        <div>
+          <Link href="/account/orders" className="text-button">← Back to Orders</Link>
+          <h1 style={{ marginTop: '0.5rem' }}>Order {order.orderNumber}</h1>
+          <p className="muted-copy">Placed on {formatDate(order.createdAt)}</p>
+        </div>
+        <div className="account-page__actions">
+          <Link href={`/account/orders/${order.orderNumber}/tracking`} className="button">Track Order</Link>
+          <button type="button" className="button button--secondary" onClick={() => window.print()}>Print</button>
+        </div>
+      </header>
+
+      <section className="account-section account-order-header">
+        <div className="account-order-statuses">
+          <div><strong>Order Status:</strong> <StatusBadge status={order.status} /></div>
+          <div><strong>Payment:</strong> <StatusBadge status={order.paymentStatus} /></div>
+          <div><strong>Fulfillment:</strong> <StatusBadge status={order.fulfillmentStatus} /></div>
+        </div>
+      </section>
+
+      <section className="account-section">
+        <h2>Order Summary</h2>
+        <div className="account-order-summary-grid">
+          <div className="account-summary-card">
+            <p className="eyebrow">Subtotal</p>
+            <PriceDisplay price={order.subtotal} />
+          </div>
+          <div className="account-summary-card">
+            <p className="eyebrow">Shipping</p>
+            <PriceDisplay price={order.shippingTotal} />
+          </div>
+          <div className="account-summary-card">
+            <p className="eyebrow">Discount</p>
+            <PriceDisplay price={order.discountTotal} />
+          </div>
+          <div className="account-summary-card">
+            <p className="eyebrow">Tax</p>
+            <PriceDisplay price={order.taxTotal} />
+          </div>
+          <div className="account-summary-card account-summary-card--total">
+            <p className="eyebrow">Grand Total</p>
+            <PriceDisplay price={order.grandTotal} />
+            <span className="muted-copy">{order.itemCount} item{order.itemCount !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="account-section">
+        <h2>Items ({order.itemCount})</h2>
+        <div className="account-order-items">
+          {order.items.map((item) => (
+            <article key={item.id} className="account-order-item">
+              <div className="account-order-item__image">
+                {item.productImage ? (
+                  <img src={item.productImage} alt={item.productName} />
+                ) : (
+                  <div className="cart-item__placeholder">No image</div>
+                )}
+              </div>
+              <div className="account-order-item__details">
+                <h3>{item.productName}</h3>
+                <p className="muted-copy">
+                  SKU: {item.sku}
+                  {item.variantDescription && ` • ${item.variantDescription}`}
+                </p>
+                <div className="account-order-item__pricing">
+                  <span>Qty: {item.quantity}</span>
+                  <span>Unit: <PriceDisplay price={item.unitPrice} /></span>
+                  {item.discountAmount > 0 && <span className="muted-copy">Discount: <PriceDisplay price={item.discountAmount} /></span>}
+                  <strong>Line Total: <PriceDisplay price={item.total} /></strong>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {order.delivery && (
+        <section className="account-section">
+          <h2>Delivery</h2>
+          <div className="account-delivery">
+            <div className="account-delivery__status">
+              <StatusBadge status={order.delivery.status} />
+              {order.delivery.method && (
+                <span className="account-delivery__method">{order.delivery.method.name} ({order.delivery.method.type})</span>
+              )}
+            </div>
+            {order.delivery.trackingNumber && (
+              <div className="account-delivery__tracking">
+                <strong>Tracking:</strong> {order.delivery.trackingNumber}
+              </div>
+            )}
+            <div className="account-delivery__timestamps">
+              <div><strong>Estimated:</strong> {formatDate(order.delivery.estimatedDeliveryAt)}</div>
+              <div><strong>Shipped:</strong> {formatDateTime(order.delivery.shippedAt)}</div>
+              <div><strong>Delivered:</strong> {formatDateTime(order.delivery.deliveredAt)}</div>
+              {order.delivery.pickedUpAt && <div><strong>Picked Up:</strong> {formatDateTime(order.delivery.pickedUpAt)}</div>}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {order.payment && (
+        <section className="account-section">
+          <h2>Payment</h2>
+          <div className="account-payment">
+            <div className="account-payment__status">
+              <StatusBadge status={order.payment.status} />
+              <strong>{order.payment.provider}</strong>
+            </div>
+            <div className="account-payment__details">
+              <div><strong>Amount:</strong> <PriceDisplay price={order.payment.amount} /></div>
+              {order.payment.providerReference && <div><strong>Reference:</strong> {order.payment.providerReference}</div>}
+              {order.payment.paidAt && <div><strong>Paid:</strong> {formatDateTime(order.payment.paidAt)}</div>}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="account-section">
+        <h2>Timeline</h2>
+        <div className="account-timeline">
+          {order.delivery?.history?.map((event, idx) => (
+            <div key={idx} className="account-timeline__event">
+              <div className="account-timeline__marker" />
+              <div className="account-timeline__content">
+                <div className="account-timeline__label">{event.toStatus.replace(/_/g, ' ')}</div>
+                <div className="account-timeline__time">{formatDateTime(event.createdAt)}</div>
+                {event.note && <div className="account-timeline__note">{event.note}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="account-section">
+        <h2>Actions</h2>
+        <div className="account-actions">
+          <Link href={`/account/orders/${order.orderNumber}/tracking`} className="button">Track Order</Link>
+          <button type="button" className="button button--secondary" onClick={() => window.print()}>Print Order</button>
+        </div>
+      </section>
+    </div>
+  );
+}
