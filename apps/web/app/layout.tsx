@@ -4,10 +4,12 @@ import type { Metadata } from 'next';
 import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://veyra.example.com';
+
 export const metadata: Metadata = {
   title: 'Veyra Commerce',
   description: 'Kenya-first clothing commerce foundation',
-  metadataBase: new URL('https://veyra.example.com'),
+  metadataBase: new URL(siteUrl),
   openGraph: {
     title: 'Veyra Commerce',
     description: 'Kenya-first essentials for everyday life.',
