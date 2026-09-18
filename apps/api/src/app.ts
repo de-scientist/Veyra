@@ -57,6 +57,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await paymentRoutes(instance);
     await fulfillmentRoutes(instance);
     await returnRoutes(instance);
+    await accountRoutes(instance);
   }, { prefix: '/api/v1' });
 
   app.setErrorHandler((error, request, reply) => {
