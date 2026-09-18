@@ -7,6 +7,7 @@ import type { Route } from 'next';
 
 const navigation: Array<{ href: Route; label: string; icon: string }> = [
   { href: '/account', label: 'Overview', icon: '🏠' },
+  { href: '/account/notifications', label: 'Notifications', icon: '🔔' },
   { href: '/account/profile', label: 'Profile', icon: '👤' },
   { href: '/account/addresses', label: 'Addresses', icon: '📍' },
   { href: '/account/orders', label: 'Orders', icon: '📦' },

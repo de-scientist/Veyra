@@ -41,6 +41,8 @@ async function main() {
     { name: 'Process Fulfillment', slug: 'fulfillment.process', resource: 'fulfillment', action: 'manage' },
     { name: 'Manage Delivery', slug: 'delivery.manage', resource: 'delivery', action: 'manage' },
     { name: 'View Audit Logs', slug: 'audit.read', resource: 'audit', action: 'read' },
+    { name: 'View Notifications', slug: 'notifications.read', resource: 'notifications', action: 'read' },
+    { name: 'Manage Notifications', slug: 'notifications.manage', resource: 'notifications', action: 'manage' },
   ];
 
   for (const permission of adminPermissions) {

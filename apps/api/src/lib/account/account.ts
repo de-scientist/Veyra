@@ -3,6 +3,7 @@ import { OrderStatus, Prisma, ReturnStatus, AuditAction } from '@prisma/client';
 import { hashPassword, hashToken, verifyPassword } from '../auth.js';
 import { calculateAvailableQuantity } from '../catalog.js';
 import { HttpError } from '../errors.js';
+import { emitSecurityEvent } from '../notifications/domainHooks.js';
 import { prisma } from '../prisma.js';
 import { addCartItem } from '../shopping.js';
 
@@ -598,6 +599,7 @@ export async function changePassword(userId: string, currentSessionId: string | 
       : prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
   ]);
   await prisma.auditLog.create({ data: { actorId: userId, action: AuditAction.PASSWORD_CHANGED, entity: 'User', entityId: userId } });
+  await emitSecurityEvent(userId, 'PASSWORD_CHANGED');
   return { changed: true };
 }
 
@@ -684,6 +686,7 @@ export async function deactivateAccount(userId: string) {
     prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
     prisma.auditLog.create({ data: { actorId: userId, action: AuditAction.ACCOUNT_DEACTIVATED, entity: 'User', entityId: userId } }),
   ]);
+  await emitSecurityEvent(userId, 'ACCOUNT_DEACTIVATED');
   return { deactivated: true };
 }
 

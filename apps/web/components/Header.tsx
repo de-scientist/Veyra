@@ -4,13 +4,29 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { categories } from '../lib/storefront-data';
-import { getCart } from '../lib/shopping-api';
+import { getCart, getUnreadCount } from '../lib/shopping-api';
 
 export function Header() {
   const [cartCount, setCartCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     getCart().then((cart) => setCartCount(cart.itemCount)).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const refresh = () => {
+      getUnreadCount().then((result) => {
+        if (mounted) setUnreadCount(result.unreadCount);
+      }).catch(() => undefined);
+    };
+    refresh();
+    const interval = setInterval(refresh, 60000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   return (
@@ -36,6 +52,9 @@ export function Header() {
           </Link>
           <Link href="/account" aria-label="Account">
             Account
+          </Link>
+          <Link href="/account/notifications" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}>
+            <span aria-hidden="true">🔔</span> Notifications{unreadCount ? ` (${unreadCount})` : ''}
           </Link>
           <Link href="/wishlist" aria-label="Wishlist">
             Wishlist

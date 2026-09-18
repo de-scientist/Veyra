@@ -556,6 +556,61 @@ export function updatePreferences(input: { emailOrderUpdates?: boolean; emailDel
   return request<AccountPreferences>('/account/preferences', { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+export type CustomerNotification = {
+  id: string;
+  type: string;
+  category: string;
+  title: string;
+  body: string;
+  priority: string;
+  status: string;
+  entityType: string | null;
+  entityId: string | null;
+  deepLink: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type PaginatedNotifications = {
+  notifications: CustomerNotification[];
+  unreadCount: number;
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+
+export type NotificationPreferenceMatrix = Array<{
+  category: string;
+  channels: Array<{ channel: string; enabled: boolean; locked: boolean; explicit: boolean }>;
+}>;
+
+export function getNotifications(params?: { page?: number; pageSize?: number; category?: string; unreadOnly?: boolean }) {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+  if (params?.category) searchParams.set('category', params.category);
+  if (params?.unreadOnly) searchParams.set('unreadOnly', 'true');
+  return request<PaginatedNotifications>(`/account/notifications?${searchParams.toString()}`);
+}
+
+export function getUnreadCount() {
+  return request<{ unreadCount: number }>('/account/notifications/unread-count');
+}
+
+export function markNotificationRead(id: string) {
+  return request<{ read: boolean }>(`/account/notifications/${id}/read`, { method: 'POST' });
+}
+
+export function markAllNotificationsRead() {
+  return request<{ marked: number }>('/account/notifications/read-all', { method: 'POST' });
+}
+
+export function getNotificationPreferences() {
+  return request<NotificationPreferenceMatrix>('/account/notification-preferences');
+}
+
+export function updateNotificationPreference(input: { category: string; channel: string; enabled: boolean }) {
+  return request<NotificationPreferenceMatrix>('/account/notification-preferences', { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 export function deactivateAccount() {
   return request<{ deactivated: boolean }>('/account/deactivate', { method: 'POST' });
 }

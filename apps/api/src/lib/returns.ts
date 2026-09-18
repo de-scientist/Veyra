@@ -6,6 +6,7 @@ import { calculateAvailableQuantity } from './catalog.js';
 import { env } from './env.js';
 import { HttpError } from './errors.js';
 import { afterCommitNotify, buildEvent, enqueueEvent, type NotificationEventType } from './notifications/events.js';
+import { emitReturnEvent } from './notifications/domainHooks.js';
 import { prisma } from './prisma.js';
 
 const activeReturnStatuses: ReturnStatus[] = [ReturnStatus.REQUESTED, ReturnStatus.UNDER_REVIEW, ReturnStatus.APPROVED, ReturnStatus.RETURN_INITIATED, ReturnStatus.RECEIVED, ReturnStatus.INSPECTING, ReturnStatus.APPROVED_FOR_RESOLUTION];
@@ -133,8 +134,19 @@ export async function createReturn(userId: string, input: { orderNumber: string;
       if (!variant || variant.status !== 'ACTIVE' || !variant.inventory || calculateAvailableQuantity(variant.inventory.quantityOnHand, variant.inventory.quantityReserved) < prepared[0].data.quantity) throw new HttpError(409, 'EXCHANGE_VARIANT_UNAVAILABLE', 'The replacement variant is unavailable.');
       await client.exchange.create({ data: { returnRequestId: request.id, originalOrderItemId: prepared[0].orderItem.id, originalVariantId: prepared[0].orderItem.variantId, replacementVariantId: replacement, quantity: prepared[0].data.quantity, status: ExchangeStatus.REQUESTED, priceDifference: 0 } });
     }
+    const eventTypes: NotificationEventType[] = input.type === ReturnType.EXCHANGE ? ['RETURN_REQUESTED', 'EXCHANGE_REQUESTED'] : ['RETURN_REQUESTED'];
+    for (const eventType of eventTypes) {
+      await enqueueEvent(client, buildEvent(eventType, 'ReturnRequest', request.id, {
+        returnId: request.id,
+        returnNumber: request.returnNumber,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        returnType: input.type,
+      }, userId));
+    }
     return client.returnRequest.findUniqueOrThrow({ where: { id: request.id }, include: returnInclude });
   });
+  afterCommitNotify();
   return serializeReturn(created);
 }
 
@@ -152,20 +164,44 @@ export async function ownedReturnDetail(returnId: string, userId: string) {
   return serializeReturn(await getOwnedReturn(returnId, userId));
 }
 
-async function transitionReturn(returnId: string, toStatus: ReturnStatus, actorId: string, note?: string, rejectionReason?: string) {
-  return prisma.$transaction(async (client) => {
+type ReturnCustomerEvent = Extract<NotificationEventType, `RETURN_${string}` | `EXCHANGE_${string}`>;
+
+async function transitionReturn(returnId: string, toStatus: ReturnStatus, actorId: string, note?: string, rejectionReason?: string, customerEvent?: ReturnCustomerEvent) {
+  const updated = await prisma.$transaction(async (client) => {
     const request = await client.returnRequest.findUnique({ where: { id: returnId }, include: returnInclude });
     if (!request) throw new HttpError(404, 'RETURN_NOT_FOUND', 'Return request not found.');
     assertReturnTransition(request.status, toStatus);
-    const updated = await client.returnRequest.update({ where: { id: returnId }, data: { status: toStatus, actorId, approvedAt: toStatus === ReturnStatus.APPROVED ? new Date() : undefined, rejectedAt: toStatus === ReturnStatus.REJECTED ? new Date() : undefined, rejectionReason: rejectionReason?.trim() || undefined, receivedAt: toStatus === ReturnStatus.RECEIVED ? new Date() : undefined, history: { create: { fromStatus: request.status, toStatus, actorId, note: note?.trim() || rejectionReason?.trim() || null } } }, include: returnInclude });
-    return updated;
+    const result = await client.returnRequest.update({ where: { id: returnId }, data: { status: toStatus, actorId, approvedAt: toStatus === ReturnStatus.APPROVED ? new Date() : undefined, rejectedAt: toStatus === ReturnStatus.REJECTED ? new Date() : undefined, rejectionReason: rejectionReason?.trim() || undefined, receivedAt: toStatus === ReturnStatus.RECEIVED ? new Date() : undefined, history: { create: { fromStatus: request.status, toStatus, actorId, note: note?.trim() || rejectionReason?.trim() || null } } }, include: returnInclude });
+    if (customerEvent) {
+      await enqueueEvent(client, buildEvent(customerEvent, 'ReturnRequest', result.id, {
+        returnId: result.id,
+        returnNumber: result.returnNumber,
+        orderId: result.orderId,
+        orderNumber: result.order.orderNumber,
+        returnType: result.type,
+        rejectionReason: result.rejectionReason ?? '',
+      }, result.userId));
+    }
+    return result;
   });
+  afterCommitNotify();
+  return updated;
 }
 
 export async function reviewReturn(returnId: string, actorId: string) { return serializeReturn(await transitionReturn(returnId, ReturnStatus.UNDER_REVIEW, actorId)); }
-export async function approveReturn(returnId: string, actorId: string, note?: string) { return serializeReturn(await transitionReturn(returnId, ReturnStatus.APPROVED, actorId, note)); }
-export async function rejectReturn(returnId: string, actorId: string, reason: string) { if (!reason.trim()) throw new HttpError(400, 'REJECTION_REASON_REQUIRED', 'A rejection reason is required.'); return serializeReturn(await transitionReturn(returnId, ReturnStatus.REJECTED, actorId, undefined, reason)); }
-export async function receiveReturn(returnId: string, actorId: string, note?: string) { return serializeReturn(await transitionReturn(returnId, ReturnStatus.RECEIVED, actorId, note)); }
+export async function approveReturn(returnId: string, actorId: string, note?: string) {
+  const updated = await transitionReturn(returnId, ReturnStatus.APPROVED, actorId, note, undefined, 'RETURN_APPROVED');
+  if (updated.type === ReturnType.EXCHANGE) {
+    await emitExchangeApproved(updated.id);
+  }
+  return serializeReturn(updated);
+}
+export async function rejectReturn(returnId: string, actorId: string, reason: string) { if (!reason.trim()) throw new HttpError(400, 'REJECTION_REASON_REQUIRED', 'A rejection reason is required.'); return serializeReturn(await transitionReturn(returnId, ReturnStatus.REJECTED, actorId, undefined, reason, 'RETURN_REJECTED')); }
+export async function receiveReturn(returnId: string, actorId: string, note?: string) { return serializeReturn(await transitionReturn(returnId, ReturnStatus.RECEIVED, actorId, note, undefined, 'RETURN_RECEIVED')); }
+
+async function emitExchangeApproved(returnId: string) {
+  await emitReturnEvent(returnId, 'EXCHANGE_APPROVED');
+}
 
 export async function inspectReturn(returnId: string, actorId: string, items: Array<{ returnItemId: string; condition: ReturnCondition; disposition: ReturnDisposition; note?: string }>) {
   const updated = await prisma.$transaction(async (client) => {
@@ -202,8 +238,18 @@ export async function requestRefund(returnId: string, actorId: string, idempoten
     const successfulRefunds = await client.refund.aggregate({ where: { paymentId: payment.id, status: RefundStatus.SUCCEEDED }, _sum: { amount: true } });
     const alreadyRefunded = successfulRefunds._sum.amount ?? new Prisma.Decimal(0);
     if (alreadyRefunded.add(amount).gt(payment.amount)) throw new HttpError(409, 'REFUND_AMOUNT_EXCEEDED', 'The requested refund exceeds the refundable balance.');
-    return client.refund.create({ data: { refundNumber: refundNumber(), orderId: request.orderId, paymentId: payment.id, returnRequestId: request.id, amount, currency: payment.currency, reason: request.reason, idempotencyKey, createdBy: actorId, status: RefundStatus.PENDING } });
+    const refund = await client.refund.create({ data: { refundNumber: refundNumber(), orderId: request.orderId, paymentId: payment.id, returnRequestId: request.id, amount, currency: payment.currency, reason: request.reason, idempotencyKey, createdBy: actorId, status: RefundStatus.PENDING } });
+    await enqueueEvent(client, buildEvent('REFUND_REQUESTED', 'Refund', refund.id, {
+      refundId: refund.id,
+      refundNumber: refund.refundNumber,
+      orderId: request.orderId,
+      orderNumber: request.order.orderNumber,
+      refundAmount: Number(amount),
+      currency: payment.currency,
+    }, request.userId));
+    return refund;
   });
+  afterCommitNotify();
   return { refundNumber: result.refundNumber, amount: Number(result.amount), currency: result.currency, status: result.status };
 }
 
@@ -221,8 +267,28 @@ export async function completeManualRefund(refundId: string, actorId: string, pr
     await client.refundTransaction.create({ data: { refundId: refund.id, provider: refund.provider, providerReference: providerReference.trim(), amount: refund.amount, currency: refund.currency, status: RefundStatus.SUCCEEDED } });
     await client.payment.update({ where: { id: refund.paymentId }, data: { status: paymentStatus } });
     if (refund.returnRequestId) await client.returnRequest.update({ where: { id: refund.returnRequestId }, data: { status: ReturnStatus.RESOLVED, completedAt: new Date(), actorId } });
-    return client.refund.update({ where: { id: refund.id }, data: { status: RefundStatus.SUCCEEDED, providerReference: providerReference.trim(), processedAt: new Date(), createdBy: actorId } });
+    const completed = await client.refund.update({ where: { id: refund.id }, data: { status: RefundStatus.SUCCEEDED, providerReference: providerReference.trim(), processedAt: new Date(), createdBy: actorId } });
+    const orderUser = await client.order.findUnique({ where: { id: refund.orderId }, select: { userId: true, orderNumber: true } });
+    await enqueueEvent(client, buildEvent('REFUND_SUCCEEDED', 'Refund', refund.id, {
+      refundId: refund.id,
+      refundNumber: completed.refundNumber,
+      orderId: refund.orderId,
+      orderNumber: orderUser?.orderNumber ?? '',
+      refundAmount: Number(completed.amount),
+      currency: completed.currency,
+    }, orderUser?.userId ?? null));
+    if (refund.returnRequestId) {
+      const resolved = await client.returnRequest.findUnique({ where: { id: refund.returnRequestId }, select: { returnNumber: true, userId: true } });
+      await enqueueEvent(client, buildEvent('RETURN_RESOLVED', 'ReturnRequest', refund.returnRequestId, {
+        returnId: refund.returnRequestId,
+        returnNumber: resolved?.returnNumber ?? '',
+        orderId: refund.orderId,
+        orderNumber: orderUser?.orderNumber ?? '',
+      }, resolved?.userId ?? null));
+    }
+    return completed;
   });
+  afterCommitNotify();
   return { refundNumber: result.refundNumber, amount: Number(result.amount), currency: result.currency, status: result.status, providerReference: result.providerReference };
 }
 
