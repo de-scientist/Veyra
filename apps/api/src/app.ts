@@ -15,6 +15,7 @@ import { checkoutRoutes } from './routes/checkout.js';
 import { paymentRoutes } from './routes/payments.js';
 import { fulfillmentRoutes } from './routes/fulfillment.js';
 import { returnRoutes } from './routes/returns.js';
+import { accountRoutes } from './routes/account.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
