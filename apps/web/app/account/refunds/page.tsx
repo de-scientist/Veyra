@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { getRefunds, type AccountRefund } from '../../../lib/shopping-api';
 import { PriceDisplay } from '../../../components/PriceDisplay';
 
-export const metadata = { title: 'Refunds | Veyra', robots: { index: false, follow: false } };
-
 export default function RefundsPage() {
   const [refunds, setRefunds] = useState<AccountRefund[]>([]);
   const [loading, setLoading] = useState(true);

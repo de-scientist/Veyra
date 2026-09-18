@@ -519,6 +519,14 @@ export function getReturns() {
   return request<AccountReturn[]>('/account/returns');
 }
 
+export function getAccountReturnDetail(returnId: string) {
+  return request<AccountReturn>(`/account/returns/${encodeURIComponent(returnId)}`);
+}
+
+export function getAccountWishlist() {
+  return request<{ count: number; items: Array<{ id: string; productId: string; product: { name: string; slug: string; image: string | null } }> }>('/account/wishlist');
+}
+
 export function getRefunds() {
   return request<AccountRefund[]>('/account/refunds');
 }

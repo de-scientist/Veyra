@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { getPayments, type AccountPayment } from '../../../lib/shopping-api';
 import { PriceDisplay } from '../../../components/PriceDisplay';
-
-export const metadata = { title: 'Payment History | Veyra', robots: { index: false, follow: false } };
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<AccountPayment[]>([]);

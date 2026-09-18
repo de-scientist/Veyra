@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { getSessions, changePassword, revokeSession, revokeOtherSessions, type AccountSession } from '../../../lib/shopping-api';
 
-export const metadata = { title: 'Security | Veyra', robots: { index: false, follow: false } };
-
 export default function SecurityPage() {
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [loading, setLoading] = useState(true);

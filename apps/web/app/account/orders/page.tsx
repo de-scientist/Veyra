@@ -5,9 +5,7 @@ import Link from 'next/link';
 import { getOrders, type PaginatedOrders, type OrderSummary } from '../../../lib/shopping-api';
 import { PriceDisplay } from '../../../components/PriceDisplay';
 
-const STATUSES = ['All', 'PENDING', 'CONFIRMED', 'PROCESSING', 'COMPLETED', 'CANCELLED', 'RETURNED'] as const;
-
-export const metadata = { title: 'Orders | Veyra', robots: { index: false, follow: false } };
+const STATUSES = ['All', 'PENDING', 'CONFIRMED', 'PROCESSING', 'COMPLETED', 'CANCELLED'] as const;
 
 export default function OrdersPage() {
   const [data, setData] = useState<PaginatedOrders | null>(null);

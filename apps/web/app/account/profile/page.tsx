@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { getProfile, updateProfile, type AccountProfile } from '../../../lib/shopping-api';
 
-export const metadata = { title: 'Profile | Veyra', robots: { index: false, follow: false } };
-
 export default function ProfilePage() {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [loading, setLoading] = useState(true);

@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { getOrderDetail, type AccountOrder } from '../../../../../lib/shopping-api';
 import { PriceDisplay } from '../../../../../components/PriceDisplay';
 
-export const metadata = { title: 'Order Detail | Veyra', robots: { index: false, follow: false } };
-
 interface OrderDetailPageProps {
   params: Promise<{ orderNumber: string }>;
 }

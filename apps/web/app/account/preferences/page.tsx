@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { getPreferences, updatePreferences, type AccountPreferences } from '../../../lib/shopping-api';
 
-export const metadata = { title: 'Preferences | Veyra', robots: { index: false, follow: false } };
-
 export default function PreferencesPage() {
   const [preferences, setPreferences] = useState<AccountPreferences | null>(null);
   const [loading, setLoading] = useState(true);

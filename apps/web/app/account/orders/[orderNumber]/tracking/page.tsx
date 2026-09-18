@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getOrderTracking } from '../../../../../lib/shopping-api';
 
-export const metadata = { title: 'Track Order | Veyra', robots: { index: false, follow: false } };
-
 interface TrackingPageProps {
   params: Promise<{ orderNumber: string }>;
 }

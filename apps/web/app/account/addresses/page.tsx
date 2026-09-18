@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { getAddresses, createAddress, updateAddress, deleteAddress, setDefaultAddress, type AccountAddress } from '../../../lib/shopping-api';
 
-export const metadata = { title: 'Addresses | Veyra', robots: { index: false, follow: false } };
-
 export default function AddressesPage() {
   const [addresses, setAddresses] = useState<AccountAddress[]>([]);
   const [loading, setLoading] = useState(true);
