@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getOrderDetail, reorder, type AccountOrder } from '../../../../../lib/shopping-api';
-import { PriceDisplay } from '../../../../../components/PriceDisplay';
+import { getOrderDetail, reorder, type AccountOrder, type AccountOrderItem } from '../../../../lib/shopping-api';
+import { PriceDisplay } from '../../../../components/PriceDisplay';
 
 interface OrderDetailPageProps {
   params: Promise<{ orderNumber: string }>;
@@ -18,8 +18,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
     let mounted = true;
     params.then(({ orderNumber }) => {
       getOrderDetail(orderNumber)
-        .then((o) => { if (mounted) setOrder(o); })
-        .catch((e) => { if (mounted) setError(e instanceof Error ? e.message : 'Failed to load order'); })
+        .then((o: AccountOrder) => { if (mounted) setOrder(o); })
+        .catch((e: unknown) => { if (mounted) setError(e instanceof Error ? e.message : 'Failed to load order'); })
         .finally(() => { if (mounted) setLoading(false); });
     });
     return () => { mounted = false; };
@@ -144,7 +144,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       <section className="account-section">
         <h2>Items ({order.itemCount})</h2>
         <div className="account-order-items">
-          {order.items.map((item) => (
+          {order.items.map((item: AccountOrderItem) => (
             <article key={item.id} className="account-order-item">
               <div className="account-order-item__image">
                 {item.productImage ? (
@@ -216,7 +216,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
       <section className="account-section">
         <h2>Timeline</h2>
         <div className="account-timeline">
-          {order.delivery?.history?.map((event, idx) => (
+          {order.delivery?.history?.map((event: { fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }, idx: number) => (
             <div key={idx} className="account-timeline__event">
               <div className="account-timeline__marker" />
               <div className="account-timeline__content">
@@ -239,7 +239,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
             onClick={async () => {
               try {
                 const result = await reorder(order.orderNumber);
-                const added = result.results.filter((r) => r.added).length;
+                const added = result.results.filter((r: { added: boolean }) => r.added).length;
                 alert(added > 0 ? `${added} item(s) added to your cart. Review your cart to check out.` : 'No items could be added to your cart (unavailable or out of stock).');
                 if (added > 0) window.location.href = '/cart';
               } catch (e) {

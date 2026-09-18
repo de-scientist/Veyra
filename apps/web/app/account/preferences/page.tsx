@@ -36,7 +36,7 @@ export default function PreferencesPage() {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
+    const { name, checked } = e.currentTarget;
     setFormData((prev) => ({ ...prev, [name]: checked }));
     setError(null);
     setSuccess(null);

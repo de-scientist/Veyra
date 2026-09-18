@@ -33,7 +33,8 @@ export default function SecurityPage() {
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPasswordForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.currentTarget;
+    setPasswordForm((prev) => ({ ...prev, [name]: value }));
     setError(null);
     setSuccess(null);
   };
