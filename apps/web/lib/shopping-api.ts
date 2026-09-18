@@ -124,6 +124,193 @@ export type WishlistItem = {
   };
 };
 
+// Account types
+export type AccountProfile = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  avatarUrl: string | null;
+  status: string;
+  emailVerifiedAt: string | null;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AccountAddress = {
+  id: string;
+  label: string | null;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string | null;
+  postalCode: string | null;
+  country: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AccountOrderItem = {
+  id: string;
+  productName: string;
+  sku: string;
+  variantDescription: string | null;
+  quantity: number;
+  unitPrice: number;
+  discountAmount: number;
+  subtotal: number;
+  total: number;
+  productImage: string | null;
+};
+
+export type AccountOrderDelivery = {
+  id: string;
+  status: string;
+  trackingNumber: string | null;
+  estimatedDeliveryAt: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+  method: { name: string; type: string } | null;
+  history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }>;
+};
+
+export type AccountOrderPayment = {
+  id: string;
+  status: string;
+  amount: number;
+  provider: string;
+  providerReference: string | null;
+  paidAt: string | null;
+};
+
+export type AccountOrder = {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  subtotal: number;
+  shippingTotal: number;
+  discountTotal: number;
+  taxTotal: number;
+  grandTotal: number;
+  currency: string;
+  itemCount: number;
+  items: AccountOrderItem[];
+  delivery: AccountOrderDelivery | null;
+  payment: AccountOrderPayment | null;
+};
+
+export type OrderSummary = {
+  orderNumber: string;
+  createdAt: string;
+  status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  grandTotal: number;
+  currency: string;
+  itemCount: number;
+};
+
+export type AccountPayment = {
+  id: string;
+  orderNumber: string;
+  provider: string;
+  status: string;
+  amount: number;
+  currency: string;
+  providerReference: string | null;
+  paidAt: string | null;
+  createdAt: string;
+};
+
+export type AccountReturnItem = {
+  id: string;
+  orderItemId: string;
+  productName: string;
+  sku: string;
+  variantDescription: string | null;
+  quantity: number;
+  reason: string;
+  condition: string;
+  disposition: string | null;
+  refundAmount: number;
+};
+
+export type AccountReturn = {
+  id: string;
+  returnNumber: string;
+  orderNumber: string;
+  type: 'REFUND' | 'EXCHANGE';
+  status: string;
+  reason: string;
+  customerNote: string | null;
+  requestedAt: string;
+  items: AccountReturnItem[];
+  refund: { refundNumber: string; amount: number; currency: string; status: string; providerReference: string | null } | null;
+  exchange: { status: string; replacementVariantId: string; quantity: number } | null;
+  history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }>;
+};
+
+export type AccountRefund = {
+  id: string;
+  refundNumber: string;
+  orderNumber: string;
+  amount: number;
+  currency: string;
+  status: string;
+  provider: string;
+  providerReference: string | null;
+  reason: string;
+  requestedAt: string;
+  processedAt: string | null;
+};
+
+export type AccountSession = {
+  id: string;
+  device: string;
+  ipAddress: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  isCurrent: boolean;
+};
+
+export type AccountPreferences = {
+  id: string;
+  userId: string;
+  emailOrderUpdates: boolean;
+  emailDelivery: boolean;
+  emailReturns: boolean;
+  emailMarketing: boolean;
+  updatedAt: string;
+};
+
+export type DashboardData = {
+  profile: AccountProfile;
+  orderSummary: { totalOrders: number; activeOrders: number; deliveredOrders: number; processingOrders: number };
+  currentOrder: AccountOrder | null;
+  recentOrders: OrderSummary[];
+  wishlist: { count: number; items: Array<{ productId: string; product: { name: string; slug: string; image: string | null; price: number; availability: string } }> } | null;
+  activeReturns: { count: number; latest: AccountReturn | null };
+  recentRefunds: { count: number; latest: AccountRefund | null };
+};
+
+export type PaginatedOrders = {
+  orders: OrderSummary[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+
+export type ReorderResult = {
+  orderNumber: string;
+  results: Array<{ orderItemId: string; productName: string; sku: string; added: boolean; reason?: string; currentPrice?: number; currentStock?: number }>;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}/api/v1${path}`, {
     ...init,
@@ -264,4 +451,106 @@ export function inspectReturn(returnId: string, items: Array<{ returnItemId: str
 
 export function requestRefund(returnId: string) {
   return request<{ refundNumber: string; amount: number; currency: string; status: string }>(`/admin/returns/${returnId}/refund`, { method: 'POST', body: JSON.stringify({ idempotencyKey: `refund-${returnId}` }) });
+}
+
+// Account API calls
+export function getAccountDashboard() {
+  return request<DashboardData>('/account');
+}
+
+export function getProfile() {
+  return request<AccountProfile>('/account/profile');
+}
+
+export function updateProfile(input: { firstName?: string; lastName?: string; phone?: string | null }) {
+  return request<AccountProfile>('/account/profile', { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function getAddresses() {
+  return request<AccountAddress[]>('/account/addresses');
+}
+
+export function createAddress(input: { label?: string; line1: string; line2?: string; city: string; state?: string; postalCode?: string; country?: string }) {
+  return request<AccountAddress>('/account/addresses', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateAddress(id: string, input: { label?: string; line1?: string; line2?: string; city?: string; state?: string; postalCode?: string; country?: string }) {
+  return request<AccountAddress>(`/account/addresses/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function deleteAddress(id: string) {
+  return request<{ deleted: boolean }>(`/account/addresses/${id}`, { method: 'DELETE' });
+}
+
+export function setDefaultAddress(id: string, type: 'shipping' | 'billing') {
+  return request<AccountAddress>(`/account/addresses/${id}/default`, { method: 'POST', body: JSON.stringify({ type }) });
+}
+
+export function getOrders(params?: { page?: number; pageSize?: number; status?: string; search?: string }) {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+  if (params?.status) searchParams.set('status', params.status);
+  if (params?.search) searchParams.set('search', params.search);
+  return request<PaginatedOrders>(`/account/orders?${searchParams.toString()}`);
+}
+
+export function getOrderDetail(orderNumber: string) {
+  return request<AccountOrder>(`/account/orders/${encodeURIComponent(orderNumber)}`);
+}
+
+export function getOrderTracking(orderNumber: string) {
+  return request<{ orderNumber: string; status: string; fulfillmentStatus: string; trackingNumber: string | null; internalReference: string | null; courierProvider: string | null; method: { name: string; type: string } | null; zone: { code: string; name: string } | null; estimatedDeliveryAt: string | null; shippedAt: string | null; pickedUpAt: string | null; deliveredAt: string | null; history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }> }>(`/account/orders/${encodeURIComponent(orderNumber)}/tracking`);
+}
+
+export function reorder(orderNumber: string) {
+  return request<ReorderResult>(`/account/orders/${encodeURIComponent(orderNumber)}/reorder`, { method: 'POST' });
+}
+
+export function claimGuestOrder(orderNumber: string, token: string) {
+  return request<{ orderNumber: string; claimed: boolean }>('/account/orders/claim', { method: 'POST', body: JSON.stringify({ orderNumber, token }) });
+}
+
+export function getPayments() {
+  return request<AccountPayment[]>('/account/payments');
+}
+
+export function getReturns() {
+  return request<AccountReturn[]>('/account/returns');
+}
+
+export function getRefunds() {
+  return request<AccountRefund[]>('/account/refunds');
+}
+
+export function getSessions() {
+  return request<AccountSession[]>('/account/security');
+}
+
+export function changePassword(input: { currentPassword: string; newPassword: string; confirmPassword: string }) {
+  return request<{ changed: boolean }>('/account/security/password', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function revokeSession(id: string) {
+  return request<{ revoked: boolean }>(`/account/sessions/${id}`, { method: 'DELETE' });
+}
+
+export function revokeOtherSessions() {
+  return request<{ revoked: string }>('/account/sessions/others', { method: 'DELETE' });
+}
+
+export function getPreferences() {
+  return request<AccountPreferences>('/account/preferences');
+}
+
+export function updatePreferences(input: { emailOrderUpdates?: boolean; emailDelivery?: boolean; emailReturns?: boolean; emailMarketing?: boolean }) {
+  return request<AccountPreferences>('/account/preferences', { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function deactivateAccount() {
+  return request<{ deactivated: boolean }>('/account/deactivate', { method: 'POST' });
+}
+
+export function deleteAccount() {
+  return request<{ deleted: boolean }>('/account/delete', { method: 'POST' });
 }
