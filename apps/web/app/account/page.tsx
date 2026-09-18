@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import type { Route } from 'next';
 import { getAccountDashboard, type DashboardData, type AccountOrder, type OrderSummary } from '../../lib/shopping-api';
 import { PriceDisplay } from '../../components/PriceDisplay';
 
@@ -217,7 +218,7 @@ function ReturnsRefundsSection({ activeReturns, recentRefunds }: { activeReturns
 }
 
 function QuickLinks() {
-  const links = [
+  const links: Array<{ href: Route; label: string; icon: string }> = [
     { href: '/account/profile', label: 'Edit Profile', icon: '👤' },
     { href: '/account/addresses', label: 'Manage Addresses', icon: '📍' },
     { href: '/account/orders', label: 'Order History', icon: '📦' },
