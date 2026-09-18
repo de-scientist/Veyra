@@ -76,6 +76,7 @@ describe('production smoke journey', () => {
   it('guest cart accepts the variant and validates checkout-ready', async () => {
     const add = await app.inject({ method: 'POST', url: '/api/v1/cart/items', payload: { variantId, quantity: 1 } });
     expect(add.statusCode).toBe(200);
+    expect((add.json() as { data: { itemCount: number } }).data.itemCount).toBe(1);
     guestCookie = cookies(add);
     expect(guestCookie).toContain('veyra_guest_cart');
     const validation = await app.inject({ method: 'GET', url: '/api/v1/cart/validation', headers: { cookie: guestCookie } });
@@ -135,14 +136,16 @@ describe('production smoke journey', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/payments/mpesa/initiate',
-      headers: { cookie: guestCookie, 'idempotency-key': `smoke-pay-${stamp}-123456` },
+      headers: { cookie: guestCookie, 'idempotency-key': `smoke-pay-${stamp}-123456`, 'x-confirmation-token': confirmationToken ?? '' },
       payload: { orderNumber },
     });
+    // Controlled failure (missing provider configuration), never a success.
     expect([400, 409, 503]).toContain(response.statusCode);
-    const body = response.json() as { success: boolean; data?: { payment?: { status: string } } };
-    expect(body.success).toBe(true);
-    // A missing-provider configuration surfaces as a controlled failure, never PAID.
-    expect(body.data?.payment?.status).not.toBe('PAID');
+    const body = response.json() as { success: boolean; error?: { code: string; requestId: string } };
+    expect(body.success).toBe(false);
+    expect(typeof body.error?.code).toBe('string');
+    expect(typeof body.error?.requestId).toBe('string');
+    expect(response.body).not.toMatch(/"status":"PAID"/);
   });
 
   it('registration provisions account access', async () => {

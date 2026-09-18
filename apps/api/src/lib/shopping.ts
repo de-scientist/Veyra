@@ -149,6 +149,17 @@ async function loadCart(where: Prisma.CartWhereUniqueInput) {
   return prisma.cart.findUnique({ where, include: cartInclude });
 }
 
+/**
+ * Reload a known cart by id. Mutation routes must use this after writing:
+ * calling getOrCreateCart again would mint a new orphan guest cart because
+ * the reply cookie is not visible on the current request.
+ */
+export async function reloadCart(cartId: string) {
+  const cart = await loadCart({ id: cartId });
+  if (!cart) throw new HttpError(404, 'CART_NOT_FOUND', 'Cart not found.');
+  return cart;
+}
+
 async function createGuestCart(sessionId: string) {
   return prisma.cart.create({
     data: {

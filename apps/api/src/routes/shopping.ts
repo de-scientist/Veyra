@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma.js';
 import {
   addCartItem,
   getOrCreateCart,
+  reloadCart,
   serializeCart,
   updateCartItem,
   validateCart,
@@ -84,7 +85,7 @@ export async function shoppingRoutes(app: FastifyInstance) {
     const payload = cartItemSchema.parse(request.body);
     const cart = await getOrCreateCart(request, reply);
     await addCartItem(cart.id, payload.variantId, payload.quantity);
-    const updatedCart = await getOrCreateCart(request, reply);
+    const updatedCart = await reloadCart(cart.id);
     return { success: true, data: serializeCart(updatedCart) };
   });
 
@@ -93,7 +94,7 @@ export async function shoppingRoutes(app: FastifyInstance) {
     const payload = quantitySchema.parse(request.body);
     const cart = await getOrCreateCart(request, reply);
     await updateCartItem(cart.id, itemId, payload.quantity);
-    const updatedCart = await getOrCreateCart(request, reply);
+    const updatedCart = await reloadCart(cart.id);
     return { success: true, data: serializeCart(updatedCart) };
   });
 
@@ -101,14 +102,14 @@ export async function shoppingRoutes(app: FastifyInstance) {
     const { itemId } = request.params as { itemId: string };
     const cart = await getOrCreateCart(request, reply);
     await prisma.cartItem.deleteMany({ where: { id: itemId, cartId: cart.id } });
-    const updatedCart = await getOrCreateCart(request, reply);
+    const updatedCart = await reloadCart(cart.id);
     return { success: true, data: serializeCart(updatedCart) };
   });
 
   app.delete('/cart', async (request, reply) => {
     const cart = await getOrCreateCart(request, reply);
     await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
-    const updatedCart = await getOrCreateCart(request, reply);
+    const updatedCart = await reloadCart(cart.id);
     return { success: true, data: serializeCart(updatedCart) };
   });
 
