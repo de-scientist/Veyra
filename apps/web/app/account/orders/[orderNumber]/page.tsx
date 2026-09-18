@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getOrderDetail, type AccountOrder } from '../../../../../lib/shopping-api';
+import { getOrderDetail, reorder, type AccountOrder } from '../../../../../lib/shopping-api';
 import { PriceDisplay } from '../../../../../components/PriceDisplay';
 
 interface OrderDetailPageProps {
@@ -233,6 +233,23 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
         <h2>Actions</h2>
         <div className="account-actions">
           <Link href={`/account/orders/${order.orderNumber}/tracking`} className="button">Track Order</Link>
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={async () => {
+              try {
+                const result = await reorder(order.orderNumber);
+                const added = result.results.filter((r) => r.added).length;
+                alert(added > 0 ? `${added} item(s) added to your cart. Review your cart to check out.` : 'No items could be added to your cart (unavailable or out of stock).');
+                if (added > 0) window.location.href = '/cart';
+              } catch (e) {
+                alert(e instanceof Error ? e.message : 'Reorder failed. Please try again.');
+              }
+            }}
+          >
+            Reorder These Items
+          </button>
+          <Link href="/returns" className="button button--secondary">Request Return</Link>
           <button type="button" className="button button--secondary" onClick={() => window.print()}>Print Order</button>
         </div>
       </section>

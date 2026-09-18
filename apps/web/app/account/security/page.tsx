@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getSessions, changePassword, revokeSession, revokeOtherSessions, type AccountSession } from '../../../lib/shopping-api';
+import { getSessions, changePassword, revokeSession, revokeOtherSessions, deactivateAccount, deleteAccount, type AccountSession } from '../../../lib/shopping-api';
 
 export default function SecurityPage() {
   const [sessions, setSessions] = useState<AccountSession[]>([]);
@@ -211,11 +211,15 @@ export default function SecurityPage() {
           <div>
             <h3>Deactivate Account</h3>
             <p className="muted-copy">Temporarily disable your account. You can reactivate later by contacting support.</p>
-            <button type="button" className="button button--secondary button--danger" onClick={() => {
+            <button type="button" className="button button--secondary button--danger" onClick={async () => {
               if (confirm('Are you sure you want to deactivate your account? This will log you out and disable your account.')) {
-                fetch('/api/v1/account/deactivate', { method: 'POST', credentials: 'include' })
-                  .then(() => { alert('Account deactivated'); window.location.href = '/'; })
-                  .catch(() => alert('Failed to deactivate account'));
+                try {
+                  await deactivateAccount();
+                  alert('Account deactivated');
+                  window.location.href = '/';
+                } catch {
+                  alert('Failed to deactivate account');
+                }
               }
             }}>
               Deactivate Account
@@ -225,11 +229,15 @@ export default function SecurityPage() {
           <div>
             <h3>Delete Account</h3>
             <p className="muted-copy">Permanently delete your account and all personal data. This action cannot be undone.</p>
-            <button type="button" className="button button--danger" onClick={() => {
-              if (confirm('Are you absolutely sure you want to delete your account? This will permanently remove all your data and cannot be undone.')) {
-                fetch('/api/v1/account/delete', { method: 'POST', credentials: 'include' })
-                  .then(() => { alert('Account deleted'); window.location.href = '/'; })
-                  .catch(() => alert('Failed to delete account'));
+            <button type="button" className="button button--danger" onClick={async () => {
+              if (confirm('Are you absolutely sure you want to delete your account? Your orders and payment records are retained for legal/financial reasons; personal access will be disabled.')) {
+                try {
+                  await deleteAccount();
+                  alert('Account deletion requested');
+                  window.location.href = '/';
+                } catch {
+                  alert('Failed to delete account');
+                }
               }
             }}>
               Delete Account
