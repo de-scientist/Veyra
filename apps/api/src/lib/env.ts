@@ -18,6 +18,18 @@ const envSchema = z.object({
   M_PESA_SHORTCODE: z.string().optional(),
   M_PESA_PASSKEY: z.string().optional(),
   RETURN_WINDOW_DAYS: z.coerce.number().int().positive().optional(),
+  APP_URL: z.string().url().default('http://localhost:3000'),
+  EMAIL_PROVIDER: z.enum(['log', 'mock', 'smtp']).default('log'),
+  EMAIL_FROM_ADDRESS: z.string().email().default('no-reply@veyra.local'),
+  EMAIL_FROM_NAME: z.string().default('Veyra'),
+  EMAIL_WEBHOOK_SECRET: z.string().min(16).optional(),
+  SMS_PROVIDER: z.enum(['mock', 'log']).default('mock'),
+  SMS_SENDER_ID: z.string().max(11).default('VEYRA'),
+  SMS_WEBHOOK_SECRET: z.string().min(16).optional(),
+  NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+  NOTIFICATION_BASE_DELAY_MS: z.coerce.number().int().min(1000).max(3600000).default(30000),
+  NOTIFICATION_MAX_DELAY_MS: z.coerce.number().int().min(60000).max(86400000).default(3600000),
+  NOTIFICATION_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(25),
 });
 
 export const env = envSchema.parse(process.env);
