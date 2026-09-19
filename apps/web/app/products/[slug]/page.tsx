@@ -129,7 +129,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
           <ProductActions productId={product.id} productName={product.name} variants={product.variants} />
 
           <div className="status-row" style={{ marginTop: '1.5rem' }}>
-            <span>Delivery<small>Courier, local delivery &amp; pickup across our zones — calculated at checkout.</small></span>
+            <span>Delivery<small>Flexible delivery options across our zones — calculated at checkout.</small></span>
             <span>Payment<small>Secure checkout with M-Pesa support.</small></span>
           </div>
         </div>
