@@ -694,6 +694,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- Discovery layout + filters ---------- */
 .discovery-layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 1.75rem; align-items: start; }
+.discovery-layout .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .filter-panel {
   position: sticky; top: 96px; background: var(--jb-surface);
   border: 1px solid var(--jb-border); border-radius: var(--jb-radius-lg); padding: 1.25rem;
