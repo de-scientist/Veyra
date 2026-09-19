@@ -79,7 +79,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </button>
       <nav id="admin-nav" className={`account-nav admin-nav ${mobileOpen ? 'open' : ''}`} aria-label="Admin navigation">
         <div className="admin-nav__brand">
-          <Link href="/admin" className="brand">VEYRA OPS</Link>
+          <Link href="/admin" className="brand">JB OPS</Link>
           <span className="badge badge--current">{session.roles[0] ?? 'staff'}</span>
         </div>
         <ul className="account-nav-list">

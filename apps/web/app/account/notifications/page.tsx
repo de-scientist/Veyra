@@ -108,7 +108,7 @@ export default function NotificationsPage() {
         <div>
           <h1>Notifications</h1>
           <p className="muted-copy">
-            {data ? `${data.unreadCount} unread` : 'Your updates from Veyra'}
+            {data ? `${data.unreadCount} unread` : 'Your updates from JB'}
           </p>
         </div>
         <div className="account-page__actions">
