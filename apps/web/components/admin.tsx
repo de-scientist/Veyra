@@ -64,7 +64,7 @@ export function ConfirmAction({
 }: {
   label: string;
   confirmMessage: string;
-  onConfirm: () => void | Promise<void>;
+  onConfirm: () => unknown;
   danger?: boolean;
   disabled?: boolean;
   title?: string;

@@ -16,6 +16,8 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const [order, setOrder] = useState<AccountOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const { notify } = useToast();
 
   useEffect(() => {
     let mounted = true;

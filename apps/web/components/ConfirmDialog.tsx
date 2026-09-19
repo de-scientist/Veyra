@@ -12,7 +12,7 @@ type ConfirmOptions = {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: ConfirmVariant;
-  onConfirm: () => void | Promise<void>;
+  onConfirm: () => unknown;
 };
 
 /**
