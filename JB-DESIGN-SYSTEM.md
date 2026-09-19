@@ -1,74 +1,65 @@
-# JB Design System v1.0
+# JB Mercantile Design System v2
 
-Brand: **JB** — modern, premium, trustworthy, mobile-first clothing e-commerce (Kenya-first, direct-to-consumer).
-Core identity: **Royal Blue + White**. Single token source: `apps/web/app/globals.css :root`.
+Brand: **JB Mercantile** — *Fashion • Footwear • Kitchen & Home*. Premium multi-category Kenyan retail. Royal Blue + White, Light/Dark/System. Single token source: `apps/web/app/globals.css`.
 
-## 1. Brand
+## 1. Brand colors
 
-- **Logo:** JB geometric lettermark. Assets: `public/jb-logo.png` (primary, blue-on-white contexts + favicon source), `public/jb-navbar.png` (header-optimised). Usage: header (height 32px desktop / 28px mobile), auth pages (48px), admin sidebar (32px), footer (28px), order-confirmation + emails (where applicable). Clear space = cap-height of "J" on all sides. Never stretch, recolour, add gradients/shadows, or place blue-on-blue.
-- **Voice:** concise, trustworthy, no invented claims/prices/reviews/addresses.
-- **Principles:** one coherent product; white space first; blue reserved for action/emphasis; subtle motion only; mobile-first; backend authoritative (price, stock, totals, payment state).
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--jb-primary` | `#1D4ED8` | `#3F6FE0` | Primary CTA bg (white text both themes) |
+| `--jb-primary-hover` / `-active` | `#1E40AF` / `#1E3A8A` | `#3A67DC` / `#2E53B4` | Hover/active (dark values keep 4.5:1 with white) |
+| `--jb-primary-strong` | `#0047AB` | `#9DBCFF` | Text/link accents on surfaces |
+| `--jb-primary-soft` | `#E8EEFB` | `#17264D` | Tinted wells, selected states |
+| `--jb-primary-foreground` | `#FFFFFF` | `#FFFFFF` | Text on primary |
 
-## 2. Colour tokens
+Royal Blue `#0047AB` (classic) is the text-accent shade; `#1D4ED8` is the action shade (better AA on white). Never use other hues for brand.
+
+## 2. Semantic tokens (both themes)
 
 ```text
---jb-primary:            #1D4ED8  (Royal Blue — primary CTA, active nav, links, selected)
---jb-primary-hover:      #1E40AF
---jb-primary-active:     #1E3A8A
---jb-primary-soft:       #E8EEFB  (tinted surfaces, selected pills, info bg)
---jb-primary-foreground: #FFFFFF
---jb-background:         #FFFFFF  (app background)
---jb-surface:            #FFFFFF  (cards)
---jb-surface-muted:      #F1F5FD  (subtle wells, media placeholders, summary strips)
---jb-text:               #0F1E3D  (headings/body — navy-ink, AA on white)
---jb-text-muted:         #4B5B7C  (secondary — AA on white ≥ 4.6:1)
---jb-border:             #DCE3F5  (1px borders)
---jb-success:            #157A3D   bg #E5F5EB
---jb-warning:            #9A6200   bg #FFF3DC
---jb-error:              #C81E1E   bg #FDECEC
---jb-info:               #1D4ED8   bg #E8EEFB
---jb-focus:              #1D4ED8  (2px outline + 2px offset, never removed)
+--background / --foreground            app canvas + ink
+--surface / --surface-elevated / --surface-muted
+--border / --border-strong
+--primary / --primary-foreground
+--muted / --muted-foreground           secondary text (#4B5B7C light / #A9B7D6 dark)
+--success / --warning / --error / --info (+ -bg tints)
+--focus                                visible focus ring, never removed
 ```
 
-Legacy aliases (`--brand`, `--accent`, `--bg`, …) are mapped to JB tokens for backward compatibility — do not use in new code. No other hues in UI; semantic colours are for status only.
+Dark surfaces: `#0B1222` canvas, `#121B31` cards, `#1A2542` wells — deep navy, never pure black; hero stays royal-blue gradient (deeper stops in dark). `color-scheme` set per theme so native controls match.
 
 ## 3. Typography
 
-System sans stack (no network font): `-apple-system, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif`.
-Scale: display `clamp(2.25rem,5vw,3.75rem)/1.05/-0.03em/700`; h1 `clamp(1.6rem,2.4vw,2.25rem)/1.15/700`; h2 `1.25rem/1.3/700`; h3 `1.05rem/1.4/650`; body `1rem/1.6/400`; small `0.875rem/1.5`; caption/eyebrow `0.72rem/uppercase/+0.14em/700 muted`; button `0.95rem/600`; label `0.9rem/600`. One font family everywhere.
+One system sans stack. Display `clamp(2.25rem,5vw,3.75rem)/1.05/700`; page `clamp(1.6rem,2.4vw,2.25rem)`; section `clamp(1.5rem,2vw,2.2rem)`; card `1.05–1.2rem`; body `1rem/1.6`; small `0.875rem`; eyebrow `0.72rem/uppercase/0.14em/700`. Readable in both themes (ink `#0F1E3D` / `#EAF0FF`).
 
-## 4. Spacing / radius / shadow / borders
+## 4. Spacing / radii / shadows / borders / breakpoints
 
-Spacing scale (rem): `0.25 / 0.5 / 0.75 / 1 / 1.25 / 1.5 / 2 / 3 / 4`. Page container `min(1180px, 100% - 2rem)`; section gap `3rem`; card padding `1.25–1.5rem`.
-Radius: sm `10px` (inputs), md `14px` (panels), lg `18px` (cards), pill `999px` (CTAs, pills, badges). No other radii.
-Shadows: `sm 0 1px 2px rgba(15,30,61,.06)`, `md 0 12px 30px rgba(15,30,61,.08)`; no glow/heavy shadows.
-Borders: `1px solid var(--jb-border)`; never coloured borders except selected/focus/error states.
+Scale `0.25–4rem`; container `min(1180px,100%-2rem)`; radii sm 10 / md 14 / lg 18 / pill 999 (no excessive rounding); shadows subtle only (stronger black in dark); borders `1px var(--border)`. Breakpoints: 1020px (filters→drawer, mega-menu off), 900px (grids 2-col, nav→hamburger), 640px (single column).
 
-## 5. Icons
+## 5. Buttons / inputs / badges / chips
 
-Inline SVG (stroke 1.8, round caps) for nav/actions; emoji removed from customer/admin nav. Icon size 18px (nav), 16px (inline). `aria-hidden="true"` on decorative icons; meaningful icon-buttons always carry `aria-label`.
+Primary (blue), Secondary + Danger (surface bg, colored border/text), Small, Link/text-button. 44px targets, hover/active/focus-visible/disabled/loading. Inputs 44–48px, 10px radius, blue focus ring + tint; error red + message. Badges pill uppercase (sale blue; status green/red/amber/blue via `StatusBadge`). Active-filter `.chip`s with removable ✕.
 
-## 6. Components
+## 6. Navigation / breadcrumbs / pagination / menus
 
-- **Button:** pill, primary = blue bg/white text; secondary = white bg/blue border+text; danger = white bg/red border+text (solid red only for confirmed destructive submit). Heights 44px (default, touch target), 40px small. States: hover (darker), active (darkest + translateY(0)), focus-visible ring, disabled (50% opacity, `not-allowed`), loading (`aria-busy`, spinner + label preserved).
-- **Input/Select/Textarea:** 44px min-height, 10px radius, 1px border, white bg, focus = blue border + 3px soft ring; error = red border + message with `aria-describedby`; help text muted.
-- **Checkbox/Radio/Switch:** 20px+ targets, blue checked, visible focus.
-- **Card:** white, 1px border, lg radius, sm shadow; hover = border-blue + md shadow (product cards only); no lift on data cards.
-- **Badge:** pill, uppercase 0.7rem/700; variants sale (blue), success/warning/error/info (semantic bg), neutral (muted). Status badges (`AdminStatusBadge`) map order/payment/fulfilment states to these — never raw hex.
-- **Alert/Toast:** left blue/semantic border + tinted bg + `role=status|alert`; one style site-wide.
-- **Tabs/Breadcrumbs/Pagination/Dropdown:** breadcrumbs = `nav > ol`; pagination = secondary buttons + "Page x of y"; dropdowns native `<select>` styled.
-- **Dialog/Drawer:** overlay `rgba(15,30,61,.5)`, panel white lg radius, Escape closes, focus trapped + returned; destructive actions state consequence + require explicit confirm (no `window.confirm` in new code).
-- **DataTable:** sticky header, row hover, 44px row actions, horizontal scroll container with shadow hint on mobile; always loading/empty/error states.
-- **PageHeader:** eyebrow + h1 + description + actions row; admin adds breadcrumbs.
-- **States:** loading = skeleton blocks (`.skeleton`) with `aria-busy`, never bare spinners for page loads; empty = centred card + explanation + next-action CTA; error = message + retry; success = confirmation card; disabled = obvious + accessible.
-- **ProductCard:** media 4:5 on muted surface, sale badge, brand eyebrow, name, short desc, `PriceDisplay` (KES, compare-at strikethrough), wishlist action; hover: image scale 1.03 + border-blue.
-- **PriceDisplay:** `en-KE` KES, compare-at only when greater; never invented.
-- **StatusBadge / OrderTimeline:** payment vs fulfilment visually separated; only backend-defined states rendered.
+Header: logo, Shop mega-menu (departments → categories, Escape/outside-click close), department links, search/account/wishlist/cart with count badges, theme dropdown (Light/Dark/System, `menuitemradio`). Mobile drawer with native `<details>` department expanders + appearance control. Breadcrumbs `nav > ol` + `aria-current`. Pagination prev/next + live count. Footer: 4 columns (brand, departments, collections, support).
 
-## 7. Motion
+## 7. Product components
 
-150–250ms ease for hover/drawer/dialog; image scale ≤1.04; full `prefers-reduced-motion` reset (no transitions/animations).
+`JBProductCard`: media 4:5 + hover image + `-x%` sale badge, dept · category eyebrow, name, desc, KES price, stock + option count, wishlist action; image-failure fallback (never broken). `ProductGallery`: main + selectable thumbnails + fallback. `ProductSpecifications`: schema-driven `dl` table (apparel and appliance facts, same component). Attribute controls: Color→swatch (hex map + initial fallback), Size/Shoe Size/Capacity/Power→option buttons, Material/Style→checkboxes — driven by `ATTRIBUTE_REGISTRY`, invalid combos unselectable.
 
-## 8. Accessibility target
+## 8. Discovery
 
-WCAG 2.2 AA: AA contrast pairs above, 44px targets, visible focus, labelled controls, semantic landmarks/headings, live regions for async feedback, touch + keyboard parity.
+URL-driven state (`department/category/q/sort/attrs/inStock/maxPrice/page`), shareable. Desktop sticky sidebar `FilterPanel`; mobile bottom `Sheet`; `SortControl`; active chips; facets derived per-scope (≥2 values, Brand suppressed when single); data-driven price buckets; 12/page pagination. Search: suggestions (departments/categories/products), combobox keyboard (↑↓/Enter/Escape), clear button, distinct start vs no-result empties.
+
+## 9. States / dialogs / toasts / tables / forms / tabs
+
+Loading: skeletons matching layout (`aria-busy`). Empty: explanation + next-action CTA (per surface). Error: message + retry, no internals. Success: confirmation + toast. Dialogs (filter sheet): overlay, labelled, focus-visible, Escape/outside close. Toasts: bottom-center, success/error/info, icon-independent text, `aria-live=polite`, 4s. Tables: sticky muted header, row hover, scroll container, themed. Forms: label/help/error/`aria-invalid`, 20px+ checks with blue accent, toggle switches with focus rings.
+
+## 10. Accessibility rules
+
+WCAG 2.2 AA: AA pairs both themes; 44px targets; visible focus; semantic landmarks/headings; live regions; labelled controls; no color-only state (labels + text accompany badges/swatches); `prefers-reduced-motion` kills transitions/zoom; skip link; duplicate-ID-free filter instances (`idPrefix`).
+
+## 11. Logo
+
+`JBLogo`/`JBMark` SVG: royal rounded square + white geometric JB, theme-proof. Lockup with `JB MERCANTILE` + optional descriptor. PNGs remain for favicon/social/packaging.

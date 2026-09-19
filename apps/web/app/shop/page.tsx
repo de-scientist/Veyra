@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import type { Route } from 'next';
 
 import { ProductCard } from '../../components/ProductCard';
 import { FilterPanel, FilterSheetHost, SortControl } from '../../components/DiscoveryFilters';
@@ -74,7 +75,7 @@ export default function ShopPage({ searchParams }: { searchParams?: SearchParams
     const params = new URLSearchParams(discoveryQueryString({ ...query, ...fixed, page: p }).slice(1));
     if (maxPrice !== null) params.set('maxPrice', String(maxPrice));
     const s = params.toString();
-    return `/shop${s ? `?${s}` : ''}`;
+    return `/shop${s ? `?${s}` : ''}` as Route;
   };
 
   return (
@@ -123,7 +124,7 @@ export default function ShopPage({ searchParams }: { searchParams?: SearchParams
           {activeChips.map((chip) => (
             <li key={chip.key} className="chip">
               {chip.label}
-              <Link href={chip.href} aria-label={`Remove filter ${chip.label}`}>✕</Link>
+              <Link href={chip.href as Route} aria-label={`Remove filter ${chip.label}`}>✕</Link>
             </li>
           ))}
         </ul>

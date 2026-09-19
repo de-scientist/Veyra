@@ -6,12 +6,13 @@ import { useState } from 'react';
 import { FacetControl } from './AttributeControls';
 import {
   discoveryQueryString,
+  type DepartmentSlug,
   type DiscoveryQuery,
   type Facet,
   type PriceBucket,
 } from '../lib/catalog';
 
-export type FixedParams = { department?: string; category?: string; q?: string };
+export type FixedParams = { department?: DepartmentSlug; category?: string; q?: string };
 
 type FilterProps = {
   facets: Facet[];

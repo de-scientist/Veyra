@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 
 import { ProductCard } from '../../../components/ProductCard';
@@ -57,7 +58,7 @@ export default function CategoryPage({ params, searchParams }: { params: { slug:
     pms.delete('category');
     if (maxPrice !== null) pms.set('maxPrice', String(maxPrice));
     const s = pms.toString();
-    return `${basePath}${s ? `?${s}` : ''}`;
+    return `${basePath}${s ? `?${s}` : ''}` as Route;
   };
 
   return (
