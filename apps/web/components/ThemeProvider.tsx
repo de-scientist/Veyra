@@ -93,6 +93,12 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
         toggleRef.current?.focus();
         return;
       }
+      // Tab out of the menu dismisses it (focus returns to the toggle via
+      // the close path) instead of leaving a detached open menu behind.
+      if (event.key === 'Tab' && menu && !menu.contains(document.activeElement)) {
+        setOpen(false);
+        return;
+      }
       if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && menu) {
         event.preventDefault();
         const items = Array.from(menu.querySelectorAll<HTMLElement>('button'));
@@ -101,8 +107,16 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
         items[next]?.focus();
       }
     };
+    const onPointer = (event: MouseEvent) => {
+      const root = toggleRef.current?.closest('.theme-toggle');
+      if (root && !root.contains(event.target as Node)) setOpen(false);
+    };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onPointer);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onPointer);
+    };
   }, [open ]);
 
   return (

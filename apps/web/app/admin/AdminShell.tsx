@@ -127,7 +127,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
       {mobileOpen && <div className="account-nav-overlay" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
-      <main className="account-main admin-main" role="main">
+      <main className="account-main admin-main">
         <div className="container page-shell">{children}</div>
       </main>
     </div>

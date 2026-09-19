@@ -58,6 +58,7 @@ export function SearchBar({ initialQuery = '', autoFocus = false }: { initialQue
           aria-controls="search-suggestions"
           aria-activedescendant={activeIndex >= 0 ? `suggest-${activeIndex}` : undefined}
           role="combobox"
+          aria-autocomplete="list"
           autoComplete="off"
           onChange={(e) => {
             setValue(e.target.value);

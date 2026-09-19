@@ -45,7 +45,6 @@ export function AccountNav() {
         id="account-nav"
         ref={navRef}
         className={`account-nav ${mobileOpen ? 'open' : ''}`}
-        role="navigation"
         aria-label="Account navigation"
       >
         {mobileOpen ? (

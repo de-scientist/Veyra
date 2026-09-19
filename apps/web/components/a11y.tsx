@@ -5,10 +5,16 @@ import { useEffect, useRef } from 'react';
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+function isVisible(element: HTMLElement): boolean {
+  // offsetParent is null for fixed-position elements and for <body>, so it
+  // cannot be used as a visibility test inside fixed drawers/dialogs/sheets.
+  if (element.getClientRects().length === 0) return false;
+  const style = window.getComputedStyle(element);
+  return style.visibility !== 'hidden' && style.display !== 'none';
+}
+
 function focusablesIn(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (element) => element.offsetParent !== null || element === document.activeElement,
-  );
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(isVisible);
 }
 
 /**
@@ -28,6 +34,14 @@ export function useModalFocus({
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
   const previousOverflow = useRef<string>('');
+  // Keep the latest onClose without re-subscribing the effect when the
+  // caller's inline closure identity changes (avoids trap teardown/rebuild).
+  const onCloseRef = useRef(onClose);
+  const initialRefHolder = useRef(initialFocusRef);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    initialRefHolder.current = initialFocusRef;
+  });
 
   useEffect(() => {
     if (!active) return;
@@ -36,25 +50,36 @@ export function useModalFocus({
     document.body.style.overflow = 'hidden';
 
     const container = containerRef.current;
+    // Read .current here (post-mount) so caller refs (e.g. Close button)
+    // are already attached — reading during render would see null.
     const focusTarget =
-      initialFocusRef?.current ?? (container ? focusablesIn(container)[0] : undefined);
+      initialRefHolder.current?.current ?? (container ? focusablesIn(container)[0] : undefined);
     // Focus after paint so the dialog is laid out (avoids scroll jumps).
     const frame = requestAnimationFrame(() => focusTarget?.focus({ preventScroll: true }));
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
-      if (event.key !== 'Tab' || !container) return;
-      const focusables = focusablesIn(container);
+      if (event.key !== 'Tab' || !containerRef.current) return;
+      const containerEl = containerRef.current;
+      const focusables = focusablesIn(containerEl);
       if (focusables.length === 0) {
         event.preventDefault();
         return;
       }
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
+      // If focus somehow escaped the modal (e.g. pointer click on the
+      // mouse-only overlay), pull it back instead of letting Tab walk the
+      // hidden page behind the dialog.
+      if (!containerEl.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
@@ -73,7 +98,7 @@ export function useModalFocus({
       const trigger = triggerRef.current;
       if (trigger instanceof HTMLElement) trigger.focus({ preventScroll: true });
     };
-  }, [active, onClose, initialFocusRef]);
+  }, [active]);
 
   return containerRef;
 }

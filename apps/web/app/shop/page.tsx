@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import type { Route } from 'next';
 
 import { ProductCard } from '../../components/ProductCard';
+import { JBIcon } from '../../components/JBIcons';
 import { FilterPanel, FilterSheetHost, SortControl } from '../../components/DiscoveryFilters';
 import {
   applyDiscovery,
@@ -124,7 +125,7 @@ export default function ShopPage({ searchParams }: { searchParams?: SearchParams
           {activeChips.map((chip) => (
             <li key={chip.key} className="chip">
               {chip.label}
-              <Link href={chip.href as Route} aria-label={`Remove filter ${chip.label}`}>✕</Link>
+              <Link href={chip.href as Route} aria-label={`Remove filter ${chip.label}`} className="chip__remove"><JBIcon name="close" size={14} /></Link>
             </li>
           ))}
         </ul>

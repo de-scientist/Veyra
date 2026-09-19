@@ -139,13 +139,15 @@ export function FilterSheetHost(props: FilterProps) {
         className="button button--secondary button--small filter-drawer-toggle"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls="jb-filter-sheet"
       >
         Filters
       </button>
       {open ? (
         <>
           <div className="sheet-overlay" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div ref={sheetRef} className="sheet" role="dialog" aria-modal="true" aria-label="Product filters">
+          <div ref={sheetRef} id="jb-filter-sheet" className="sheet" role="dialog" aria-modal="true" aria-label="Product filters">
             <div className="sheet__handle" aria-hidden="true" />
             <div className="sheet__header">
               <h2>Filters</h2>
