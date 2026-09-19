@@ -39,13 +39,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         if (!mounted) return;
         // UX-only gate: backend authorization remains mandatory on every endpoint.
         if (!isOperationsRole(result.roles)) {
-          router.replace('/');
+          router.replace('/login');
           return;
         }
         setSession(result);
       })
       .catch(() => {
-        if (mounted) router.replace('/');
+        if (mounted) router.replace('/login');
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -59,7 +59,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     try {
       await logout();
     } finally {
-      router.replace('/');
+      router.replace('/login');
     }
   };
 
