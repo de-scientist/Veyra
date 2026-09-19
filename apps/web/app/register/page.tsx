@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { RegisterForm } from '../../components/AuthForms';
 
 export const metadata: Metadata = {
-  title: 'Create account | JB',
+  title: 'Create account | JB Mercantile',
   description: 'Create a JB account to shop faster, track orders, and manage returns.',
   robots: { index: false, follow: false },
 };

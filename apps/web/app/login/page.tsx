@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { LoginForm } from '../../components/AuthForms';
 
 export const metadata: Metadata = {
-  title: 'Sign in | JB',
+  title: 'Sign in | JB Mercantile',
   description: 'Sign in to your JB account to shop faster, track orders, and manage returns.',
   robots: { index: false, follow: false },
 };

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { AdminShell } from './AdminShell';
 
 export const metadata: Metadata = {
-  title: 'Admin | JB',
+  title: 'Admin | JB Mercantile',
   robots: { index: false, follow: false },
 };
 
