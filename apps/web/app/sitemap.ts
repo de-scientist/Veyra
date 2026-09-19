@@ -5,7 +5,7 @@ import type { MetadataRoute } from 'next';
  * DB-backed sitemap once the production domain is finalized (Phase 15 prep).
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://veyra.example.com').replace(/\/$/, '');
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com').replace(/\/$/, '');
   const now = new Date();
   return [
     { url: `${base}/`, lastModified: now },

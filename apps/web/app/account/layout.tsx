@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { AccountNav } from '../../components/AccountNav';
 
 export const metadata: Metadata = {
-  title: 'Account | Veyra',
+  title: 'Account | JB',
   robots: { index: false, follow: false },
 };
 

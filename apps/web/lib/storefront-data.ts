@@ -60,7 +60,7 @@ export const products: Product[] = [
     description:
       'The Classic Black Hoodie pairs a premium brushed cotton feel with a confident silhouette and all-day comfort. Designed for Kenya’s cool evenings and polished everyday looks, it layers beautifully from commute to weekend plans.',
     category: 'men',
-    brand: 'Veyra',
+    brand: 'JB',
     featured: true,
     newArrival: true,
     status: 'ACTIVE',
@@ -85,7 +85,7 @@ export const products: Product[] = [
     description:
       'The Mila Tapered Trouser blends a tailored profile with comfort-first fabric. It moves from office-ready to after-hours without losing ease, giving the wardrobe an instant premium finish.',
     category: 'women',
-    brand: 'Veyra',
+    brand: 'JB',
     featured: true,
     newArrival: false,
     status: 'ACTIVE',
@@ -108,7 +108,7 @@ export const products: Product[] = [
     description:
       'The Atlas Utility Shirt delivers a structured silhouette without feeling rigid. Its refined finish works with denim, tailored trousers, and layered fits for a versatile wardrobe base.',
     category: 'men',
-    brand: 'Veyra',
+    brand: 'JB',
     featured: false,
     newArrival: true,
     status: 'ACTIVE',
@@ -130,7 +130,7 @@ export const products: Product[] = [
     description:
       'The Solace Knit Set is designed for polished, low-effort styling. The soft knit structure keeps it comfortable while the lean silhouette delivers a clean, intentional finish.',
     category: 'women',
-    brand: 'Veyra',
+    brand: 'JB',
     featured: true,
     newArrival: true,
     status: 'ACTIVE',
@@ -152,7 +152,7 @@ export const products: Product[] = [
     description:
       'The Nairobi Utility Bag brings function and refinement together with durable finishes, practical storage, and a clean silhouette that pairs well with everyday essentials.',
     category: 'accessories',
-    brand: 'Veyra',
+    brand: 'JB',
     featured: false,
     newArrival: true,
     status: 'ACTIVE',
@@ -174,7 +174,7 @@ export const products: Product[] = [
     description:
       'The Marina Overshirt brings an elevated layer to the wardrobe with a structured fit and soft hand feel. Built for layering and day-to-night ease, it plays across relaxed and tailored looks.',
     category: 'women',
-    brand: 'Veyra',
+    brand: 'JB',
     featured: false,
     newArrival: true,
     status: 'ACTIVE',
