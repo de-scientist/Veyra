@@ -88,7 +88,7 @@ export async function exportReport(report: string, query: AnalyticsQuery & { exp
     throw new Error(body?.error?.message ?? 'Export failed.');
   }
   const disposition = response.headers.get('content-disposition') ?? '';
-  const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `veyra-${report}.csv`;
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `jb-${report}.csv`;
   return { filename, csv: await response.text() };
 }
 

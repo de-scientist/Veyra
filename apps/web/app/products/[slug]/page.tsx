@@ -20,11 +20,13 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
   return (
     <main className="container page-shell product-page">
       <nav aria-label="Breadcrumb" className="breadcrumbs">
-        <Link href="/">Home</Link>
-        <span>/</span>
-        <Link href="/shop">Shop</Link>
-        <span>/</span>
-        <span>{product.name}</span>
+        <ol>
+          <li><Link href="/">Home</Link></li>
+          <li aria-hidden="true">/</li>
+          <li><Link href="/shop">Shop</Link></li>
+          <li aria-hidden="true">/</li>
+          <li aria-current="page">{product.name}</li>
+        </ol>
       </nav>
 
       <div className="product-layout">

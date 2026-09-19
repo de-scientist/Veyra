@@ -10,7 +10,7 @@ export function AdminStatusBadge({ status }: { status: string }) {
   const green = ['paid', 'completed', 'delivered', 'active', 'approved', 'succeeded', 'resolved', 'sent'];
   const red = ['failed', 'cancelled', 'rejected', 'unpaid', 'dead letter'];
   const amber = ['pending', 'processing', 'packed', 'shipped', 'out for delivery', 'under review', 'inspecting', 'in transit', 'assigned', 'preparing', 'delivery attempted', 'ready for pickup', 'partially refunded', 'refunded'];
-  const color = green.includes(normalized) ? '#1f6b45' : red.includes(normalized) ? '#b84d45' : amber.includes(normalized) ? '#7c5a45' : '#5f5a55';
+  const color = green.includes(normalized) ? '#157a3d' : red.includes(normalized) ? '#c81e1e' : amber.includes(normalized) ? '#9a6200' : '#1d4ed8';
   return (
     <span
       style={{

@@ -16,11 +16,13 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
   return (
     <main className="container page-shell">
       <nav aria-label="Breadcrumb" className="breadcrumbs">
-        <Link href="/">Home</Link>
-        <span>/</span>
-        <Link href="/shop">Shop</Link>
-        <span>/</span>
-        <span>{category.name}</span>
+        <ol>
+          <li><Link href="/">Home</Link></li>
+          <li aria-hidden="true">/</li>
+          <li><Link href="/shop">Shop</Link></li>
+          <li aria-hidden="true">/</li>
+          <li aria-current="page">{category.name}</li>
+        </ol>
       </nav>
 
       <div className="page-header">
@@ -30,15 +32,25 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
         </div>
       </div>
 
-      <p>{category.description}</p>
+      <p className="muted-copy">{category.description}</p>
 
-      <div className="product-grid">
-        {products.length > 0 ? (
-          products.map((product) => <ProductCard key={product.id} product={product} />)
-        ) : (
-          <p>No products currently available in this category.</p>
-        )}
+      <div className="toolbar">
+        <span className="toolbar__count" role="status">
+          {products.length} piece{products.length === 1 ? '' : 's'}
+        </span>
       </div>
+
+      {products.length > 0 ? (
+        <div className="product-grid">
+          {products.map((product) => <ProductCard key={product.id} product={product} />)}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <h2>No products in {category.name} yet</h2>
+          <p>New pieces are on the way. Browse everything instead.</p>
+          <Link href="/shop" className="button">Browse the shop</Link>
+        </div>
+      )}
     </main>
   );
 }
