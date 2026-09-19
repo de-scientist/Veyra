@@ -439,7 +439,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- Footer ---------- */
 .site-footer { border-top: 1px solid var(--jb-border); background: var(--jb-surface-muted); margin-top: 3rem; }
-.site-footer__inner { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 2rem; padding: 2.5rem 0 3rem; }
+.site-footer__inner { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 2rem; padding: 2.5rem 0 3rem; }
 .site-footer h4 { margin: 0 0 0.25rem; }
 .site-footer ul { list-style: none; padding: 0; margin: 0.75rem 0 0; display: grid; gap: 0.25rem; color: var(--jb-text-muted); }
 .site-footer ul a { display: inline-flex; min-height: 36px; align-items: center; color: var(--jb-text-muted); font-weight: 500; }
