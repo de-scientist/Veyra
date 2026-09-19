@@ -9,6 +9,7 @@ import {
   type AccountPreferences,
   type NotificationPreferenceMatrix,
 } from '../../../lib/shopping-api';
+import { useTheme, type ThemeMode } from '../../../components/ThemeProvider';
 
 const CHANNEL_LABELS: Record<string, string> = { IN_APP: 'In-app', EMAIL: 'Email', SMS: 'SMS' };
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
@@ -18,6 +19,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
 };
 
 export default function PreferencesPage() {
+  const { mode, setMode } = useTheme();
   const [preferences, setPreferences] = useState<AccountPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -98,6 +100,30 @@ export default function PreferencesPage() {
 
       {error && <div className="inline-message" role="alert">{error}</div>}
       {success && <div className="success-message" role="status">{success}</div>}
+
+      <section className="account-preferences-section" aria-labelledby="appearance-heading">
+        <h2 id="appearance-heading">Appearance</h2>
+        <p className="muted-copy">Choose how JB Mercantile looks. System follows your device setting.</p>
+        <div className="choice-list" role="radiogroup" aria-label="Appearance">
+          {(['light', 'dark', 'system'] as ThemeMode[]).map((value) => (
+            <label className="choice" key={value}>
+              <input
+                type="radio"
+                name="appearance"
+                value={value}
+                checked={mode === value}
+                onChange={() => setMode(value)}
+              />
+              <span>
+                <strong style={{ textTransform: 'capitalize' }}>{value}</strong>
+                <small>
+                  {value === 'light' ? 'Bright surfaces, royal-blue accents.' : value === 'dark' ? 'Dark navy surfaces for low light.' : 'Match your device automatically.'}
+                </small>
+              </span>
+            </label>
+          ))}
+        </div>
+      </section>
 
       <form onSubmit={handleSubmit} className="account-preferences-form">
         <section className="account-preferences-section">
