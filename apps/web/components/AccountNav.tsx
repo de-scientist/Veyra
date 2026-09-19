@@ -1,27 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
 
-const navigation: Array<{ href: Route; label: string; icon: string }> = [
-  { href: '/account', label: 'Overview', icon: '🏠' },
-  { href: '/account/notifications', label: 'Notifications', icon: '🔔' },
-  { href: '/account/profile', label: 'Profile', icon: '👤' },
-  { href: '/account/addresses', label: 'Addresses', icon: '📍' },
-  { href: '/account/orders', label: 'Orders', icon: '📦' },
-  { href: '/account/wishlist', label: 'Wishlist', icon: '❤️' },
-  { href: '/account/returns', label: 'Returns', icon: '↩️' },
-  { href: '/account/refunds', label: 'Refunds', icon: '💰' },
-  { href: '/account/payments', label: 'Payments', icon: '💳' },
-  { href: '/account/security', label: 'Security', icon: '🔒' },
-  { href: '/account/preferences', label: 'Preferences', icon: '⚙️' },
+import { useModalFocus } from './a11y';
+import { JBIcon, type JBIconName } from './JBIcons';
+
+const navigation: Array<{ href: Route; label: string; icon: JBIconName }> = [
+  { href: '/account', label: 'Overview', icon: 'home' },
+  { href: '/account/notifications', label: 'Notifications', icon: 'bell' },
+  { href: '/account/profile', label: 'Profile', icon: 'user' },
+  { href: '/account/addresses', label: 'Addresses', icon: 'pin' },
+  { href: '/account/orders', label: 'Orders', icon: 'box' },
+  { href: '/account/wishlist', label: 'Wishlist', icon: 'heart' },
+  { href: '/account/returns', label: 'Returns', icon: 'refresh' },
+  { href: '/account/refunds', label: 'Refunds', icon: 'cash' },
+  { href: '/account/payments', label: 'Payments', icon: 'card' },
+  { href: '/account/security', label: 'Security', icon: 'lock' },
+  { href: '/account/preferences', label: 'Preferences', icon: 'sliders' },
 ];
 
 export function AccountNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  // Modal slide-over on mobile: trap, Escape, scroll-lock, focus restore.
+  const navRef = useModalFocus({ active: mobileOpen, onClose: () => setMobileOpen(false), initialFocusRef: closeRef });
 
   return (
     <>
@@ -32,10 +38,21 @@ export function AccountNav() {
         aria-controls="account-nav"
         aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'}
       >
-        ☰ Account
+        <JBIcon name="menu" /> Account
       </button>
 
-      <nav id="account-nav" className={`account-nav ${mobileOpen ? 'open' : ''}`} role="navigation" aria-label="Account navigation">
+      <nav
+        id="account-nav"
+        ref={navRef}
+        className={`account-nav ${mobileOpen ? 'open' : ''}`}
+        role="navigation"
+        aria-label="Account navigation"
+      >
+        {mobileOpen ? (
+          <button ref={closeRef} type="button" className="button button--secondary button--small" onClick={() => setMobileOpen(false)} aria-label="Close navigation" style={{ marginBottom: '0.75rem' }}>
+            <JBIcon name="close" /> Close
+          </button>
+        ) : null}
         <ul className="account-nav-list">
           {navigation.map((item) => (
             <li key={item.href}>
@@ -43,8 +60,9 @@ export function AccountNav() {
                 href={item.href}
                 className={`account-nav-link ${pathname === item.href || (item.href !== '/account' && pathname.startsWith(item.href)) ? 'active' : ''}`}
                 aria-current={pathname === item.href || (item.href !== '/account' && pathname.startsWith(item.href)) ? 'page' : undefined}
+                onClick={() => setMobileOpen(false)}
               >
-                <span className="account-nav-icon" aria-hidden="true">{item.icon}</span>
+                <span className="account-nav-icon" aria-hidden="true"><JBIcon name={item.icon} /></span>
                 <span>{item.label}</span>
               </Link>
             </li>

@@ -5,6 +5,7 @@ import type { Route } from 'next';
 
 import type { Pagination } from '../lib/admin-api';
 import { StatusBadge } from './jb-ui';
+import { useConfirm } from './ConfirmDialog';
 
 export function AdminStatusBadge({ status }: { status: string }) {
   return <StatusBadge status={status} />;
@@ -52,18 +53,44 @@ export function AdminEmptyState({ title, message, actionHref, actionLabel }: { t
   );
 }
 
-export function ConfirmAction({ label, confirmMessage, onConfirm, danger, disabled }: { label: string; confirmMessage: string; onConfirm: () => void | Promise<void>; danger?: boolean; disabled?: boolean }) {
+export function ConfirmAction({
+  label,
+  confirmMessage,
+  onConfirm,
+  danger,
+  disabled,
+  title,
+  confirmLabel,
+}: {
+  label: string;
+  confirmMessage: string;
+  onConfirm: () => void | Promise<void>;
+  danger?: boolean;
+  disabled?: boolean;
+  title?: string;
+  confirmLabel?: string;
+}) {
+  const { confirm, dialog } = useConfirm();
   return (
-    <button
-      type="button"
-      className={`button ${danger ? 'button--danger' : 'button--secondary'}`}
-      disabled={disabled}
-      onClick={() => {
-        if (window.confirm(confirmMessage)) void onConfirm();
-      }}
-    >
-      {label}
-    </button>
+    <>
+      {dialog}
+      <button
+        type="button"
+        className={`button ${danger ? 'button--danger' : 'button--secondary'}`}
+        disabled={disabled}
+        onClick={() => {
+          void confirm({
+            title: title ?? label,
+            description: confirmMessage,
+            confirmLabel: confirmLabel ?? label,
+            variant: danger ? 'destructive' : 'default',
+            onConfirm,
+          });
+        }}
+      >
+        {label}
+      </button>
+    </>
   );
 }
 

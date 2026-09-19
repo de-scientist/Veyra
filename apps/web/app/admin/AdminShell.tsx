@@ -1,28 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Image from 'next/image';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { Route } from 'next';
 
+import { useModalFocus } from '../../components/a11y';
+import { JBIcon, type JBIconName } from '../../components/JBIcons';
+import { JBLogo } from '../../components/JBLogo';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { getSessionUser, isOperationsRole, logout, type SessionUser } from '../../lib/admin-api';
 
-const NAVIGATION: Array<{ href: Route; label: string; icon: string }> = [
-  { href: '/admin', label: 'Dashboard', icon: '📊' },
-  { href: '/admin/analytics', label: 'Analytics', icon: '📈' },
-  { href: '/admin/orders', label: 'Orders', icon: '📦' },
-  { href: '/admin/payments', label: 'Payments', icon: '💳' },
-  { href: '/admin/fulfillment', label: 'Fulfillment', icon: '🚚' },
-  { href: '/admin/products', label: 'Products', icon: '👕' },
-  { href: '/admin/inventory', label: 'Inventory', icon: '📋' },
-  { href: '/admin/returns', label: 'Returns', icon: '↩️' },
-  { href: '/admin/customers', label: 'Customers', icon: '👥' },
-  { href: '/admin/reviews', label: 'Reviews', icon: '⭐' },
-  { href: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
-  { href: '/admin/notifications', label: 'Notifications', icon: '🔔' },
-  { href: '/admin/audit-logs', label: 'Audit Logs', icon: '📝' },
-  { href: '/admin/settings', label: 'Settings', icon: '⚙️' },
+const NAVIGATION: Array<{ href: Route; label: string; icon: JBIconName }> = [
+  { href: '/admin', label: 'Dashboard', icon: 'grid' },
+  { href: '/admin/analytics', label: 'Analytics', icon: 'chart' },
+  { href: '/admin/orders', label: 'Orders', icon: 'box' },
+  { href: '/admin/payments', label: 'Payments', icon: 'card' },
+  { href: '/admin/fulfillment', label: 'Fulfillment', icon: 'truck' },
+  { href: '/admin/products', label: 'Products', icon: 'tag' },
+  { href: '/admin/inventory', label: 'Inventory', icon: 'clipboard' },
+  { href: '/admin/returns', label: 'Returns', icon: 'refresh' },
+  { href: '/admin/customers', label: 'Customers', icon: 'users' },
+  { href: '/admin/reviews', label: 'Reviews', icon: 'star' },
+  { href: '/admin/coupons', label: 'Coupons', icon: 'ticket' },
+  { href: '/admin/notifications', label: 'Notifications', icon: 'bell' },
+  { href: '/admin/audit-logs', label: 'Audit Logs', icon: 'doc' },
+  { href: '/admin/settings', label: 'Settings', icon: 'sliders' },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -31,6 +34,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  // Modal slide-over on mobile: trap, Escape, scroll-lock, focus restore.
+  const navRef = useModalFocus({ active: mobileOpen, onClose: () => setMobileOpen(false), initialFocusRef: closeRef });
 
   useEffect(() => {
     let mounted = true;
@@ -56,6 +63,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const handleLogout = async () => {
+    const confirmed = await confirm({
+      title: 'Log out of JB operations?',
+      description: 'You will be signed out of the operations dashboard on this device.',
+      confirmLabel: 'Log out',
+      variant: 'default',
+      onConfirm: () => undefined,
+    });
+    if (!confirmed) return;
     try {
       await logout();
     } finally {
@@ -68,6 +83,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="admin-layout">
+      {confirmDialog}
       <button
         type="button"
         className="account-mobile-toggle"
@@ -76,23 +92,28 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         aria-controls="admin-nav"
         aria-label={mobileOpen ? 'Close admin navigation' : 'Open admin navigation'}
       >
-        ☰ Admin
+        <JBIcon name="menu" /> Admin
       </button>
-      <nav id="admin-nav" className={`account-nav admin-nav ${mobileOpen ? 'open' : ''}`} aria-label="Admin navigation">
+      <nav id="admin-nav" ref={navRef} className={`account-nav admin-nav ${mobileOpen ? 'open' : ''}`} aria-label="Admin navigation">
         <div className="admin-nav__brand">
           <Link href="/admin" className="brand" aria-label="JB operations dashboard">
-            <Image src="/jb-logo.png" alt="" width={30} height={30} />
+            <JBLogo variant="full" alt="" height={30} />
             <span>JB OPS</span>
           </Link>
           <span className="badge badge--current">{session.roles[0] ?? 'staff'}</span>
         </div>
+        {mobileOpen ? (
+          <button ref={closeRef} type="button" className="button button--secondary button--small" onClick={() => setMobileOpen(false)} aria-label="Close admin navigation" style={{ marginBottom: '0.75rem' }}>
+            <JBIcon name="close" /> Close
+          </button>
+        ) : null}
         <ul className="account-nav-list">
           {NAVIGATION.map((item) => {
             const active = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
             return (
               <li key={item.href}>
                 <Link href={item.href} className={`account-nav-link ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => setMobileOpen(false)}>
-                  <span className="account-nav-icon" aria-hidden="true">{item.icon}</span>
+                  <span className="account-nav-icon" aria-hidden="true"><JBIcon name={item.icon} /></span>
                   <span>{item.label}</span>
                 </Link>
               </li>

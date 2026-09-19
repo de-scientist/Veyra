@@ -6,6 +6,7 @@ import type { Route } from 'next';
 import { getAccountDashboard, type DashboardData, type AccountOrder, type OrderSummary } from '../../lib/shopping-api';
 import { PriceDisplay } from '../../components/PriceDisplay';
 import { StatusBadge } from '../../components/jb-ui';
+import { JBIcon, type JBIconName } from '../../components/JBIcons';
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString('en-KE', {
@@ -171,13 +172,13 @@ function ReturnsRefundsSection({ activeReturns, recentRefunds }: { activeReturns
 }
 
 function QuickLinks() {
-  const links: Array<{ href: Route; label: string; icon: string }> = [
-    { href: '/account/profile', label: 'Edit Profile', icon: '👤' },
-    { href: '/account/addresses', label: 'Manage Addresses', icon: '📍' },
-    { href: '/account/orders', label: 'Order History', icon: '📦' },
-    { href: '/account/wishlist', label: 'Wishlist', icon: '❤️' },
-    { href: '/account/security', label: 'Security', icon: '🔒' },
-    { href: '/account/preferences', label: 'Preferences', icon: '⚙️' },
+  const links: Array<{ href: Route; label: string; icon: JBIconName }> = [
+    { href: '/account/profile', label: 'Edit Profile', icon: 'user' },
+    { href: '/account/addresses', label: 'Manage Addresses', icon: 'pin' },
+    { href: '/account/orders', label: 'Order History', icon: 'box' },
+    { href: '/account/wishlist', label: 'Wishlist', icon: 'heart' },
+    { href: '/account/security', label: 'Security', icon: 'lock' },
+    { href: '/account/preferences', label: 'Preferences', icon: 'sliders' },
   ];
 
   return (
@@ -186,7 +187,7 @@ function QuickLinks() {
       <div className="account-quick-links">
         {links.map((link) => (
           <Link key={link.href} href={link.href} className="account-quick-link">
-            <span className="account-quick-link-icon" aria-hidden="true">{link.icon}</span>
+            <span className="account-quick-link-icon" aria-hidden="true"><JBIcon name={link.icon} size={22} /></span>
             <span>{link.label}</span>
           </Link>
         ))}

@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { getAdminCustomerDetail, updateAdminCustomer } from '../../../../lib/admin-api';
 import { AdminStatusBadge, formatAdminDate, formatMoney } from '../../../../components/admin';
+import { useConfirm } from '../../../../components/ConfirmDialog';
 
 type Detail = {
   id: string;
@@ -31,6 +32,7 @@ export default function AdminCustomerDetailPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const load = useCallback(async (id: string) => {
     try {
@@ -58,14 +60,21 @@ export default function AdminCustomerDetailPage({ params }: PageProps) {
 
   const handleStatus = async (status: 'ACTIVE' | 'SUSPENDED') => {
     if (!customerId) return;
-    if (!window.confirm(`Set this customer to ${status}?`)) return;
-    try {
-      await updateAdminCustomer(customerId, { status });
-      setMessage(`Customer ${status === 'ACTIVE' ? 'reactivated' : 'suspended'}. Change audited.`);
-      await load(customerId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Update failed');
-    }
+    const action = status === 'ACTIVE' ? 'Reactivate' : 'Suspend';
+    const confirmed = await confirm({
+      title: `${action} this customer?`,
+      description:
+        status === 'ACTIVE'
+          ? 'The customer will regain account access. The change is audited.'
+          : 'The customer will lose account access immediately. The change is audited.',
+      confirmLabel: action,
+      variant: status === 'ACTIVE' ? 'default' : 'destructive',
+      onConfirm: () => updateAdminCustomer(customerId, { status }),
+    });
+    if (!confirmed) return;
+    setError(null);
+    setMessage(`Customer ${status === 'ACTIVE' ? 'reactivated' : 'suspended'}. Change audited.`);
+    await load(customerId);
   };
 
   if (loading) return <div className="empty-state"><p>Loading customer…</p></div>;
@@ -74,6 +83,7 @@ export default function AdminCustomerDetailPage({ params }: PageProps) {
 
   return (
     <div className="account-page">
+      {confirmDialog}
       <header className="account-page__header">
         <div>
           <Link href="/admin/customers" className="text-button">← Back to Customers</Link>

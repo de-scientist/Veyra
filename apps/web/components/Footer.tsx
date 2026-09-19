@@ -9,7 +9,7 @@ export function Footer() {
       <div className="container site-footer__inner">
         <div>
           <p className="brand brand--small site-footer__brand">
-            <JBLogo size={30} descriptor={null} />
+            <JBLogo variant="compact" alt="JB Mercantile" height={30} />
           </p>
           <p>JB Mercantile — fashion, footwear and kitchen &amp; home essentials, designed for Kenya and delivered with care.</p>
         </div>

@@ -1,8 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
+import { useModalFocus } from './a11y';
 import { FacetControl } from './AttributeControls';
 import {
   discoveryQueryString,
@@ -128,6 +129,9 @@ export function FilterPanel({ facets, priceBuckets, query, basePath, fixed, sele
 /** Mobile filter entry point: toggle button + bottom sheet reusing the same panel. */
 export function FilterSheetHost(props: FilterProps) {
   const [open, setOpen] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  // Modal bottom sheet: trap, Escape, scroll-lock, focus restore to Filters button.
+  const sheetRef = useModalFocus({ active: open, onClose: () => setOpen(false), initialFocusRef: closeRef });
   return (
     <>
       <button
@@ -141,11 +145,11 @@ export function FilterSheetHost(props: FilterProps) {
       {open ? (
         <>
           <div className="sheet-overlay" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div className="sheet" role="dialog" aria-modal="true" aria-label="Product filters">
+          <div ref={sheetRef} className="sheet" role="dialog" aria-modal="true" aria-label="Product filters">
             <div className="sheet__handle" aria-hidden="true" />
             <div className="sheet__header">
               <h2>Filters</h2>
-              <button type="button" className="button button--secondary button--small" onClick={() => setOpen(false)}>
+              <button ref={closeRef} type="button" className="button button--secondary button--small" onClick={() => setOpen(false)}>
                 Close
               </button>
             </div>

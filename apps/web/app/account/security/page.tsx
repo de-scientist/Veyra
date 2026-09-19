@@ -1,9 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getSessions, changePassword, revokeSession, revokeOtherSessions, deactivateAccount, deleteAccount, type AccountSession } from '../../../lib/shopping-api';
+import { useConfirm } from '../../../components/ConfirmDialog';
+import { useToast } from '../../../components/Toast';
 
 export default function SecurityPage() {
+  const router = useRouter();
+  const { notify } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,27 +75,57 @@ export default function SecurityPage() {
   };
 
   const handleRevokeSession = async (id: string) => {
-    if (!confirm('Revoke this session? You will be logged out from that device.')) return;
+    const confirmed = await confirm({
+      title: 'Revoke this session?',
+      description: 'You will be logged out from that device.',
+      confirmLabel: 'Revoke',
+      variant: 'default',
+      onConfirm: () => revokeSession(id),
+    });
+    if (!confirmed) return;
     setError(null);
-    try {
-      await revokeSession(id);
-      setSuccess('Session revoked');
-      await loadSessions();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to revoke session');
-    }
+    setSuccess('Session revoked');
+    await loadSessions();
   };
 
   const handleRevokeOthers = async () => {
-    if (!confirm('Revoke all other sessions? You will be logged out from all other devices.')) return;
+    const confirmed = await confirm({
+      title: 'Revoke all other sessions?',
+      description: 'You will be logged out from all other devices.',
+      confirmLabel: 'Revoke all',
+      variant: 'default',
+      onConfirm: () => revokeOtherSessions(),
+    });
+    if (!confirmed) return;
     setError(null);
-    try {
-      await revokeOtherSessions();
-      setSuccess('All other sessions revoked');
-      await loadSessions();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to revoke sessions');
-    }
+    setSuccess('All other sessions revoked');
+    await loadSessions();
+  };
+
+  const handleDeactivate = async () => {
+    const confirmed = await confirm({
+      title: 'Deactivate your account?',
+      description: 'This will log you out and disable your account. You can reactivate later by contacting support.',
+      confirmLabel: 'Deactivate',
+      variant: 'destructive',
+      onConfirm: () => deactivateAccount(),
+    });
+    if (!confirmed) return;
+    notify('info', 'Account deactivated');
+    router.replace('/');
+  };
+
+  const handleDelete = async () => {
+    const confirmed = await confirm({
+      title: 'Delete your account?',
+      description: 'Your orders and payment records are retained for legal/financial reasons; personal access will be disabled. This cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+      onConfirm: () => deleteAccount(),
+    });
+    if (!confirmed) return;
+    notify('info', 'Account deletion requested');
+    router.replace('/');
   };
 
   function formatDateTime(dateString: string) {
@@ -104,6 +140,7 @@ export default function SecurityPage() {
 
   return (
     <div className="account-page">
+      {confirmDialog}
       <header className="account-page__header">
         <h1>Security</h1>
         <p className="muted-copy">Manage your password and active sessions</p>
@@ -212,17 +249,7 @@ export default function SecurityPage() {
           <div>
             <h3>Deactivate Account</h3>
             <p className="muted-copy">Temporarily disable your account. You can reactivate later by contacting support.</p>
-            <button type="button" className="button button--secondary button--danger" onClick={async () => {
-              if (confirm('Are you sure you want to deactivate your account? This will log you out and disable your account.')) {
-                try {
-                  await deactivateAccount();
-                  alert('Account deactivated');
-                  window.location.href = '/';
-                } catch {
-                  alert('Failed to deactivate account');
-                }
-              }
-            }}>
+            <button type="button" className="button button--secondary button--danger" onClick={handleDeactivate}>
               Deactivate Account
             </button>
           </div>
@@ -230,17 +257,7 @@ export default function SecurityPage() {
           <div>
             <h3>Delete Account</h3>
             <p className="muted-copy">Permanently delete your account and all personal data. This action cannot be undone.</p>
-            <button type="button" className="button button--danger" onClick={async () => {
-              if (confirm('Are you absolutely sure you want to delete your account? Your orders and payment records are retained for legal/financial reasons; personal access will be disabled.')) {
-                try {
-                  await deleteAccount();
-                  alert('Account deletion requested');
-                  window.location.href = '/';
-                } catch {
-                  alert('Failed to delete account');
-                }
-              }
-            }}>
+            <button type="button" className="button button--danger" onClick={handleDelete}>
               Delete Account
             </button>
           </div>

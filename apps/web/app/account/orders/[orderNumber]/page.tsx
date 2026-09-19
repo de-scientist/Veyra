@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { getOrderDetail, reorder, type AccountOrder, type AccountOrderItem } from '../../../../lib/shopping-api';
 import { PriceDisplay } from '../../../../components/PriceDisplay';
 import { StatusBadge } from '../../../../components/jb-ui';
+import { useToast } from '../../../../components/Toast';
 
 interface OrderDetailPageProps {
   params: Promise<{ orderNumber: string }>;
@@ -198,10 +200,14 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
               try {
                 const result = await reorder(order.orderNumber);
                 const added = result.results.filter((r: { added: boolean }) => r.added).length;
-                alert(added > 0 ? `${added} item(s) added to your cart. Review your cart to check out.` : 'No items could be added to your cart (unavailable or out of stock).');
-                if (added > 0) window.location.href = '/cart';
+                if (added > 0) {
+                  notify('success', `${added} item(s) added to your cart.`);
+                  router.push('/cart');
+                } else {
+                  notify('info', 'No items could be added to your cart (unavailable or out of stock).');
+                }
               } catch (e) {
-                alert(e instanceof Error ? e.message : 'Reorder failed. Please try again.');
+                notify('error', e instanceof Error ? e.message : 'Reorder failed. Please try again.');
               }
             }}
           >

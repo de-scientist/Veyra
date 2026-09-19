@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 
+import { JBLogo } from '../../components/JBLogo';
 import { RegisterForm } from '../../components/AuthForms';
 
 export const metadata: Metadata = {
@@ -15,8 +15,7 @@ export default function RegisterPage() {
     <main className="auth-shell">
       <div className="auth-card">
         <Link href="/" className="auth-card__logo" aria-label="JB Mercantile home">
-          <Image src="/jb-logo.png" alt="" width={40} height={40} />
-          <span>JB Mercantile</span>
+          <JBLogo variant="full" alt="JB Mercantile" height={56} />
         </Link>
         <div>
           <p className="eyebrow">Join JB Mercantile</p>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { getAdminReviews, moderateReview, type Pagination } from '../../../lib/admin-api';
 import { AdminEmptyState, AdminPagination, AdminStatusBadge, formatAdminDate } from '../../../components/admin';
+import { useConfirm } from '../../../components/ConfirmDialog';
 
 const STATUSES = ['', 'PENDING', 'APPROVED', 'REJECTED'];
 
@@ -25,6 +26,7 @@ export default function AdminReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [params, setParams] = useState({ page: 1, pageSize: 20, search: '', status: 'PENDING' });
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,19 +47,23 @@ export default function AdminReviewsPage() {
   }, [load]);
 
   const handleModerate = async (id: string, status: string) => {
-    if (!window.confirm(`Mark this review ${status}?`)) return;
-    try {
-      await moderateReview(id, { status });
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Moderation failed');
-    }
+    const confirmed = await confirm({
+      title: `${status === 'APPROVED' ? 'Approve' : 'Reject'} this review?`,
+      description: `The review will be marked ${status.toLowerCase()} and the decision is audited.`,
+      confirmLabel: status === 'APPROVED' ? 'Approve' : 'Reject',
+      variant: status === 'APPROVED' ? 'default' : 'destructive',
+      onConfirm: () => moderateReview(id, { status }),
+    });
+    if (!confirmed) return;
+    setError(null);
+    await load();
   };
 
   if (loading && reviews.length === 0) return <div className="empty-state"><p>Loading reviews…</p></div>;
 
   return (
     <div className="account-page">
+      {confirmDialog}
       <header className="account-page__header">
         <div>
           <h1>Reviews</h1>

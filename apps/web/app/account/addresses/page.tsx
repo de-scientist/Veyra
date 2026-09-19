@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { getAddresses, createAddress, updateAddress, deleteAddress, setDefaultAddress, type AccountAddress } from '../../../lib/shopping-api';
+import { useConfirm } from '../../../components/ConfirmDialog';
 
 export default function AddressesPage() {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [addresses, setAddresses] = useState<AccountAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,14 +87,16 @@ export default function AddressesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this address?')) return;
+    const confirmed = await confirm({
+      title: 'Delete this address?',
+      description: 'The address will be removed from your account. This cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+      onConfirm: () => deleteAddress(id),
+    });
+    if (!confirmed) return;
     setError(null);
-    try {
-      await deleteAddress(id);
-      await loadAddresses();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete address');
-    }
+    await loadAddresses();
   };
 
   const handleSetDefault = async (id: string, type: 'shipping' | 'billing') => {
@@ -109,6 +113,7 @@ export default function AddressesPage() {
 
   return (
     <div className="account-page">
+      {confirmDialog}
       <header className="account-page__header">
         <div>
           <h1>Addresses</h1>

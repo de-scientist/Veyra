@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { getSearchSuggestions } from '../lib/catalog';
+import { JBIcon } from './JBIcons';
 
 /** Global search: prominent input, suggestions, clear, keyboard support, URL state. */
 export function SearchBar({ initialQuery = '', autoFocus = false }: { initialQuery?: string; autoFocus?: boolean }) {
@@ -87,7 +88,7 @@ export function SearchBar({ initialQuery = '', autoFocus = false }: { initialQue
             aria-label="Clear search"
             onClick={() => setValue('')}
           >
-            ✕
+            <JBIcon name="close" size={16} />
           </button>
         ) : null}
         <button type="submit" className="button">Search</button>

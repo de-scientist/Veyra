@@ -1,6 +1,8 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+
+import { JBIcon, type JBIconName } from './JBIcons';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
@@ -66,21 +68,38 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return <ThemeContext.Provider value={{ mode, resolved, setMode }}>{children}</ThemeContext.Provider>;
 }
 
-const MODES: Array<{ value: ThemeMode; label: string; icon: string }> = [
-  { value: 'light', label: 'Light', icon: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0-15v2m0 16v2M4.2 4.2l1.4 1.4m11.2 11.2 1.4 1.4M2 12h2m16 0h2M4.2 19.8l1.4-1.4M17.8 6.4l1.4-1.4' },
-  { value: 'dark', label: 'Dark', icon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z' },
-  { value: 'system', label: 'System', icon: 'M4 5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm2 13h12' },
+const MODES: Array<{ value: ThemeMode; label: string; icon: JBIconName }> = [
+  { value: 'light', label: 'Light', icon: 'sun' },
+  { value: 'dark', label: 'Dark', icon: 'moon' },
+  { value: 'system', label: 'System', icon: 'monitor' },
 ];
 
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const { mode, setMode } = useTheme();
   const [open, setOpen] = useState(false);
   const active = MODES.find((m) => m.value === mode) ?? MODES[2];
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    // Move focus to the checked option when the menu opens.
+    const menu = menuRef.current;
+    const checked = menu?.querySelector<HTMLElement>('[aria-checked="true"]');
+    (checked ?? menu?.querySelector<HTMLElement>('button'))?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        setOpen(false);
+        toggleRef.current?.focus();
+        return;
+      }
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && menu) {
+        event.preventDefault();
+        const items = Array.from(menu.querySelectorAll<HTMLElement>('button'));
+        const index = items.indexOf(document.activeElement as HTMLElement);
+        const next = event.key === 'ArrowDown' ? (index + 1) % items.length : (index - 1 + items.length) % items.length;
+        items[next]?.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -89,6 +108,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   return (
     <div className="theme-toggle">
       <button
+        ref={toggleRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -96,13 +116,11 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
         onClick={() => setOpen((v) => !v)}
         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', minHeight: 44, padding: '0 0.75rem', borderRadius: 999, border: 0, background: 'transparent', color: 'inherit', font: 'inherit', fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer' }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d={active.icon} />
-        </svg>
+        <JBIcon name={active.icon} />
         {!compact && <span className="header-label">{active.label}</span>}
       </button>
       {open ? (
-        <div className="theme-menu" role="menu" aria-label="Appearance">
+        <div className="theme-menu" ref={menuRef} role="menu" aria-label="Appearance">
           {MODES.map((item) => (
             <button
               key={item.value}
@@ -112,13 +130,12 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
               onClick={() => {
                 setMode(item.value);
                 setOpen(false);
+                toggleRef.current?.focus();
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d={item.icon} />
-              </svg>
+              <JBIcon name={item.icon} />
               {item.label}
-              {mode === item.value ? <span className="theme-menu__check" aria-hidden="true">✓</span> : null}
+              {mode === item.value ? <span className="theme-menu__check" aria-hidden="true"><JBIcon name="check" size={16} /></span> : null}
             </button>
           ))}
         </div>

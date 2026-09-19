@@ -3,26 +3,11 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
+import { JBIcon } from './JBIcons';
 import { JBLogo } from './JBLogo';
 import { ThemeToggle } from './ThemeProvider';
 import { departments, getDepartmentCategories } from '../lib/catalog';
 import { getCart, getUnreadCount } from '../lib/shopping-api';
-
-function Icon({ d }: { d: string }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={d} />
-    </svg>
-  );
-}
-
-const ICONS = {
-  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35',
-  account: 'M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
-  bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M10.3 21a2 2 0 0 0 3.4 0',
-  heart: 'M19 14c1.5-1.5 3-3.3 3-5.5A4.5 4.5 0 0 0 17.5 4c-1.8 0-3.4 1-4.5 2.5C11.9 5 10.3 4 8.5 4A4.5 4.5 0 0 0 4 8.5c0 2.2 1.5 4 3 5.5l5 5Z',
-  cart: 'M6 7h15l-1.5 9h-12ZM6 7 5 4H2M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z',
-};
 
 export function Header() {
   const [cartCount, setCartCount] = useState(0);
@@ -30,6 +15,7 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
   const megaRef = useRef<HTMLDivElement>(null);
+  const menuToggleRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     getCart().then((cart) => setCartCount(cart.itemCount)).catch(() => undefined);
@@ -53,7 +39,10 @@ export function Header() {
   useEffect(() => {
     if (!megaOpen) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMegaOpen(false);
+      if (event.key === 'Escape') {
+        setMegaOpen(false);
+        (megaRef.current?.querySelector('button') as HTMLElement | null)?.focus();
+      }
     };
     const onClick = (event: MouseEvent) => {
       if (megaRef.current && !megaRef.current.contains(event.target as Node)) setMegaOpen(false);
@@ -66,10 +55,25 @@ export function Header() {
     };
   }, [megaOpen]);
 
+  // Mobile nav is a non-modal disclosure: Escape closes and focus returns
+  // to the toggle (no trap — the rest of the page stays interactive).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+        menuToggleRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   return (
     <header className="site-header">
       <div className="container site-header__inner">
         <button
+          ref={menuToggleRef}
           type="button"
           className="header-menu-toggle"
           aria-expanded={menuOpen}
@@ -77,11 +81,11 @@ export function Header() {
           aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
           onClick={() => setMenuOpen((open) => !open)}
         >
-          <span aria-hidden="true">{menuOpen ? '✕' : '☰'}</span>
+          <JBIcon name={menuOpen ? 'close' : 'menu'} />
         </button>
 
         <Link href="/" className="brand" aria-label="JB Mercantile home" style={{ textDecoration: 'none' }}>
-          <JBLogo size={34} />
+          <JBLogo variant="compact" alt="" />
         </Link>
 
         <nav aria-label="Main navigation" className="main-nav">
@@ -93,7 +97,7 @@ export function Header() {
               onClick={() => setMegaOpen((v) => !v)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', minHeight: 44, padding: '0 0.75rem', borderRadius: 999, border: 0, background: 'transparent', color: 'inherit', font: 'inherit', fontWeight: 600, cursor: 'pointer' }}
             >
-              Shop <span aria-hidden="true" style={{ fontSize: '0.7rem' }}>▾</span>
+              Shop <JBIcon name="chevron" size={14} />
             </button>
             {megaOpen ? (
               <div className="mega-menu" role="menu" aria-label="Shop departments">
@@ -129,20 +133,20 @@ export function Header() {
 
         <div className="header-actions">
           <Link href="/search" aria-label="Search products">
-            <Icon d={ICONS.search} /> <span className="header-label">Search</span>
+            <JBIcon name="search" /> <span className="header-label">Search</span>
           </Link>
           <Link href="/login" aria-label="Sign in to JB Mercantile">
-            <Icon d={ICONS.account} /> <span className="header-label">Sign in</span>
+            <JBIcon name="user" /> <span className="header-label">Sign in</span>
           </Link>
           <Link href="/account/notifications" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}>
-            <Icon d={ICONS.bell} /> <span className="header-label">Notifications</span>
+            <JBIcon name="bell" /> <span className="header-label">Notifications</span>
             {unreadCount ? <span className="header-count">{unreadCount}</span> : null}
           </Link>
           <Link href="/wishlist" aria-label="Wishlist">
-            <Icon d={ICONS.heart} /> <span className="header-label">Wishlist</span>
+            <JBIcon name="heart" /> <span className="header-label">Wishlist</span>
           </Link>
           <Link href="/cart" aria-label={`Cart${cartCount ? `, ${cartCount} items` : ''}`}>
-            <Icon d={ICONS.cart} /> <span className="header-label">Cart</span>
+            <JBIcon name="cart" /> <span className="header-label">Cart</span>
             {cartCount ? <span className="header-count">{cartCount}</span> : null}
           </Link>
           <ThemeToggle compact />
@@ -184,4 +188,3 @@ export function Header() {
     </header>
   );
 }
-
