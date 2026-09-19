@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
 import { ThemeProvider, ThemeScript } from '../components/ThemeProvider';
+import { ToastProvider } from '../components/Toast';
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com';
 const brandName = 'JB Mercantile';
@@ -67,9 +68,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to main content
         </a>
         <ThemeProvider>
-          <Header />
-          <div id="main-content">{children}</div>
-          <Footer />
+          <ToastProvider>
+            <Header />
+            <div id="main-content">{children}</div>
+            <Footer />
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

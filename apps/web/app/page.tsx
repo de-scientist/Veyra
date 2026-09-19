@@ -155,7 +155,7 @@ export default function HomePage() {
         </div>
         <div className="trust-strip__item">
           <strong>Flexible delivery</strong>
-          <span>Courier, local delivery and pickup options across our delivery zones.</span>
+          <span>Flexible delivery across our zones, with pickup options at checkout.</span>
         </div>
         <div className="trust-strip__item">
           <strong>Easy returns</strong>
