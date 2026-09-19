@@ -1,41 +1,63 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
 import { ProductCard } from '../components/ProductCard';
-import { categories, collections, getFeaturedProducts, getNewArrivals } from '../lib/storefront-data';
+import {
+  collections,
+  departments,
+  getFeaturedProducts,
+  getNewArrivals,
+  getProductsByDepartment,
+} from '../lib/catalog';
 
 export default function HomePage() {
   const featuredProducts = getFeaturedProducts();
   const newArrivals = getNewArrivals();
+  const fashionPicks = getProductsByDepartment('fashion').slice(0, 4);
+  const footwearPicks = getProductsByDepartment('footwear').slice(0, 4);
+  const kitchenPicks = getProductsByDepartment('kitchen-home').slice(0, 4);
 
   return (
     <main className="container page-shell">
-      <section className="hero" aria-labelledby="jb-hero-heading">
+      <section className="hero hero--mercantile" aria-labelledby="jb-hero-heading">
         <div className="hero__content">
-          <p className="eyebrow">JB · Kenya-first essentials</p>
-          <h1 id="jb-hero-heading">Refined everyday style, made for movement.</h1>
+          <p className="eyebrow">JB Mercantile · Nairobi, Kenya</p>
+          <h1 id="jb-hero-heading">Fashion. Footwear. Kitchen &amp; Home.</h1>
           <p>
-            Shop elevated staples, modern layers, and versatile essentials — with secure checkout and M-Pesa payments.
+            One store for the way you live — everyday clothing, shoes for every step,
+            and kitchen essentials, with secure checkout and M-Pesa payments.
           </p>
           <div className="cta-row">
-            <Link href="/shop" className="button">Shop new arrivals</Link>
-            <Link href="/collections/weekend-edit" className="button button--secondary">Explore the collection</Link>
+            <Link href="/shop" className="button">Shop now</Link>
+            <Link href="#jb-departments" className="button button--secondary">Explore categories</Link>
           </div>
+        </div>
+        <div className="hero__media" aria-hidden="true">
+          {departments.map((department) => (
+            <span key={department.slug} className="hero__media-item">
+              <Image src={department.image} alt="" width={300} height={380} priority />
+              <span className="hero__media-label">{department.name}</span>
+            </span>
+          ))}
         </div>
       </section>
 
-      <section className="section-block" aria-labelledby="jb-categories-heading">
+      <section className="section-block" aria-labelledby="jb-departments" id="jb-departments">
         <div className="section-heading">
-          <h2 id="jb-categories-heading">Shop by category</h2>
+          <h2 id="jb-departments-heading">Shop by department</h2>
           <Link href="/shop">Browse all</Link>
         </div>
-        <div className="category-grid">
-          {categories.map((category) => (
-            <Link key={category.slug} href={`/categories/${category.slug}`} className="category-card">
-              <div>
-                <p className="eyebrow">Category</p>
-                <h3>{category.name}</h3>
-              </div>
-              <p>{category.description}</p>
+        <div className="dept-grid">
+          {departments.map((department) => (
+            <Link key={department.slug} href={`/shop?department=${department.slug}`} className="dept-card">
+              <span className="dept-card__media">
+                <Image src={department.image} alt="" width={640} height={360} />
+              </span>
+              <span className="dept-card__body">
+                <h3>{department.name}</h3>
+                <p>{department.description}</p>
+                <span className="dept-card__cta">Shop {department.tagline.toLowerCase()} →</span>
+              </span>
             </Link>
           ))}
         </div>
@@ -47,26 +69,73 @@ export default function HomePage() {
           <Link href="/shop">See more</Link>
         </div>
         <div className="product-grid">
-          {featuredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
+          {featuredProducts.map((product, index) => (
+            <ProductCard key={product.id} product={product} eager={index < 2} />
           ))}
         </div>
       </section>
 
-      <section className="section-block promo-grid" aria-label="Collections">
-        {collections.map((collection) => (
-          <Link key={collection.slug} href={`/collections/${collection.slug}`} className="promo-card">
-            <p className="eyebrow">Collection</p>
-            <h3>{collection.name}</h3>
-            <p>{collection.description}</p>
-          </Link>
-        ))}
+      {fashionPicks.length >= 2 ? (
+        <section className="section-block" aria-labelledby="jb-fashion-heading">
+          <div className="section-heading">
+            <h2 id="jb-fashion-heading">Fashion picks</h2>
+            <Link href="/shop?department=fashion">All fashion</Link>
+          </div>
+          <div className="product-grid">
+            {fashionPicks.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {footwearPicks.length >= 2 ? (
+        <section className="section-block" aria-labelledby="jb-footwear-heading">
+          <div className="section-heading">
+            <h2 id="jb-footwear-heading">Footwear essentials</h2>
+            <Link href="/shop?department=footwear">All footwear</Link>
+          </div>
+          <div className="product-grid">
+            {footwearPicks.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {kitchenPicks.length >= 2 ? (
+        <section className="section-block" aria-labelledby="jb-kitchen-heading">
+          <div className="section-heading">
+            <h2 id="jb-kitchen-heading">Kitchen &amp; home essentials</h2>
+            <Link href="/shop?department=kitchen-home">All kitchen &amp; home</Link>
+          </div>
+          <div className="product-grid">
+            {kitchenPicks.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="section-block" aria-labelledby="jb-collections-heading">
+        <div className="section-heading">
+          <h2 id="jb-collections-heading">Collections</h2>
+        </div>
+        <div className="promo-grid">
+          {collections.map((collection) => (
+            <Link key={collection.slug} href={`/collections/${collection.slug}`} className="promo-card">
+              <p className="eyebrow">Collection</p>
+              <h3>{collection.name}</h3>
+              <p>{collection.description}</p>
+            </Link>
+          ))}
+        </div>
       </section>
 
       <section className="section-block" aria-labelledby="jb-new-heading">
         <div className="section-heading">
           <h2 id="jb-new-heading">New arrivals</h2>
-          <Link href="/shop">View all</Link>
+          <Link href="/shop?sort=newest">View all</Link>
         </div>
         <div className="product-grid">
           {newArrivals.map((product) => (
@@ -75,14 +144,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="trust-strip" aria-label="Why shop with JB">
+      <section className="trust-strip" aria-label="Why shop with JB Mercantile">
         <div className="trust-strip__item">
           <strong>Secure checkout</strong>
-          <span>Your order totals are always calculated by our backend — never in the browser.</span>
+          <span>Order totals are always calculated by our backend — never in the browser.</span>
         </div>
         <div className="trust-strip__item">
           <strong>M-Pesa payments</strong>
           <span>Pay with M-Pesa and track confirmation right on your order.</span>
+        </div>
+        <div className="trust-strip__item">
+          <strong>Flexible delivery</strong>
+          <span>Courier, local delivery and pickup options across our delivery zones.</span>
         </div>
         <div className="trust-strip__item">
           <strong>Easy returns</strong>
