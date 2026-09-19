@@ -1,61 +1,162 @@
-import Image from 'next/image';
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { PriceDisplay } from '../../../components/PriceDisplay';
 import { ProductCard } from '../../../components/ProductCard';
 import { ProductActions } from '../../../components/ProductActions';
-import { getProductBySlug, getPublicProducts } from '../../../lib/storefront-data';
+import { ProductGallery } from '../../../components/ProductGallery';
+import { ProductSpecifications } from '../../../components/ProductSpecifications';
+import { StatusBadge } from '../../../components/jb-ui';
+import {
+  getProductBySlug,
+  getProductCategory,
+  getProductDepartment,
+  getPublicProducts,
+  productInStock,
+} from '../../../lib/catalog';
+
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com';
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const product = getProductBySlug(params.slug);
+  if (!product) return { title: 'Product not found | JB Mercantile' };
+  const department = getProductDepartment(product);
+  return {
+    title: `${product.name} | JB Mercantile`,
+    description: product.shortDescription,
+    openGraph: {
+      title: `${product.name} | JB Mercantile`,
+      description: product.shortDescription,
+      type: 'website',
+      images: product.images.slice(0, 1).map((url) => ({ url })),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${product.name} | JB Mercantile`,
+      description: product.shortDescription,
+    },
+  };
+}
 
 export default function ProductPage({ params }: { params: { slug: string } }) {
   const product = getProductBySlug(params.slug);
+  if (!product) notFound();
 
-  if (!product) {
-    notFound();
-  }
+  const category = getProductCategory(product);
+  const department = getProductDepartment(product);
+  const inStock = productInStock(product);
+  const prices = product.variants.map((v) => v.price);
+  const minPrice = Math.min(...prices, product.price);
+  const hasPriceRange = Math.max(...prices) !== minPrice;
+  const relatedProducts = getPublicProducts()
+    .filter((item) => item.id !== product.id && (item.department === product.department || item.category === product.category))
+    .slice(0, 4);
 
-  const relatedProducts = getPublicProducts().filter((item) => item.id !== product.id).slice(0, 3);
-  const selectedVariant = product.variants[0];
+  const productJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.shortDescription,
+    image: product.images,
+    brand: { '@type': 'Brand', name: product.brand },
+    category: category?.name ?? department?.name,
+    offers: {
+      '@type': 'AggregateOffer',
+      priceCurrency: 'KES',
+      lowPrice: minPrice,
+      highPrice: Math.max(...prices, product.price),
+      offerCount: product.variants.length,
+      availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    },
+  };
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${siteUrl}/` },
+      { '@type': 'ListItem', position: 2, name: 'Shop', item: `${siteUrl}/shop` },
+      ...(department ? [{ '@type': 'ListItem', position: 3, name: department.name, item: `${siteUrl}/shop?department=${department.slug}` }] : []),
+      { '@type': 'ListItem', position: department ? 4 : 3, name: product.name, item: `${siteUrl}/products/${product.slug}` },
+    ],
+  };
 
   return (
     <main className="container page-shell product-page">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+
       <nav aria-label="Breadcrumb" className="breadcrumbs">
         <ol>
           <li><Link href="/">Home</Link></li>
           <li aria-hidden="true">/</li>
           <li><Link href="/shop">Shop</Link></li>
           <li aria-hidden="true">/</li>
+          {department ? (
+            <>
+              <li><Link href={`/shop?department=${department.slug}`}>{department.name}</Link></li>
+              <li aria-hidden="true">/</li>
+            </>
+          ) : null}
+          {category ? (
+            <>
+              <li><Link href={`/categories/${category.slug}`}>{category.name}</Link></li>
+              <li aria-hidden="true">/</li>
+            </>
+          ) : null}
           <li aria-current="page">{product.name}</li>
         </ol>
       </nav>
 
       <div className="product-layout">
-        <div className="product-gallery">
-          {product.images.map((image, index) => (
-            <div key={image} className="product-gallery__item">
-              <Image src={image} alt={`${product.name} ${index + 1}`} width={800} height={1000} />
-            </div>
-          ))}
-        </div>
+        <ProductGallery images={product.images} productName={product.name} />
 
         <div className="product-summary">
-          <p className="eyebrow">{product.brand}</p>
+          <p className="eyebrow">
+            {department ? `${department.name} · ` : ''}{category ? category.name : product.brand}
+          </p>
           <h1>{product.name}</h1>
-          <PriceDisplay price={selectedVariant?.price ?? product.price} compareAtPrice={selectedVariant?.compareAtPrice ?? product.compareAtPrice} />
+          <p className="muted-copy">
+            {hasPriceRange ? 'From ' : ''}
+            <PriceDisplay price={minPrice} compareAtPrice={product.compareAtPrice} />
+          </p>
+          <p>
+            <StatusBadge status={inStock ? 'IN STOCK' : 'OUT OF STOCK'} />
+          </p>
           <p className="product-summary__description">{product.description}</p>
 
-          <ProductActions productId={product.id} variants={product.variants} />
+          <ProductActions productId={product.id} productName={product.name} variants={product.variants} />
+
+          <div className="status-row" style={{ marginTop: '1.5rem' }}>
+            <span>Delivery<small>Courier, local delivery &amp; pickup across our zones — calculated at checkout.</small></span>
+            <span>Payment<small>Secure checkout with M-Pesa support.</small></span>
+          </div>
         </div>
       </div>
 
-      <section className="section-block">
-        <h2>More from the collection</h2>
-        <div className="product-grid">
-          {relatedProducts.map((item) => (
-            <ProductCard key={item.id} product={item} />
-          ))}
-        </div>
+      <section className="section-block" aria-labelledby="product-description-heading">
+        <h2 id="product-description-heading">About this product</h2>
+        <p className="muted-copy" style={{ maxWidth: '70ch' }}>{product.description}</p>
       </section>
+
+      <div className="section-block">
+        <ProductSpecifications product={product} />
+      </div>
+
+      {relatedProducts.length > 0 ? (
+        <section className="section-block" aria-labelledby="related-heading">
+          <div className="section-heading">
+            <h2 id="related-heading">You may also like</h2>
+            <Link href={department ? `/shop?department=${department.slug}` : '/shop'}>More to explore</Link>
+          </div>
+          <div className="product-grid">
+            {relatedProducts.map((item) => (
+              <ProductCard key={item.id} product={item} />
+            ))}
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }
