@@ -21,7 +21,6 @@ const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com';
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const product = getProductBySlug(params.slug);
   if (!product) return { title: 'Product not found | JB Mercantile' };
-  const department = getProductDepartment(product);
   return {
     title: `${product.name} | JB Mercantile`,
     description: product.shortDescription,
