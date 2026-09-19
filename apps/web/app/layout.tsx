@@ -3,25 +3,31 @@ import type { Metadata } from 'next';
 
 import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
+import { ThemeProvider, ThemeScript } from '../components/ThemeProvider';
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com';
+const brandName = 'JB Mercantile';
+const brandDescriptor = 'Fashion • Footwear • Kitchen & Home';
+const brandDescription = `JB Mercantile — ${brandDescriptor}. Shop fashion, footwear and kitchen & home essentials with secure checkout and M-Pesa payments.`;
 
 export const metadata: Metadata = {
   title: {
-    default: 'JB — Kenya-first Clothing Store',
-    template: '%s | JB',
+    default: `${brandName} — ${brandDescriptor}`,
+    template: `%s | ${brandName}`,
   },
-  description: 'JB — modern, premium everyday clothing. Shop essentials with secure checkout and M-Pesa payments.',
+  description: brandDescription,
   metadataBase: new URL(siteUrl),
+  alternates: { canonical: '/' },
   openGraph: {
-    title: 'JB — Kenya-first Clothing Store',
-    description: 'Modern, premium everyday clothing with secure checkout and M-Pesa payments.',
+    title: `${brandName} — ${brandDescriptor}`,
+    description: brandDescription,
     type: 'website',
+    siteName: brandName,
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'JB — Kenya-first Clothing Store',
-    description: 'Modern, premium everyday clothing with secure checkout and M-Pesa payments.',
+    title: `${brandName} — ${brandDescriptor}`,
+    description: brandDescription,
   },
   icons: {
     icon: '/jb-logo.png',
@@ -29,26 +35,42 @@ export const metadata: Metadata = {
   },
 };
 
+const organizationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: brandName,
+  slogan: brandDescriptor,
+  url: siteUrl,
+  logo: `${siteUrl}/jb-logo.png`,
+};
+
+const websiteJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: brandName,
+  url: siteUrl,
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: `${siteUrl}/search?q={search_term_string}`,
+    'query-input': 'required name=search_term_string',
+  },
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        <a
-          href="#main-content"
-          style={{
-            position: 'absolute',
-            left: '-9999px',
-            top: 'auto',
-            width: '1px',
-            height: '1px',
-            overflow: 'hidden',
-          }}
-        >
+        <ThemeScript />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
+        <a href="#main-content" className="visually-hidden">
           Skip to main content
         </a>
-        <Header />
-        <div id="main-content">{children}</div>
-        <Footer />
+        <ThemeProvider>
+          <Header />
+          <div id="main-content">{children}</div>
+          <Footer />
+        </ThemeProvider>
       </body>
     </html>
   );
