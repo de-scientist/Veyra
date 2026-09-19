@@ -72,14 +72,16 @@ export function FacetCheckbox({
   count,
   checked,
   onChange,
+  idPrefix = '',
 }: {
   attribute: string;
   value: string;
   count?: number;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  idPrefix?: string;
 }) {
-  const id = `facet-${attribute}-${value}`.replace(/[^a-zA-Z0-9-_]/g, '-');
+  const id = `${idPrefix}facet-${attribute}-${value}`.replace(/[^a-zA-Z0-9-_]/g, '-');
   return (
     <label className="facet-option" htmlFor={id}>
       <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
@@ -94,10 +96,12 @@ export function FacetControl({
   facet,
   selected,
   onToggle,
+  idPrefix = '',
 }: {
   facet: Facet;
   selected: string[];
   onToggle: (value: string) => void;
+  idPrefix?: string;
 }) {
   const def = attributeDef(facet.attribute);
   if (def.control === 'swatch') {
@@ -128,6 +132,7 @@ export function FacetControl({
           count={count}
           checked={selected.includes(value)}
           onChange={() => onToggle(value)}
+          idPrefix={idPrefix}
         />
       ))}
     </div>

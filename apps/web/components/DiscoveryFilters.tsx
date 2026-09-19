@@ -21,13 +21,15 @@ type FilterProps = {
   /** Params preserved across filter changes (department/category/q). */
   fixed: FixedParams;
   selectedMaxPrice?: number | null;
+  /** Prefix for control ids (avoids duplicates between sidebar + sheet instances). */
+  idPrefix?: string;
 };
 
 function pushQuery(router: ReturnType<typeof useRouter>, basePath: string, fixed: FixedParams, query: DiscoveryQuery) {
   router.push(`${basePath}${discoveryQueryString({ ...query, ...fixed, page: 1 })}` as never, { scroll: false });
 }
 
-export function FilterPanel({ facets, priceBuckets, query, basePath, fixed, selectedMaxPrice }: FilterProps) {
+export function FilterPanel({ facets, priceBuckets, query, basePath, fixed, selectedMaxPrice, idPrefix = '' }: FilterProps) {
   const router = useRouter();
   const attrs = query.attrs ?? {};
 
@@ -74,8 +76,8 @@ export function FilterPanel({ facets, priceBuckets, query, basePath, fixed, sele
 
       <div className="filter-group">
         <h3>Availability</h3>
-        <label className="facet-option" htmlFor="facet-instock">
-          <input id="facet-instock" type="checkbox" checked={!!query.inStockOnly} onChange={toggleStock} />
+        <label className="facet-option" htmlFor={`${idPrefix}facet-instock`}>
+          <input id={`${idPrefix}facet-instock`} type="checkbox" checked={!!query.inStockOnly} onChange={toggleStock} />
           <span>In stock only</span>
         </label>
       </div>
@@ -85,7 +87,7 @@ export function FilterPanel({ facets, priceBuckets, query, basePath, fixed, sele
           <h3>Price</h3>
           <div role="group" aria-label="Filter by price">
             {priceBuckets.map((bucket) => {
-              const id = `price-${bucket.min}-${bucket.max ?? 'max'}`;
+              const id = `${idPrefix}price-${bucket.min}-${bucket.max ?? 'max'}`;
               return (
                 <label key={id} className="facet-option" htmlFor={id}>
                   <input
@@ -111,7 +113,7 @@ export function FilterPanel({ facets, priceBuckets, query, basePath, fixed, sele
       {facets.map((facet) => (
         <div className="filter-group" key={facet.attribute}>
           <h3>{facet.attribute}</h3>
-          <FacetControl facet={facet} selected={attrs[facet.attribute] ?? []} onToggle={(value) => toggleFacet(facet.attribute, value)} />
+          <FacetControl facet={facet} selected={attrs[facet.attribute] ?? []} onToggle={(value) => toggleFacet(facet.attribute, value)} idPrefix={idPrefix} />
         </div>
       ))}
 
@@ -146,7 +148,7 @@ export function FilterSheetHost(props: FilterProps) {
                 Close
               </button>
             </div>
-            <FilterPanel {...props} />
+            <FilterPanel {...props} idPrefix="sheet-" />
             <div className="sheet__footer">
               <button type="button" className="button" onClick={() => setOpen(false)}>
                 Show results
