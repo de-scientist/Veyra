@@ -267,8 +267,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .product-card { position: relative; display: flex; flex-direction: column; }
 .product-card__link { display: block; height: 100%; }
 .product-card__media { position: relative; background: var(--jb-surface-muted); aspect-ratio: 4 / 5; overflow: hidden; }
-.product-card__media img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.25s ease; }
+.product-card__media img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.25s ease, opacity 0.2s ease; }
 .product-card:hover .product-card__media img { transform: scale(1.03); }
+.product-card__hover { position: absolute; inset: 0; opacity: 0; transition: opacity 0.25s ease; }
+.product-card__hover img { width: 100%; height: 100%; object-fit: cover; }
+.product-card:hover .product-card__hover { opacity: 1; }
 .product-card__placeholder { display: grid; place-items: center; height: 100%; color: var(--jb-text-muted); }
 .product-card__body { padding: 1rem 1rem 1.2rem; display: grid; gap: 0.15rem; }
 .product-card__meta { letter-spacing: 0.1em; font-size: 0.7rem; text-transform: uppercase; color: var(--jb-text-muted); font-weight: 700; }

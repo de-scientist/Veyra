@@ -1,34 +1,55 @@
 import Link from 'next/link';
-import Image from 'next/image';
 
 import { PriceDisplay } from './PriceDisplay';
+import { ProductImage } from './ProductImage';
 import { WishlistButton } from './WishlistButton';
-import type { Product } from '../lib/storefront-data';
+import {
+  discountPercent,
+  getProductCategory,
+  getProductDepartment,
+  productInStock,
+  type Product,
+} from '../lib/catalog';
 
-type ProductCardProps = {
-  product: Product;
-};
-
-export function ProductCard({ product }: ProductCardProps) {
-  const primaryImage = product.images[0];
-  const hasDiscount = !!product.compareAtPrice && product.compareAtPrice > product.price;
+export function ProductCard({ product, eager = false }: { product: Product; eager?: boolean }) {
+  const [primaryImage, hoverImage] = product.images;
+  const discount = discountPercent(product);
+  const inStock = productInStock(product);
+  const category = getProductCategory(product);
+  const department = getProductDepartment(product);
+  const variantCount = product.variants.length;
 
   return (
     <article className="product-card">
       <Link href={`/products/${product.slug}`} aria-label={`View ${product.name}`} className="product-card__link">
         <div className="product-card__media">
           {primaryImage ? (
-            <Image src={primaryImage} alt={product.name} width={800} height={1000} priority={false} />
+            <>
+              <ProductImage src={primaryImage} alt={product.name} eager={eager} />
+              {hoverImage && hoverImage !== primaryImage ? (
+                <span className="product-card__hover" aria-hidden="true">
+                  <ProductImage src={hoverImage} alt="" />
+                </span>
+              ) : null}
+            </>
           ) : (
             <div className="product-card__placeholder">Image unavailable</div>
           )}
-          {hasDiscount ? <span className="badge badge--sale">Sale</span> : null}
+          {discount ? <span className="badge badge--sale">-{discount}%</span> : null}
         </div>
         <div className="product-card__body">
-          <div className="product-card__meta">{product.brand}</div>
+          <div className="product-card__meta">
+            {department ? <span className="product-card__dept">{department.name}</span> : null}
+            {department && category ? ' · ' : null}
+            {category ? category.name : product.brand}
+          </div>
           <h3>{product.name}</h3>
           <p>{product.shortDescription}</p>
           <PriceDisplay price={product.price} compareAtPrice={product.compareAtPrice} className="product-card__price" />
+          <span className={`product-card__stock ${inStock ? 'product-card__stock--in' : 'product-card__stock--out'}`}>
+            {inStock ? 'In stock' : 'Out of stock'}
+            {inStock && variantCount > 1 ? ` · ${variantCount} options` : null}
+          </span>
         </div>
       </Link>
       <div className="product-card__wishlist"><WishlistButton productId={product.id} /></div>
