@@ -1,14 +1,15 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
 
 import { useModalFocus } from './a11y';
 import { JBIcon, type JBIconName } from './JBIcons';
+import { can, getSessionUser } from '../lib/admin-api';
 
-const navigation: Array<{ href: Route; label: string; icon: JBIconName }> = [
+const accountNavigation: Array<{ href: Route; label: string; icon: JBIconName }> = [
   { href: '/account', label: 'Overview', icon: 'home' },
   { href: '/account/notifications', label: 'Notifications', icon: 'bell' },
   { href: '/account/profile', label: 'Profile', icon: 'user' },
@@ -22,12 +23,37 @@ const navigation: Array<{ href: Route; label: string; icon: JBIconName }> = [
   { href: '/account/preferences', label: 'Preferences', icon: 'sliders' },
 ];
 
+const adminEntry: { href: Route; label: string; icon: JBIconName } = {
+  href: '/admin/dashboard' as Route,
+  label: 'Admin Dashboard',
+  icon: 'grid',
+};
+
 export function AccountNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   // Modal slide-over on mobile: trap, Escape, scroll-lock, focus restore.
   const navRef = useModalFocus({ active: mobileOpen, onClose: () => setMobileOpen(false), initialFocusRef: closeRef });
+
+  // Authorization-driven entry point: shown only when the backend session
+  // carries dashboard permission. UX-only; `/admin/*` APIs re-authorize.
+  useEffect(() => {
+    let mounted = true;
+    getSessionUser()
+      .then((result) => {
+        if (mounted) setShowAdmin(can('dashboard.read', result.roles));
+      })
+      .catch(() => {
+        if (mounted) setShowAdmin(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const navigation = showAdmin ? [...accountNavigation, adminEntry] : accountNavigation;
 
   return (
     <>

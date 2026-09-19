@@ -31,6 +31,15 @@ async function main() {
     },
   });
 
+  const superAdminRole = await prisma.role.upsert({
+    where: { slug: 'super_admin' },
+    update: {},
+    create: {
+      name: 'Super Admin',
+      slug: 'super_admin',
+    },
+  });
+
   const adminPermissions = [
     { name: 'Manage Products', slug: 'products.manage', resource: 'products', action: 'manage' },
     { name: 'Manage Inventory', slug: 'inventory.manage', resource: 'inventory', action: 'manage' },
@@ -72,6 +81,22 @@ async function main() {
       update: {},
       create: {
         roleId: adminRole.id,
+        permissionId: permission.id,
+      },
+    });
+  }
+
+  for (const permission of permissionRecords) {
+    await prisma.rolePermission.upsert({
+      where: {
+        roleId_permissionId: {
+          roleId: superAdminRole.id,
+          permissionId: permission.id,
+        },
+      },
+      update: {},
+      create: {
+        roleId: superAdminRole.id,
         permissionId: permission.id,
       },
     });

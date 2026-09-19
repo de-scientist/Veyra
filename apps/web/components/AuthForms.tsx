@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -18,8 +18,23 @@ async function authRequest(path: string, body: Record<string, string>) {
   return data?.data;
 }
 
+/** Same-origin path only: must start with a single `/` (blocks `//evil`, `http:`, `javascript:`). */
+export function safeRedirectTarget(raw: string | null): string {
+  if (!raw) return '/account';
+  try {
+    const decoded = decodeURIComponent(raw);
+    if (decoded.startsWith('/') && !decoded.startsWith('//') && !decoded.includes(':')) {
+      return decoded;
+    }
+  } catch {
+    // Fall through to the default below.
+  }
+  return '/account';
+}
+
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,7 +47,7 @@ export function LoginForm() {
     setError('');
     try {
       await authRequest('/auth/login', { email: email.trim(), password });
-      router.push('/account');
+      router.push(safeRedirectTarget(searchParams.get('redirect')));
       router.refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to sign in.');

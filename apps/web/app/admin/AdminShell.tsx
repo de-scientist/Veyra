@@ -12,7 +12,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { getSessionUser, isOperationsRole, logout, type SessionUser } from '../../lib/admin-api';
 
 const NAVIGATION: Array<{ href: Route; label: string; icon: JBIconName }> = [
-  { href: '/admin', label: 'Dashboard', icon: 'grid' },
+  { href: '/admin/dashboard' as Route, label: 'Dashboard', icon: 'grid' },
   { href: '/admin/analytics', label: 'Analytics', icon: 'chart' },
   { href: '/admin/orders', label: 'Orders', icon: 'box' },
   { href: '/admin/payments', label: 'Payments', icon: 'card' },
@@ -39,20 +39,37 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   // Modal slide-over on mobile: trap, Escape, scroll-lock, focus restore.
   const navRef = useModalFocus({ active: mobileOpen, onClose: () => setMobileOpen(false), initialFocusRef: closeRef });
 
+  const isUnauthorizedPage = pathname === '/admin/unauthorized';
+
   useEffect(() => {
+    // The 403 page must render without a session gate; otherwise
+    // authenticated-but-forbidden users would loop back to `/login`.
+    if (isUnauthorizedPage) {
+      setLoading(false);
+      return;
+    }
     let mounted = true;
     getSessionUser()
       .then((result) => {
         if (!mounted) return;
         // UX-only gate: backend authorization remains mandatory on every endpoint.
         if (!isOperationsRole(result.roles)) {
-          router.replace('/login');
+          router.replace('/admin/unauthorized');
           return;
         }
         setSession(result);
       })
-      .catch(() => {
-        if (mounted) router.replace('/login');
+      .catch((error: unknown) => {
+        if (!mounted) return;
+        const code = (error as { code?: string } | null)?.code;
+        // Authenticated-but-forbidden sessions surface here when the account
+        // is suspended/deleted; anything else unauthenticated goes to login.
+        if (code && code !== 'UNAUTHENTICATED') {
+          router.replace('/admin/unauthorized');
+          return;
+        }
+        const redirect = encodeURIComponent(pathname);
+        router.replace(`/login?redirect=${redirect}` as Route);
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -60,7 +77,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [router]);
+  }, [router, pathname, isUnauthorizedPage]);
 
   const handleLogout = async () => {
     const confirmed = await confirm({
@@ -77,6 +94,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       router.replace('/login');
     }
   };
+
+  if (isUnauthorizedPage) {
+    return <main className="account-main admin-main"><div className="container page-shell">{children}</div></main>;
+  }
 
   if (loading) return <div className="empty-state"><p>Checking admin access…</p></div>;
   if (!session) return <div className="empty-state"><p>Redirecting…</p></div>;
@@ -96,7 +117,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </button>
       <nav id="admin-nav" ref={navRef} className={`account-nav admin-nav ${mobileOpen ? 'open' : ''}`} aria-label="Admin navigation">
         <div className="admin-nav__brand">
-          <Link href="/admin" className="brand" aria-label="JB operations dashboard">
+            <Link href="/admin/dashboard" className="brand" aria-label="JB operations dashboard">
             <JBLogo variant="full" alt="" height={30} />
             <span>JB OPS</span>
           </Link>
@@ -109,7 +130,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         ) : null}
         <ul className="account-nav-list">
           {NAVIGATION.map((item) => {
-            const active = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
+            const active = pathname === item.href || (item.href !== '/admin/dashboard' && pathname.startsWith(item.href));
             return (
               <li key={item.href}>
                 <Link href={item.href} className={`account-nav-link ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => setMobileOpen(false)}>

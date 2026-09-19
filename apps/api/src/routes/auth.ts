@@ -7,6 +7,7 @@ import { env } from '../lib/env.js';
 import { authLimit } from '../lib/rateLimits.js';
 import { hashPassword, hashToken, verifyPassword } from '../lib/auth.js';
 import { HttpError } from '../lib/errors.js';
+import { assertUserActive } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 
 const authCookieName = 'veyra_session';
@@ -174,6 +175,9 @@ export async function authRoutes(app: FastifyInstance) {
       throw new HttpError(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
     }
 
+    // Inactive accounts cannot establish sessions, even with valid credentials.
+    assertUserActive(user);
+
     const sessionToken = await createSession(
       user.id,
       request.headers['user-agent'] ?? undefined,
@@ -249,6 +253,9 @@ export async function authRoutes(app: FastifyInstance) {
     if (!session) {
       throw new HttpError(401, 'UNAUTHENTICATED', 'Authentication required.');
     }
+
+    // Suspended/deleted/deactivated accounts lose API access immediately.
+    assertUserActive(session.user);
 
     return {
       success: true,

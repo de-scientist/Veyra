@@ -26,6 +26,34 @@ export function isOperationsRole(roles: string[]) {
   return roles.some((role) => ['staff', 'admin', 'super_admin', 'super-admin'].includes(role.toLowerCase()));
 }
 
+function isAdminRole(roles: string[]) {
+  return roles.some((role) => ['admin', 'super_admin', 'super-admin'].includes(role.toLowerCase()));
+}
+
+function isSuperAdminRole(roles: string[]) {
+  return roles.some((role) => ['super_admin', 'super-admin'].includes(role.toLowerCase()));
+}
+
+/**
+ * Centralized frontend permission helper. UX-only: every permission is
+ * re-enforced by the backend on each request. Unknown permissions deny.
+ */
+export function can(permission: string, roles: string[]): boolean {
+  switch (permission.toLowerCase()) {
+    case 'dashboard.read':
+      return isOperationsRole(roles);
+    case 'refunds.process':
+    case 'customers.manage':
+    case 'users.manage':
+    case 'settings.manage':
+      return isAdminRole(roles);
+    case 'roles.manage':
+      return isSuperAdminRole(roles);
+    default:
+      return false;
+  }
+}
+
 export function getSessionUser() {
   return request<SessionUser>('/auth/me');
 }

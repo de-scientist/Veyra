@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Suspense } from 'react';
 
 import { JBLogo } from '../../components/JBLogo';
 import { LoginForm } from '../../components/AuthForms';
@@ -22,7 +23,9 @@ export default function LoginPage() {
           <h1>Sign in to JB Mercantile</h1>
           <p className="muted-copy">Track orders, manage returns, and check out faster.</p>
         </div>
-        <LoginForm />
+        <Suspense>
+          <LoginForm />
+        </Suspense>
       </div>
     </main>
   );

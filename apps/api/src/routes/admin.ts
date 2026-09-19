@@ -4,7 +4,11 @@ import { Prisma } from '@prisma/client';
 
 import { HttpError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
-import { requireOperationsAccess } from '../middleware/operations.js';
+import {
+  requireAdminAccess,
+  requireOperationsAccess,
+  requireSuperAdmin,
+} from '../middleware/operations.js';
 
 const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).max(100).default(1),
@@ -273,13 +277,18 @@ export async function adminRoutes(app: FastifyInstance) {
     return { success: true, data: { ...customer, orders: customer.orders.map((o) => ({ ...o, grandTotal: Number(o.grandTotal) })) } };
   });
 
-  app.patch('/admin/customers/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/customers/:id', { preHandler: requireOperationsAccess }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const payload = z.object({ firstName: z.string().min(1).max(120).optional(), lastName: z.string().min(1).max(120).optional(), phone: z.string().max(32).nullable().optional(), status: z.enum(['ACTIVE', 'SUSPENDED']).optional() }).parse(request.body);
+    // Suspend/reinstate is user-lifecycle management: administrators only.
+    // Name/phone edits remain available to operations staff.
+    if (payload.status !== undefined) {
+      await requireAdminAccess(request, reply);
+    }
     const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found.');
     const customer = await prisma.user.update({ where: { id }, data: { firstName: payload.firstName?.trim(), lastName: payload.lastName?.trim(), phone: payload.phone, status: payload.status }, select: { id: true, email: true, firstName: true, lastName: true, phone: true, status: true } });
-    await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'CUSTOMER_UPDATED', entity: 'User', entityId: id, ...auditMeta(request) } });
+    await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'CUSTOMER_UPDATED', entity: 'User', entityId: id, before: { status: existing.status } as Prisma.InputJsonValue, after: { status: customer.status } as Prisma.InputJsonValue, ...auditMeta(request) } });
     return { success: true, data: customer };
   });
 
@@ -367,6 +376,82 @@ export async function adminRoutes(app: FastifyInstance) {
     const coupon = await prisma.coupon.update({ where: { id }, data: { status: payload.status, maxUses: payload.maxUses === null ? null : payload.maxUses, validUntil: payload.validUntil === null ? null : payload.validUntil ? new Date(payload.validUntil) : undefined } });
     await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'COUPON_UPDATED', entity: 'Coupon', entityId: id, before: { status: existing.status } as Prisma.InputJsonValue, after: { status: coupon.status } as Prisma.InputJsonValue, ...auditMeta(request) } });
     return { success: true, data: { ...coupon, value: Number(coupon.value) } };
+  });
+
+  // ---- Role & permission administration (super-admin only) ----
+  // There is intentionally no public registration path to these endpoints:
+  // roles can only be listed/changed by an already-authenticated super-admin.
+  // The first super-admin is promoted directly in the database; see docs.
+  app.get('/admin/roles', { preHandler: requireSuperAdmin }, async () => {
+    const roles = await prisma.role.findMany({
+      include: { permissions: { include: { permission: true } }, _count: { select: { users: true } } },
+      orderBy: { slug: 'asc' },
+    });
+    return {
+      success: true,
+      data: {
+        roles: roles.map((role) => ({
+          id: role.id,
+          name: role.name,
+          slug: role.slug,
+          memberCount: role._count.users,
+          permissions: role.permissions.map((entry) => entry.permission.slug),
+        })),
+      },
+    };
+  });
+
+  app.post('/admin/users/:id/roles', { preHandler: requireSuperAdmin }, async (request) => {
+    const { id } = request.params as { id: string };
+    const payload = z.object({ role: z.string().trim().min(1).max(60), action: z.enum(['assign', 'revoke']) }).parse(request.body);
+    const roleSlug = payload.role.toLowerCase();
+
+    const [target, role] = await Promise.all([
+      prisma.user.findUnique({ where: { id }, include: { roles: { include: { role: true } } } }),
+      prisma.role.findUnique({ where: { slug: roleSlug } }),
+    ]);
+    if (!target) throw new HttpError(404, 'USER_NOT_FOUND', 'User not found.');
+    if (!role) throw new HttpError(404, 'ROLE_NOT_FOUND', 'Role not found.');
+    if (target.status === 'DELETED') {
+      throw new HttpError(409, 'USER_DELETED', 'Roles cannot be changed on deleted accounts.');
+    }
+
+    const actor = actorId(request);
+    const alreadyHas = target.roles.some((entry) => entry.role.slug.toLowerCase() === roleSlug);
+
+    // Self-lockout guard: a super-admin cannot strip their own super-admin role.
+    if (actor === id && payload.action === 'revoke' && (roleSlug === 'super_admin' || roleSlug === 'super-admin')) {
+      throw new HttpError(403, 'SELF_LOCKOUT_DENIED', 'You cannot remove your own super-administrator role.');
+    }
+
+    if (payload.action === 'assign') {
+      if (alreadyHas) throw new HttpError(409, 'ROLE_ALREADY_ASSIGNED', 'The user already has this role.');
+      await prisma.userRole.create({ data: { userId: id, roleId: role.id } });
+    } else {
+      if (!alreadyHas) throw new HttpError(404, 'ROLE_NOT_ASSIGNED', 'The user does not have this role.');
+      await prisma.userRole.deleteMany({ where: { userId: id, roleId: role.id } });
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: actor,
+        action: 'USER_ROLE_CHANGED',
+        entity: 'User',
+        entityId: id,
+        before: { roles: target.roles.map((entry) => entry.role.slug) } as Prisma.InputJsonValue,
+        after: { roles: payload.action === 'assign'
+          ? [...target.roles.map((entry) => entry.role.slug), role.slug]
+          : target.roles.map((entry) => entry.role.slug).filter((slug) => slug.toLowerCase() !== roleSlug),
+        } as Prisma.InputJsonValue,
+        ...auditMeta(request),
+      },
+    });
+
+    const updated = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, status: true, roles: { select: { role: { select: { slug: true } } } } },
+    });
+    return { success: true, data: { ...updated, roles: updated?.roles.map((entry) => entry.role.slug) } };
   });
 
   // ---- Operational settings (safe subset; secrets stay in environment) ----
