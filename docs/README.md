@@ -24,6 +24,8 @@ JB Mercantile — Fashion • Footwear • Kitchen & Home. Start here; each page
 
 - [AUTHENTICATION.md](AUTHENTICATION.md) — sessions, RBAC, route protection
 - [ADMIN.md](ADMIN.md) — operations platform, analytics, audit logs
+- [ADMIN-ACCESS-RBAC-AUDIT.md](ADMIN-ACCESS-RBAC-AUDIT.md) — pre-remediation audit (current-state truth)
+- [ADMIN-RBAC-IMPLEMENTATION-REPORT.md](ADMIN-RBAC-IMPLEMENTATION-REPORT.md) — remediation record, matrices, tests
 
 ## Frontend
 

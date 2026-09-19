@@ -75,7 +75,7 @@ sequenceDiagram
 
 ## Authentication & Authorization
 
-Cookie session (`veyra_session`, HttpOnly, SameSite Lax, Secure in production, 7-day expiry, server-side revocation). Passwords bcrypt. Roles: `CUSTOMER`, `STAFF`, `ADMIN`, `SUPER_ADMIN`. Operations routes require staff or above; financial completion requires admin or above. All authorization server-side; UI gates are UX-only. See [AUTHENTICATION.md](AUTHENTICATION.md).
+Cookie session (`veyra_session`, HttpOnly, SameSite Lax, Secure in production, 7-day expiry, server-side revocation). Passwords bcrypt. Only `ACTIVE` accounts authenticate (suspend/deletion revokes access immediately). Roles: `CUSTOMER`, `STAFF`, `ADMIN`, `SUPER_ADMIN` (central catalog in `apps/api/src/lib/permissions.ts`). Operations routes require staff or above; financial completion and customer suspend/reinstate require admin or above; role assignment requires super-admin. All authorization server-side; UI gates are UX-only. See [AUTHENTICATION.md](AUTHENTICATION.md).
 
 ## Background Work
 
