@@ -58,7 +58,7 @@ export function LoginForm() {
       <button type="submit" className="button" disabled={busy} aria-busy={busy}>
         {busy ? 'Signing in…' : 'Sign in'}
       </button>
-      <p className="auth-switch">New to JB? <Link href="/register">Create an account</Link></p>
+      <p className="auth-switch">New to JB Mercantile? <Link href="/register">Create an account</Link></p>
     </form>
   );
 }

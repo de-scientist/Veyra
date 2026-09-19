@@ -27,7 +27,7 @@ export function CartPageClient() {
 
   if (error && !cart) return <div className="empty-state"><h1>We could not load your cart</h1><p>{error}</p><Link className="button" href="/shop">Continue shopping</Link></div>;
   if (!cart) return <div className="empty-state"><p>Loading your cart...</p></div>;
-  if (!cart.items.length) return <div className="empty-state"><h1>Your cart is empty</h1><p>Explore the latest JB collection and find something for your everyday rotation.</p><Link className="button" href="/shop">Shop now</Link></div>;
+  if (!cart.items.length) return <div className="empty-state"><h1>Your cart is empty</h1><p>Explore fashion, footwear and kitchen & home essentials and find something for your everyday rotation.</p><Link className="button" href="/shop">Shop now</Link></div>;
 
   return (
     <div className="cart-layout">
