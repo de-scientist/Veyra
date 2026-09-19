@@ -143,9 +143,9 @@ export function LineChart({ points, label }: { points: Array<{ bucket: string; r
           <line key={fraction} x1={pad} x2={width - pad} y1={y(max * fraction)} y2={y(max * fraction)} stroke="currentColor" strokeOpacity="0.15" />
         ))}
         <path d={path((p) => p.revenue)} fill="none" stroke="currentColor" strokeWidth="2" />
-        <path d={path((p) => p.paidRevenue)} fill="none" strokeWidth="2" strokeDasharray="5 4" style={{ stroke: 'var(--accent, #7c5a45)' }} />
+        <path d={path((p) => p.paidRevenue)} fill="none" strokeWidth="2" strokeDasharray="5 4" style={{ stroke: 'var(--jb-primary)' }} />
         {points.map((p, i) => (
-          <circle key={i} cx={x(i)} cy={y(p.paidRevenue)} r="3" style={{ fill: 'var(--accent, #7c5a45)' }}>
+          <circle key={i} cx={x(i)} cy={y(p.paidRevenue)} r="3" style={{ fill: 'var(--jb-primary)' }}>
             <title>{`${p.bucket}: paid ${p.paidRevenue.toLocaleString('en-KE')}, gross ${p.revenue.toLocaleString('en-KE')}`}</title>
           </circle>
         ))}
