@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import type { Route } from 'next';
 import { useState } from 'react';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -19,12 +20,12 @@ async function authRequest(path: string, body: Record<string, string>) {
 }
 
 /** Same-origin path only: must start with a single `/` (blocks `//evil`, `http:`, `javascript:`). */
-export function safeRedirectTarget(raw: string | null): string {
+export function safeRedirectTarget(raw: string | null): Route {
   if (!raw) return '/account';
   try {
     const decoded = decodeURIComponent(raw);
     if (decoded.startsWith('/') && !decoded.startsWith('//') && !decoded.includes(':')) {
-      return decoded;
+      return decoded as Route;
     }
   } catch {
     // Fall through to the default below.
