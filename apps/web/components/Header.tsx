@@ -1,10 +1,11 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { categories } from '../lib/storefront-data';
+import { JBLogo } from './JBLogo';
+import { ThemeToggle } from './ThemeProvider';
+import { departments, getDepartmentCategories } from '../lib/catalog';
 import { getCart, getUnreadCount } from '../lib/shopping-api';
 
 function Icon({ d }: { d: string }) {
@@ -27,6 +28,8 @@ export function Header() {
   const [cartCount, setCartCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [megaOpen, setMegaOpen] = useState(false);
+  const megaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getCart().then((cart) => setCartCount(cart.itemCount)).catch(() => undefined);
@@ -47,6 +50,22 @@ export function Header() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!megaOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMegaOpen(false);
+    };
+    const onClick = (event: MouseEvent) => {
+      if (megaRef.current && !megaRef.current.contains(event.target as Node)) setMegaOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onClick);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+    };
+  }, [megaOpen]);
+
   return (
     <header className="site-header">
       <div className="container site-header__inner">
@@ -61,16 +80,48 @@ export function Header() {
           <span aria-hidden="true">{menuOpen ? '✕' : '☰'}</span>
         </button>
 
-        <Link href="/" className="brand" aria-label="JB home">
-          <Image src="/jb-navbar.png" alt="" width={120} height={32} className="brand__logo" priority />
-          <span className="brand__wordmark">JB</span>
+        <Link href="/" className="brand" aria-label="JB Mercantile home" style={{ textDecoration: 'none' }}>
+          <JBLogo size={34} />
         </Link>
 
         <nav aria-label="Main navigation" className="main-nav">
-          <Link href="/shop">Shop</Link>
-          {categories.slice(0, 3).map((category) => (
-            <Link key={category.slug} href={`/categories/${category.slug}`}>
-              {category.name}
+          <div className="nav-item" ref={megaRef}>
+            <button
+              type="button"
+              aria-expanded={megaOpen}
+              aria-haspopup="true"
+              onClick={() => setMegaOpen((v) => !v)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', minHeight: 44, padding: '0 0.75rem', borderRadius: 999, border: 0, background: 'transparent', color: 'inherit', font: 'inherit', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Shop <span aria-hidden="true" style={{ fontSize: '0.7rem' }}>▾</span>
+            </button>
+            {megaOpen ? (
+              <div className="mega-menu" role="menu" aria-label="Shop departments">
+                {departments.map((department) => (
+                  <div key={department.slug} className="mega-menu__dept">
+                    <h3>
+                      <Link href={`/shop?department=${department.slug}`} role="menuitem" onClick={() => setMegaOpen(false)}>
+                        {department.name}
+                      </Link>
+                    </h3>
+                    <p>{department.tagline}</p>
+                    <ul>
+                      {getDepartmentCategories(department.slug).map((category) => (
+                        <li key={category.slug}>
+                          <Link href={`/categories/${category.slug}`} role="menuitem" onClick={() => setMegaOpen(false)}>
+                            {category.name}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          {departments.map((department) => (
+            <Link key={department.slug} href={`/shop?department=${department.slug}`}>
+              {department.name}
             </Link>
           ))}
           <Link href="/search">Search</Link>
@@ -80,7 +131,7 @@ export function Header() {
           <Link href="/search" aria-label="Search products">
             <Icon d={ICONS.search} /> <span className="header-label">Search</span>
           </Link>
-          <Link href="/login" aria-label="Sign in to JB">
+          <Link href="/login" aria-label="Sign in to JB Mercantile">
             <Icon d={ICONS.account} /> <span className="header-label">Sign in</span>
           </Link>
           <Link href="/account/notifications" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}>
@@ -94,24 +145,43 @@ export function Header() {
             <Icon d={ICONS.cart} /> <span className="header-label">Cart</span>
             {cartCount ? <span className="header-count">{cartCount}</span> : null}
           </Link>
+          <ThemeToggle compact />
         </div>
       </div>
 
       <nav id="jb-mobile-nav" aria-label="Mobile navigation" className={`mobile-nav${menuOpen ? ' open' : ''}`}>
         <div className="container">
           <Link href="/shop" onClick={() => setMenuOpen(false)}>Shop all</Link>
-          {categories.map((category) => (
-            <Link key={category.slug} href={`/categories/${category.slug}`} onClick={() => setMenuOpen(false)}>
-              {category.name}
-            </Link>
+          {departments.map((department) => (
+            <details key={department.slug}>
+              <summary style={{ display: 'flex', alignItems: 'center', minHeight: 48, padding: '0.5rem 0.75rem', borderRadius: 12, fontWeight: 600, cursor: 'pointer' }}>
+                {department.name}
+              </summary>
+              <div style={{ display: 'grid', paddingLeft: '1rem' }}>
+                <Link href={`/shop?department=${department.slug}`} onClick={() => setMenuOpen(false)}>
+                  All {department.name}
+                </Link>
+                {getDepartmentCategories(department.slug).map((category) => (
+                  <Link key={category.slug} href={`/categories/${category.slug}`} onClick={() => setMenuOpen(false)}>
+                    {category.name}
+                  </Link>
+                ))}
+              </div>
+            </details>
           ))}
+          <Link href="/collections/weekend-edit" onClick={() => setMenuOpen(false)}>Collections</Link>
           <Link href="/search" onClick={() => setMenuOpen(false)}>Search</Link>
           <Link href="/login" onClick={() => setMenuOpen(false)}>Sign in</Link>
           <Link href="/account" onClick={() => setMenuOpen(false)}>Account</Link>
           <Link href="/wishlist" onClick={() => setMenuOpen(false)}>Wishlist</Link>
           <Link href="/cart" onClick={() => setMenuOpen(false)}>Cart{cartCount ? ` (${cartCount})` : ''}</Link>
+          <div style={{ padding: '0.5rem 0.75rem' }}>
+            <span className="eyebrow">Appearance</span>
+            <ThemeToggle />
+          </div>
         </div>
       </nav>
     </header>
   );
 }
+
