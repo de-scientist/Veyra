@@ -281,7 +281,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .product-card__price s, .product-card__compare { text-decoration: line-through; opacity: 0.6; margin-left: 0.5rem; font-weight: 400; }
 .product-card__wishlist { position: absolute; top: 0.6rem; right: 0.6rem; }
 .product-card__wishlist button {
-  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--jb-border);
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--jb-border);
   background: var(--jb-surface);
   background: color-mix(in srgb, var(--jb-surface) 95%, transparent); cursor: pointer; font-size: 1rem; line-height: 1;
   display: grid; place-items: center; color: var(--jb-primary);
@@ -736,6 +736,20 @@ a.visually-hidden:focus-visible {
   border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 0.9rem; line-height: 1;
 }
 .chip button:hover { background: rgba(127, 127, 127, 0.25); }
+/* Filter-chip remove control: same footprint as .chip button, aligns the SVG. */
+.chip__remove {
+  display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 28px;
+  border-radius: 50%; padding: 0; color: inherit;
+}
+.chip__remove:hover { background: rgba(127, 127, 127, 0.25); color: inherit; }
+
+/* Modal touch targets: drawer/sheet/dialog dismiss + primary actions stay ≥44px
+   even when composed with .button--small. */
+.sheet__header .button,
+.account-nav .button,
+.dialog__actions .button {
+  min-height: 44px;
+}
 .filter-drawer-toggle { display: none; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1.75rem; flex-wrap: wrap; }
 .pagination__info { color: var(--jb-text-muted); font-size: 0.9rem; }
@@ -764,7 +778,7 @@ a.visually-hidden:focus-visible {
 
 /* ---------- Swatches / attribute controls ---------- */
 .swatch {
-  width: 40px; height: 40px; border-radius: 50%; padding: 0; cursor: pointer;
+  width: 44px; height: 44px; border-radius: 50%; padding: 0; cursor: pointer;
   border: 2px solid var(--jb-border); position: relative; flex: none;
   display: inline-grid; place-items: center; overflow: hidden;
 }
