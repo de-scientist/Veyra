@@ -24,27 +24,15 @@ function formatDateTime(dateString: string) {
 }
 
 function CategoryBadge({ category }: { category: string }) {
-  const colors: Record<string, string> = {
-    TRANSACTIONAL: '#1f6b45',
-    SECURITY: '#b84d45',
-    MARKETING: '#7c5a45',
-  };
-  const color = colors[category] || '#5f5a55';
+  const normalized = category.toLowerCase();
+  const tone =
+    normalized === 'transactional'
+      ? { bg: 'var(--jb-success-bg)', fg: 'var(--jb-success)' }
+      : normalized === 'security'
+        ? { bg: 'var(--jb-error-bg)', fg: 'var(--jb-error)' }
+        : { bg: 'var(--jb-warning-bg)', fg: 'var(--jb-warning)' };
   return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '0.25rem 0.6rem',
-        borderRadius: '999px',
-        fontSize: '0.7rem',
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        background: `${color}15`,
-        color,
-      }}
-    >
+    <span className="status-badge" style={{ background: tone.bg, color: tone.fg }}>
       {category.toLowerCase()}
     </span>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getRefunds, type AccountRefund } from '../../../lib/shopping-api';
 import { PriceDisplay } from '../../../components/PriceDisplay';
+import { StatusBadge } from '../../../components/jb-ui';
 
 export default function RefundsPage() {
   const [refunds, setRefunds] = useState<AccountRefund[]>([]);
@@ -36,37 +37,6 @@ export default function RefundsPage() {
       hour: '2-digit',
       minute: '2-digit',
     });
-  }
-
-  function StatusBadge({ status }: { status: string }) {
-    const normalized = status.toLowerCase().replace(/_/g, ' ');
-    const colors: Record<string, string> = {
-      requested: '#7c5a45',
-      pending: '#7c5a45',
-      processing: '#7c5a45',
-      succeeded: '#1f6b45',
-      failed: '#b84d45',
-      cancelled: '#5f5a55',
-    };
-    const color = colors[normalized] || '#5f5a55';
-    return (
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          padding: '0.25rem 0.6rem',
-          borderRadius: '999px',
-          fontSize: '0.7rem',
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          background: `${color}15`,
-          color,
-        }}
-      >
-        {status.replace(/_/g, ' ')}
-      </span>
-    );
   }
 
   if (loading) return <div className="empty-state"><p>Loading refunds…</p></div>;
