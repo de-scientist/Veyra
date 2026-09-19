@@ -4,31 +4,10 @@ import Link from 'next/link';
 import type { Route } from 'next';
 
 import type { Pagination } from '../lib/admin-api';
+import { StatusBadge } from './jb-ui';
 
 export function AdminStatusBadge({ status }: { status: string }) {
-  const normalized = status.toLowerCase().replace(/_/g, ' ');
-  const green = ['paid', 'completed', 'delivered', 'active', 'approved', 'succeeded', 'resolved', 'sent'];
-  const red = ['failed', 'cancelled', 'rejected', 'unpaid', 'dead letter'];
-  const amber = ['pending', 'processing', 'packed', 'shipped', 'out for delivery', 'under review', 'inspecting', 'in transit', 'assigned', 'preparing', 'delivery attempted', 'ready for pickup', 'partially refunded', 'refunded'];
-  const color = green.includes(normalized) ? '#157a3d' : red.includes(normalized) ? '#c81e1e' : amber.includes(normalized) ? '#9a6200' : '#1d4ed8';
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '0.25rem 0.6rem',
-        borderRadius: '999px',
-        fontSize: '0.7rem',
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        background: `${color}15`,
-        color,
-      }}
-    >
-      {status.replace(/_/g, ' ')}
-    </span>
-  );
+  return <StatusBadge status={status} />;
 }
 
 export function AdminStatCard({ label, value, href, hint }: { label: string; value: string | number; href?: Route; hint?: string }) {

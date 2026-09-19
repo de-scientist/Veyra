@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { getAccountDashboard, type DashboardData, type AccountOrder, type OrderSummary } from '../../lib/shopping-api';
 import { PriceDisplay } from '../../components/PriceDisplay';
+import { StatusBadge } from '../../components/jb-ui';
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString('en-KE', {
@@ -12,50 +13,6 @@ function formatDate(dateString: string) {
     month: 'short',
     day: 'numeric',
   });
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const normalized = status.toLowerCase().replace(/_/g, ' ');
-  const colors: Record<string, string> = {
-    paid: '#1f6b45',
-    completed: '#1f6b45',
-    delivered: '#1f6b45',
-    pending: '#7c5a45',
-    confirmed: '#7c5a45',
-    processing: '#7c5a45',
-    unpaid: '#b84d4d',
-    failed: '#b84d45',
-    cancelled: '#b84d45',
-    refunded: '#7c5a45',
-    'partially refunded': '#7c5a45',
-    unfulfilled: '#5f5a55',
-    packed: '#7c5a45',
-    shipped: '#7c5a45',
-    'out for delivery': '#7c5a45',
-    'delivery attempted': '#b84d45',
-    'ready for pickup': '#7c5a45',
-    'picked up': '#1f6b45',
-    returned: '#5f5a55',
-  };
-  const color = colors[normalized] || '#5f5a55';
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '0.25rem 0.6rem',
-        borderRadius: '999px',
-        fontSize: '0.7rem',
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        background: `${color}15`,
-        color,
-      }}
-    >
-      {status.replace(/_/g, ' ')}
-    </span>
-  );
 }
 
 function OrderCard({ order }: { order: OrderSummary }) {

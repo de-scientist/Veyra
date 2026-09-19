@@ -71,9 +71,9 @@ const STATUS_TONES: Record<string, { bg: string; fg: string }> = {
 
 function toneFor(status: string): keyof typeof STATUS_TONES {
   const s = status.toLowerCase().replace(/_/g, ' ');
-  if (['paid', 'completed', 'delivered', 'active', 'approved', 'succeeded', 'resolved', 'sent', 'confirmed'].includes(s)) return 'green';
-  if (['failed', 'cancelled', 'rejected', 'unpaid', 'expired'].includes(s)) return 'red';
-  if (['pending', 'processing', 'packed', 'shipped', 'in transit', 'out for delivery', 'under review', 'inspecting', 'assigned', 'preparing', 'ready for pickup', 'refunded', 'partially refunded', 'delivery attempted'].includes(s)) return 'amber';
+  if (['paid', 'completed', 'delivered', 'active', 'approved', 'approved for resolution', 'succeeded', 'resolved', 'received', 'picked up', 'sent', 'confirmed'].includes(s)) return 'green';
+  if (['failed', 'cancelled', 'rejected', 'unpaid', 'expired', 'dead letter'].includes(s)) return 'red';
+  if (['pending', 'processing', 'requested', 'unfulfilled', 'return initiated', 'packed', 'shipped', 'in transit', 'out for delivery', 'under review', 'inspecting', 'assigned', 'preparing', 'ready for pickup', 'refunded', 'partially refunded', 'delivery attempted'].includes(s)) return 'amber';
   return 'blue';
 }
 
