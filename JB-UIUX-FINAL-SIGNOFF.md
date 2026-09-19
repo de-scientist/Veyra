@@ -31,7 +31,7 @@ Full journey operable: skip link, single-h1 pages, native `<details>` department
 - Touch targets: wishlist + swatches bumped to 44px; nav links 48px; toggles ≥44px.
 - Reduced motion: transitions/zoom disabled, feedback preserved.
 - Forms: labels, types, required, minLength, inline errors; auth errors `role=alert`.
-- `role="navigation"` redundancy on `<nav>` left as-is (harmless).
+- Redundant landmark roles removed in follow-up pass (`role="navigation"` on `<nav>`, `role="main"` on `<main>`); skip link now surfaces on `:focus-visible` and targets a focusable `#main-content`.
 
 ## Confirmation Dialog Migration
 
@@ -55,11 +55,24 @@ Code-reviewed at 1020/900/640 breakpoints: drawers become modal with trap; sheet
 
 ## Automated Tests
 
-- `npm run typecheck --workspace @veyra/web` — PASS (fixed 7 `onConfirm` returns + pre-existing patterns)
-- `npm run lint --workspace @veyra/web` — see Verification
-- `npm test` (root, API suite) — see Verification
-- `npm run build --workspace @veyra/web` — see Verification
+- `npm run typecheck --workspace @veyra/web` — PASS (clean, no errors)
+- `npm run lint --workspace @veyra/web` — PASS (only 4 pre-existing `<img>` warnings in untouched files: account orders detail, account dashboard, CartPageClient, WishlistPageClient)
+- `npm test` (root, API suite) — PASS (13 files, 101 tests)
+- `npm run build --workspace @veyra/web` — PASS (52 routes; first attempt hit a stale-`.next`-cache `PageNotFoundError: /_document`, clean rebuild passes — environmental, unrelated to UI changes)
 - No axe/eslint-a11y/Playwright-a11y in repo; none added (no large deps per scope). Manual keyboard review performed via code-path tracing, not live AT.
+
+## Follow-Up Hardening Pass (2026-09-19)
+
+Re-audit found the base implementation substantially complete (`window.confirm`: NONE; emoji UI icons: NONE; logos: official assets throughout). Remaining gaps closed in this pass — no business logic touched:
+
+1. **Focus-trap robustness** (`components/a11y.tsx`): visibility test used `offsetParent !== null`, which is `null` for fixed-position descendants — i.e. every control inside the fixed sheet/dialog/drawers could be misclassified as non-focusable. Replaced with `getClientRects()` + computed `visibility`/`display` check. Added pull-back when focus escapes the modal (e.g. pointer interaction with the mouse-only overlay) and decoupled the effect from inline `onClose` identity (latest-close ref) so the trap no longer tears down/rebuilds on parent re-renders.
+2. **Filter-chip remove glyph** (`app/shop/page.tsx`): last `✕`-as-icon replaced with `JBIcon name="close"` inside the already-labelled remove link (`aria-label="Remove filter …"` preserved); new `.chip__remove` style keeps the 28px footprint and aligns the SVG. Remaining `→`/`←`/`×` occurrences are legitimate text content inside labelled links (pagination, back links, quantity notation), not icon substitutes.
+3. **Redundant landmark roles removed**: `role="navigation"` off `AccountNav` `<nav>`; `role="main"` off `AdminShell` `<main>`.
+4. **Theme menu dismissal** (`ThemeProvider`): added outside-pointer close and Tab-away close alongside existing Escape/arrows/focus-return; toggle keeps `aria-haspopup="menu"` + `aria-expanded` + accessible name with text label.
+5. **Search combobox** (`SearchBar`): added missing `aria-autocomplete="list"` to the `role="combobox"` input (expanded/controls/activedescendant already present).
+6. **Filter sheet toggle** (`DiscoveryFilters`): added `aria-expanded` + `aria-controls="jb-filter-sheet"` (with matching `id` on the sheet); `aria-haspopup="dialog"` retained.
+7. **Skip link** (`app/layout.tsx` + `globals.css`): link was permanently `.visually-hidden` (invisible even on focus) — added `:focus-visible` style that surfaces it as a pill above the header; `#main-content` given `tabIndex={-1}` so the skip target can receive focus.
+8. **Touch-target single source of truth** (`globals.css`): `.swatch` and `.product-card__wishlist button` base rules moved to 44px (previously relied on a later override); drawer/sheet/dialog buttons forced to `min-height: 44px` even when composed with `.button--small` (covers all Close/dismiss/confirm actions).
 
 ## Manual Tests
 
@@ -68,6 +81,7 @@ Code-path traced (not live-run): Tab/Shift+Tab wrap in sheet/drawers/dialog, Esc
 ## Files Changed / Created / Modified
 
 - Created: `components/JBIcons.tsx`, `components/a11y.tsx`, `components/ConfirmDialog.tsx`, `JB-UIUX-FINAL-SIGNOFF.md` (this file).
+- Modified (follow-up pass): `components/a11y.tsx` (visibility check, escape-focus pull-back, stable effect deps), `app/shop/page.tsx` (chip SVG icon), `components/AccountNav.tsx` (redundant role removed), `app/admin/AdminShell.tsx` (redundant role removed), `components/ThemeProvider.tsx` (menu dismissal), `components/SearchBar.tsx` (`aria-autocomplete`), `components/DiscoveryFilters.tsx` (toggle expanded/controls), `app/layout.tsx` (skip-target focus), `app/globals.css` (skip-link focus style, chip remove, 44px modal targets, 44px swatch/wishlist base).
 - Modified: `components/JBLogo.tsx` (official assets), `Header`, `Footer`, `AccountNav`, `ThemeProvider`, `SearchBar`, `DiscoveryFilters`, `admin.tsx` (ConfirmAction), `app/admin/AdminShell`, `app/account/page` (quick links), `app/account/security`, `app/account/addresses`, `app/account/orders/[orderNumber]` (reorder toast), `app/admin/reviews`, `app/admin/customers/[id]`, `app/login`, `app/register`, `app/globals.css` (dialog, logo chip, placeholder, 44px targets, timeline/sessions/danger-zone/toggle styles, drawer visibility).
 - Backend/API: **NONE**.
 
@@ -75,7 +89,6 @@ Code-path traced (not live-run): Tab/Shift+Tab wrap in sheet/drawers/dialog, Esc
 
 - MEDIUM: no live screen-reader/device/browser pass (environment limitation).
 - LOW: closed-drawer `visibility` transition is instant-hide on close (acceptable); mega-menu is click-toggled (keyboard-accessible, documented).
-- LOW: `role="navigation"` on `<nav>` redundant (harmless).
 - LOW: 4 pre-existing `<img>` lint warnings in untouched files.
 - NOT VERIFIED: physical keyboards/touch, iOS/Android, Safari/Firefox, M-Pesa sandbox re-run post-change (no business logic touched — regression risk minimal).
 
