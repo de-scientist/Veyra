@@ -1,4 +1,4 @@
-# Veyra Production Checklist
+# JB Mercantile Production Checklist
 
 ## Security
 

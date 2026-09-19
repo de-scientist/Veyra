@@ -1,4 +1,4 @@
-# Veyra Production Environment
+# JB Mercantile Production Environment
 
 No production infrastructure is provisioned. Nothing below is claimed to exist;
 every external item is marked `UNKNOWN — REQUIRES DEPLOYMENT/BUSINESS DECISION`

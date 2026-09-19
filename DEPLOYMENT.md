@@ -1,4 +1,4 @@
-# Veyra Deployment Guide
+# JB Mercantile Deployment Guide
 
 ## Prerequisites
 

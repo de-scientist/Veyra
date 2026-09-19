@@ -1,4 +1,4 @@
-# Veyra Operations Runbook
+# JB Mercantile Operations Runbook
 
 ## Health & Probes
 

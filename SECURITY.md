@@ -1,4 +1,4 @@
-# Veyra Security Policy
+# JB Mercantile Security Policy
 
 ## Architecture
 

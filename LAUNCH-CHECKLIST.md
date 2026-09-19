@@ -1,4 +1,4 @@
-# Veyra Launch Checklist
+# JB Mercantile Launch Checklist
 
 ## Infrastructure
 
