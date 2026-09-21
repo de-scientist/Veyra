@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../lib/errors.js';
 import { authLimit } from '../lib/rateLimits.js';
 import * as account from '../lib/account/account.js';
+import { removeUserAvatar, setUserAvatar } from '../lib/media/profile.js';
 
 const profileSchema = z.object({
   firstName: z.string().trim().min(1).max(120).optional(),
@@ -75,6 +76,31 @@ export async function accountRoutes(app: FastifyInstance) {
   app.patch('/account/profile', { preHandler: requireAuth }, async (request) => {
     const payload = profileSchema.parse(request.body);
     return { success: true, data: await account.updateProfile(userId(request), payload) };
+  });
+
+  const avatarSchema = z.object({
+    publicId: z.string().min(1).max(220),
+    secureUrl: z.string().url().max(2000),
+    width: z.number(),
+    height: z.number(),
+    format: z.string().min(1).max(20),
+    bytes: z.number().optional(),
+  });
+
+  // Avatar finalize: persists a freshly direct-uploaded profile asset.
+  // Identity is the session user; the service rejects assets outside the
+  // caller's own `profiles/<userId>/` namespace (403).
+  app.post('/account/profile/avatar', { preHandler: requireAuth }, async (request) => {
+    const payload = avatarSchema.parse(request.body);
+    const outcome = await setUserAvatar(userId(request), payload);
+    const profile = await account.getProfile(userId(request));
+    return { success: true, data: { ...profile, providerCleanup: outcome.providerCleanup } };
+  });
+
+  app.delete('/account/profile/avatar', { preHandler: requireAuth }, async (request) => {
+    const outcome = await removeUserAvatar(userId(request));
+    const profile = await account.getProfile(userId(request));
+    return { success: true, data: { ...profile, providerCleanup: outcome.providerCleanup } };
   });
 
   app.get('/account/addresses', { preHandler: requireAuth }, async (request) => {

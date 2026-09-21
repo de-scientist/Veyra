@@ -267,6 +267,9 @@ model User {
   lastName          String
   phone             String?
   avatarUrl         String?
+  // Cloudinary provider identity for the avatar (nullable: legacy/unset).
+  // Server-only: never serialized to clients; enables safe old-asset cleanup.
+  avatarPublicId    String?
   status            UserStatus @default(ACTIVE)
   emailVerifiedAt   DateTime?
   lastLoginAt       DateTime?
