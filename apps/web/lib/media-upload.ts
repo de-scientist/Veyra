@@ -4,7 +4,7 @@
  *
  * Flow: authorize via JB API → XHR POST to Cloudinary (progress events;
  * fetch cannot report upload progress) → normalize + validate result.
- * The helper never sees CLOUDINARY_API_SECRET; only the signed fields.
+ * The helper never sees the Cloudinary API secret; only the signed fields.
  */
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
