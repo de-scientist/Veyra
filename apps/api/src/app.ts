@@ -19,6 +19,7 @@ import { accountRoutes } from './routes/account.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { adminRoutes } from './routes/admin.js';
 import { analyticsRoutes } from './routes/analytics.js';
+import { mediaRoutes } from './routes/media.js';
 
 const allowedOrigins = env.CORS_ORIGIN.split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
