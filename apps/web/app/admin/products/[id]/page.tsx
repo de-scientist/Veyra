@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { createAdminVariant, getAdminAttributes, getAdminCategories, updateAdminProduct, updateAdminVariant, type AdminAttribute } from '../../../../lib/admin-api';
 import { AdminStatusBadge } from '../../../../components/admin';
+import { ProductMediaManager } from '../../../../components/ProductMediaManager';
 
 type ProductDetail = {
   id: string;
@@ -187,6 +188,11 @@ export default function AdminProductDetailPage({ params }: PageProps) {
             <button type="submit" className="button">Save Changes</button>
           </div>
         </form>
+      </section>
+
+      <section className="account-section" aria-labelledby="product-media-heading">
+        <h2 id="product-media-heading">Images</h2>
+        {productId ? <ProductMediaManager productId={productId} editable={product.status !== 'ARCHIVED'} /> : null}
       </section>
 
       <section className="account-section">

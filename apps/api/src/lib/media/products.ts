@@ -330,24 +330,34 @@ export async function deleteProductImage(input: {
 
   // DB first (reference removed), provider cleanup after. If cleanup fails
   // the database stays correct and the failure is reported, not hidden.
-  const remaining = await prisma.$transaction(async (tx) => {
-    await tx.productImage.delete({ where: { id: input.imageId } });
-    if (current.isPrimary) {
-      const next = await tx.productImage.findFirst({
+  // A concurrent delete winning the race surfaces P2025 — mapped to an
+  // idempotent 404, never a 500.
+  let remaining: ImageRow[];
+  try {
+    remaining = await prisma.$transaction(async (tx) => {
+      await tx.productImage.delete({ where: { id: input.imageId } });
+      if (current.isPrimary) {
+        const next = await tx.productImage.findFirst({
+          where: { productId: input.productId },
+          select: { id: true },
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        });
+        if (next) {
+          await tx.productImage.update({ where: { id: next.id }, data: { isPrimary: true } });
+        }
+      }
+      return tx.productImage.findMany({
         where: { productId: input.productId },
-        select: { id: true },
+        select: PRODUCT_IMAGE_SELECT,
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       });
-      if (next) {
-        await tx.productImage.update({ where: { id: next.id }, data: { isPrimary: true } });
-      }
-    }
-    return tx.productImage.findMany({
-      where: { productId: input.productId },
-      select: PRODUCT_IMAGE_SELECT,
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
-  });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw new HttpError(404, 'PRODUCT_IMAGE_NOT_FOUND', 'Product image not found.');
+    }
+    throw error;
+  }
 
   let providerCleanup: 'deleted' | 'failed' | 'skipped' = 'skipped';
   if (current.publicId) {

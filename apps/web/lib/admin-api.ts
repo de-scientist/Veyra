@@ -120,6 +120,69 @@ export function updateAdminVariant(productId: string, variantId: string, input: 
   return request<{ id: string }>(`/admin/products/${productId}/variants/${variantId}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+// ---- Product images (Phase D) ----
+
+export type AdminProductImage = {
+  id: string;
+  productId: string;
+  variantId: string | null;
+  url: string;
+  publicId: string | null;
+  secureUrl: string | null;
+  width: number | null;
+  height: number | null;
+  format: string | null;
+  bytes: number | null;
+  altText: string | null;
+  isPrimary: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  providerCleanup?: 'deleted' | 'failed' | 'skipped';
+};
+
+export type AdminProductImageInput = {
+  publicId: string;
+  secureUrl: string;
+  width: number;
+  height: number;
+  format: string;
+  bytes?: number;
+  altText?: string;
+  variantId?: string;
+};
+
+export function getAdminProductImages(productId: string) {
+  return request<AdminProductImage[]>(`/admin/products/${productId}/images`);
+}
+
+export function createAdminProductImage(productId: string, input: AdminProductImageInput) {
+  return request<AdminProductImage>(`/admin/products/${productId}/images`, { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateAdminProductImage(productId: string, imageId: string, input: { altText: string | null }) {
+  return request<AdminProductImage>(`/admin/products/${productId}/images/${imageId}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function setPrimaryAdminProductImage(productId: string, imageId: string) {
+  return request<AdminProductImage[]>(`/admin/products/${productId}/images/${imageId}/primary`, { method: 'POST' });
+}
+
+export function reorderAdminProductImages(productId: string, imageIds: string[]) {
+  return request<AdminProductImage[]>(`/admin/products/${productId}/images/reorder`, { method: 'PATCH', body: JSON.stringify({ imageIds }) });
+}
+
+export function replaceAdminProductImage(productId: string, imageId: string, input: AdminProductImageInput) {
+  return request<AdminProductImage>(`/admin/products/${productId}/images/${imageId}/replace`, { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function deleteAdminProductImage(productId: string, imageId: string) {
+  return request<{ images: AdminProductImage[]; providerCleanup: 'deleted' | 'failed' | 'skipped' }>(
+    `/admin/products/${productId}/images/${imageId}`,
+    { method: 'DELETE' },
+  );
+}
+
 // ---- Categories / collections / attributes ----
 
 export type AdminCategory = { id: string; name: string; slug: string; description: string | null; parentId: string | null; status: string; _count: { products: number } };
