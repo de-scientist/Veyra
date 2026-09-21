@@ -1122,6 +1122,16 @@ a.visually-hidden:focus-visible {
   .media-card { padding: 0.5rem; }
 }
 
+/* ---------- Phase F: profile avatar ---------- */
+.profile-avatar { display: grid; gap: 0.9rem; }
+.profile-avatar__current { display: flex; align-items: center; gap: 1rem; }
+.profile-avatar__meta { display: grid; gap: 0.15rem; }
+.profile-avatar__preview {
+  width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex: none;
+  border: 1px solid var(--jb-border);
+}
+.profile-avatar__actions { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; }
+
 @media (max-width: 640px) {
   .account-menu__name { display: none; }
   .account-menu__panel { position: fixed; left: 1rem; right: 1rem; top: 70px; min-width: 0; }

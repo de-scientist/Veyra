@@ -467,6 +467,28 @@ export function updateProfile(input: { firstName?: string; lastName?: string; ph
   return request<AccountProfile>('/account/profile', { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+export type AvatarFinalizeInput = {
+  publicId: string;
+  secureUrl: string;
+  width: number;
+  height: number;
+  format: string;
+  bytes?: number;
+};
+
+export function setProfileAvatar(input: AvatarFinalizeInput) {
+  return request<AccountProfile & { providerCleanup: 'deleted' | 'failed' | 'skipped' }>('/account/profile/avatar', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function removeProfileAvatar() {
+  return request<AccountProfile & { providerCleanup: 'deleted' | 'failed' | 'skipped' }>('/account/profile/avatar', {
+    method: 'DELETE',
+  });
+}
+
 export function getAddresses() {
   return request<AccountAddress[]>('/account/addresses');
 }

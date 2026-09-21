@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getProfile, updateProfile, type AccountProfile } from '../../../lib/shopping-api';
 import { notifySessionUpdated } from '../../../lib/session';
+import { ProfileAvatar } from '../../../components/ProfileAvatar';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
@@ -75,6 +76,19 @@ export default function ProfilePage() {
 
       {error && <div className="inline-message" role="alert">{error}</div>}
       {success && <div className="success-message" role="status">{success}</div>}
+
+      {profile ? (
+        <section className="account-section" aria-labelledby="profile-photo-heading">
+          <h2 id="profile-photo-heading">Profile photo</h2>
+          <ProfileAvatar
+            profile={profile}
+            onChanged={(updated) => {
+              setProfile(updated);
+              setFormData({ firstName: updated.firstName, lastName: updated.lastName, phone: updated.phone ?? '' });
+            }}
+          />
+        </section>
+      ) : null}
 
       <form onSubmit={handleSubmit} className="account-form">
         <div className="form-grid">
