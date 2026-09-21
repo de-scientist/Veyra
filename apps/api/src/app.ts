@@ -20,6 +20,7 @@ import { notificationRoutes } from './routes/notifications.js';
 import { adminRoutes } from './routes/admin.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { mediaRoutes } from './routes/media.js';
+import { productMediaRoutes } from './routes/product-media.js';
 
 const allowedOrigins = env.CORS_ORIGIN.split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
@@ -135,6 +136,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await adminRoutes(instance);
     await analyticsRoutes(instance);
     await mediaRoutes(instance);
+    await productMediaRoutes(instance);
   }, { prefix: '/api/v1' });
 
   return app;
