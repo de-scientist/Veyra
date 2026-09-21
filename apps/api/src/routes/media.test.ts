@@ -154,7 +154,6 @@ describe('media upload authorization', () => {
       context: 'product',
       folder: 'arbitrary-folder',
       publicId: 'another-asset',
-      // @ts-expect-error intentional tamper probe
       timestamp: 1,
     });
     expect(staff.statusCode).toBe(200);

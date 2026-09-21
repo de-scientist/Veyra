@@ -87,14 +87,14 @@ Seeded local admin: `admin@veyra.local` / `Admin123!` — local development only
 
 ## Environment Configuration
 
-See [.env.example](.env.example) and [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md). Key variables: `DATABASE_URL`, `AUTH_SECRET`, `SESSION_SECRET`, `APP_URL`, `NEXT_PUBLIC_API_URL`, `CORS_ORIGIN`, `MPESA_*`, rate-limit and notification settings. Sender identities still carry historic defaults (`EMAIL_FROM_NAME="Veyra"`, `SMS_SENDER_ID="VEYRA"`) — REQUIRES BUSINESS DECISION.
+See [.env.example](.env.example) and [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md). Key variables: `DATABASE_URL`, `AUTH_SECRET`, `SESSION_SECRET`, `APP_URL`, `NEXT_PUBLIC_API_URL`, `CORS_ORIGIN`, `MPESA_*`, rate-limit and notification settings. Media uploads need `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` (server-only; absent = uploads disabled with a clear error) — see [docs/CLOUDINARY.md](docs/CLOUDINARY.md). Sender identities still carry historic defaults (`EMAIL_FROM_NAME="Veyra"`, `SMS_SENDER_ID="VEYRA"`) — REQUIRES BUSINESS DECISION.
 
 ## Testing
 
 ```bash
 npm run typecheck   # API + web
 npm run lint        # API + web
-npm test            # Vitest suite (API domains + security + smoke journey)
+npm test            # Vitest suite (API domains + security + smoke journey + media + web lib)
 npm run build       # API + web production builds
 ```
 

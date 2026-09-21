@@ -52,7 +52,7 @@ PostgreSQL 18 in development (local Docker). Prisma schema is authoritative: 50 
 | M-Pesa Daraja | IMPLEMENTED (sandbox-capable; production ownership NOT VERIFIED) |
 | Email provider | Pluggable (`log` / `mock` / `smtp` stub) — production vendor NOT VERIFIED |
 | SMS provider | Pluggable (`mock` / `log`) — production vendor NOT VERIFIED |
-| Object storage / CDN | NOT VERIFIED — `CLOUDINARY_*` vars exist in `.env.example` but no wired usage found in code |
+| Object storage / CDN | Cloudinary signed direct-upload (Phase C): `POST /media/sign-upload`, server-only provider in `apps/api/src/lib/media/`, client helper in `apps/web/lib/media-upload.ts`. See [CLOUDINARY.md](CLOUDINARY.md) |
 | Product imagery (storefront demo) | Unsplash remote images (`next.config.mjs` remote pattern) |
 
 ## Request Flow (checkout → payment → fulfillment)

@@ -29,7 +29,7 @@ Attributes are data-driven, not hard-coded. `Attribute` + `AttributeValue` defin
 
 ## Product Imagery
 
-`ProductImage` (per product, ordered; variant-specific images supported). Storefront uses `next/image` with branded fallback. Demo imagery is Unsplash (`next.config.mjs` remote pattern). Object storage (Cloudinary vars exist in `.env.example`) has no wired usage found — NOT VERIFIED.
+`ProductImage` (per product, ordered; variant-specific images supported). Storefront uses `next/image` with branded fallback. Demo imagery is Unsplash (`next.config.mjs` remote pattern). Object storage: Cloudinary signed-upload infrastructure landed in Phase C (see [CLOUDINARY.md](CLOUDINARY.md)); `ProductImage` provider-metadata persistence belongs to Phase D.
 
 ## Category-Aware Discovery
 

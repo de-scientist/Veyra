@@ -10,7 +10,7 @@ Sources: `.env.example` (33 lines) + `apps/api/src/lib/env.ts` (also reads `NODE
 | `AUTH_SECRET`, `SESSION_SECRET` | Session/token signing (≥32 random chars) | Yes | Yes |
 | `APP_URL` | Canonical web URL (deep links, JSON-LD, callbacks) | Yes | No |
 | `CORS_ORIGIN` | Exact allowed origin, no wildcards | Yes (prod) | No |
-| `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` | Media storage — demo values; no wired usage found | No | Key/secret yes |
+| `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` | Media storage — signed direct-upload provider (Phase C wired; absent = `503 MEDIA_NOT_CONFIGURED`) | No | Key/secret yes |
 | `MPESA_CONSUMER_KEY/SECRET` | Daraja OAuth | Yes for payments | Yes |
 | `MPESA_SHORTCODE`, `MPESA_PASSKEY` | STK push identity | Yes for payments | Passkey yes |
 | `MPESA_CALLBACK_URL` | Must be HTTPS in production | Yes for payments | No |

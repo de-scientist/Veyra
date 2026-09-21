@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   authorizeDirectUpload,
@@ -32,6 +32,34 @@ describe('media provider configuration', () => {
     } catch (error) {
       expect((error as { statusCode?: number }).statusCode).toBe(503);
       expect((error as { code?: string }).code).toBe('MEDIA_NOT_CONFIGURED');
+    }
+  });
+
+  it('fails safe (503) when credentials are absent, regardless of local .env', async () => {
+    const saved = {
+      CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+      CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+      CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+    };
+    delete process.env.CLOUDINARY_CLOUD_NAME;
+    delete process.env.CLOUDINARY_API_KEY;
+    delete process.env.CLOUDINARY_API_SECRET;
+    vi.resetModules();
+    try {
+      const fresh = await import('./cloudinary.js');
+      expect(() => fresh.getMediaConfig()).toThrowError(/not configured/);
+      try {
+        fresh.getMediaConfig();
+        expect.unreachable('expected MEDIA_NOT_CONFIGURED');
+      } catch (error) {
+        expect((error as { statusCode?: number }).statusCode).toBe(503);
+        expect((error as { code?: string }).code).toBe('MEDIA_NOT_CONFIGURED');
+      }
+    } finally {
+      if (saved.CLOUDINARY_CLOUD_NAME !== undefined) process.env.CLOUDINARY_CLOUD_NAME = saved.CLOUDINARY_CLOUD_NAME;
+      if (saved.CLOUDINARY_API_KEY !== undefined) process.env.CLOUDINARY_API_KEY = saved.CLOUDINARY_API_KEY;
+      if (saved.CLOUDINARY_API_SECRET !== undefined) process.env.CLOUDINARY_API_SECRET = saved.CLOUDINARY_API_SECRET;
+      vi.resetModules();
     }
   });
 });
