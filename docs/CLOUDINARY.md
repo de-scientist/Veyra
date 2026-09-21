@@ -171,10 +171,23 @@ safeguard). Display sizes use fixed delivery presets
 Audit actions: `PRODUCT_IMAGE_CREATED/UPDATED/REORDERED/REPLACED/DELETED`,
 `PRODUCT_PRIMARY_IMAGE_CHANGED`.
 
+## Profile-avatar lifecycle (Phase F — implemented)
+
+`POST /account/profile/avatar` finalizes a direct upload: validates the
+provider result, requires the public ID under the caller's own
+`profiles/<userId>/` namespace (403 otherwise), persists `avatarUrl` +
+server-only `avatarPublicId` (`User.avatarPublicId`, nullable migration),
+then best-effort destroys the previous asset. `DELETE
+/account/profile/avatar` clears both fields and removes the asset when
+possible; cleanup outcomes report as `providerCleanup`
+(`deleted|failed|skipped`). The profile page (`ProfileAvatar`) previews,
+uploads with real progress, replaces, and removes; `notifySessionUpdated`
+refreshes the navbar avatar without reload.
+
 ## Future consumers
 
-- Phase F → profile media (avatar upload/replace/remove; persist
-  `avatarUrl` + provider reference; `notifySessionUpdated` refresh).
+- Category/collection/banner imagery can reuse the same signed-upload +
+  finalize pattern with new contexts when the business requires it.
 
 ## Cloudinary dashboard (manual, not code)
 

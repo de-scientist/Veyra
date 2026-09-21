@@ -26,7 +26,7 @@ Checkout + order lookup: `GET /checkout/options`, `POST /checkout/preview`, `POS
 
 Payments: `POST /payments/mpesa/initiate`, `POST /payments/mpesa/callback`, `GET /payments/:paymentId/status`.
 
-Customer account (auth, owner-scoped): `GET/PATCH /account/profile`, address CRUD + default (`/account/addresses…`), `GET /account/orders`, `POST /account/orders/claim`, `GET /account/orders/:orderNumber[/tracking]`, `POST …/reorder`, `GET /account/payments|returns|returns/:returnId|refunds|wishlist|security`, `POST /account/security/password`, `DELETE /account/sessions/others|/account/sessions/:id`, `GET/PATCH /account/preferences`, `POST /account/deactivate|/account/delete`, notifications (`GET /account/notifications[/unread-count]`, `POST …/read-all|…/:id/read`, `GET/PATCH /account/notification-preferences`).
+Customer account (auth, owner-scoped): `GET/PATCH /account/profile`, avatar finalize/remove (`POST/DELETE /account/profile/avatar`, Phase F — direct Cloudinary upload + server persistence), address CRUD + default (`/account/addresses…`), `GET /account/orders`, `POST /account/orders/claim`, `GET /account/orders/:orderNumber[/tracking]`, `POST …/reorder`, `GET /account/payments|returns|returns/:returnId|refunds|wishlist|security`, `POST /account/security/password`, `DELETE /account/sessions/others|/account/sessions/:id`, `GET/PATCH /account/preferences`, `POST /account/deactivate|/account/delete`, notifications (`GET /account/notifications[/unread-count]`, `POST …/read-all|…/:id/read`, `GET/PATCH /account/notification-preferences`).
 
 Customer returns (auth): `POST/GET /returns`, `GET /returns/:returnId`.
 
