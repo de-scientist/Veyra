@@ -36,6 +36,13 @@ const envSchema = z.object({
   NOTIFICATION_BASE_DELAY_MS: z.coerce.number().int().min(1000).max(3600000).default(30000),
   NOTIFICATION_MAX_DELAY_MS: z.coerce.number().int().min(60000).max(86400000).default(3600000),
   NOTIFICATION_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(25),
+  // Cloudinary media (Phase C). All optional: absent credentials mean media
+  // upload authorization is disabled and fails with a clear configuration
+  // error instead of fake uploads. Never prefix these with NEXT_PUBLIC_*.
+  CLOUDINARY_CLOUD_NAME: z.string().min(1).max(120).optional(),
+  CLOUDINARY_API_KEY: z.string().min(1).max(120).optional(),
+  CLOUDINARY_API_SECRET: z.string().min(1).max(256).optional(),
+  CLOUDINARY_UPLOAD_FOLDER: z.string().min(1).max(120).default('jb-mercantile'),
 });
 
 export const env = envSchema.parse(process.env);
