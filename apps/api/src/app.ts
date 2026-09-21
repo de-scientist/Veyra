@@ -134,6 +134,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await notificationRoutes(instance);
     await adminRoutes(instance);
     await analyticsRoutes(instance);
+    await mediaRoutes(instance);
   }, { prefix: '/api/v1' });
 
   return app;
