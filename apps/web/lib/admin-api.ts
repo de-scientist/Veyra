@@ -18,7 +18,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export type Pagination = { page: number; pageSize: number; total: number; totalPages: number };
 
 export type SessionUser = {
-  user: { id: string; email: string; firstName: string; lastName: string; phone: string | null; status: string };
+  // Safe subset of GET /auth/me: display fields only. The backend already
+  // serializes `avatarUrl`; no API change was needed for Phase B.
+  user: { id: string; email: string; firstName: string; lastName: string; phone: string | null; avatarUrl: string | null; status: string };
   roles: string[];
 };
 

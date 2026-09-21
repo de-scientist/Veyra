@@ -5,6 +5,7 @@ import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
 import { ThemeProvider, ThemeScript } from '../components/ThemeProvider';
 import { ToastProvider } from '../components/Toast';
+import { SessionProvider } from '../lib/session';
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com';
 const brandName = 'JB Mercantile';
@@ -69,9 +70,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </a>
         <ThemeProvider>
           <ToastProvider>
-            <Header />
-            <div id="main-content" tabIndex={-1}>{children}</div>
-            <Footer />
+            <SessionProvider>
+              <Header />
+              <div id="main-content" tabIndex={-1}>{children}</div>
+              <Footer />
+            </SessionProvider>
           </ToastProvider>
         </ThemeProvider>
       </body>

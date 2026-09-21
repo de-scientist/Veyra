@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { Route } from 'next';
 import { useState } from 'react';
 
+import { notifySessionUpdated } from '../lib/session';
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 async function authRequest(path: string, body: Record<string, string>) {
@@ -48,6 +50,9 @@ export function LoginForm() {
     setError('');
     try {
       await authRequest('/auth/login', { email: email.trim(), password });
+      // The layout-level SessionProvider does not remount on client
+      // navigation, so explicitly revalidate: navbar flips guest → avatar.
+      notifySessionUpdated();
       router.push(safeRedirectTarget(searchParams.get('redirect')));
       router.refresh();
     } catch (reason) {
@@ -106,6 +111,7 @@ export function RegisterForm() {
         ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
         password: form.password,
       });
+      notifySessionUpdated();
       router.push('/account');
       router.refresh();
     } catch (reason) {

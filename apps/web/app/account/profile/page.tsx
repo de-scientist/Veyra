@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getProfile, updateProfile, type AccountProfile } from '../../../lib/shopping-api';
+import { notifySessionUpdated } from '../../../lib/session';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
@@ -49,6 +50,9 @@ export default function ProfilePage() {
         phone: formData.phone.trim() || null,
       });
       setSuccess('Profile updated successfully');
+      // Profile → navbar sync: the shared session cache revalidates so the
+      // header reflects the new name/avatar without a page refresh.
+      notifySessionUpdated();
       const updated = await getProfile();
       setProfile(updated);
       setFormData({ firstName: updated.firstName, lastName: updated.lastName, phone: updated.phone ?? '' });

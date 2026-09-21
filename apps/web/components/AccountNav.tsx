@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
 
 import { useModalFocus } from './a11y';
 import { JBIcon, type JBIconName } from './JBIcons';
-import { can, getSessionUser } from '../lib/admin-api';
+import { can } from '../lib/admin-api';
+import { useSession } from '../lib/session';
 
 const accountNavigation: Array<{ href: Route; label: string; icon: JBIconName }> = [
   { href: '/account', label: 'Overview', icon: 'home' },
@@ -32,26 +33,15 @@ const adminEntry: { href: Route; label: string; icon: JBIconName } = {
 export function AccountNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   // Modal slide-over on mobile: trap, Escape, scroll-lock, focus restore.
   const navRef = useModalFocus({ active: mobileOpen, onClose: () => setMobileOpen(false), initialFocusRef: closeRef });
 
-  // Authorization-driven entry point: shown only when the backend session
+  // Authorization-driven entry point: shown only when the shared session
   // carries dashboard permission. UX-only; `/admin/*` APIs re-authorize.
-  useEffect(() => {
-    let mounted = true;
-    getSessionUser()
-      .then((result) => {
-        if (mounted) setShowAdmin(can('dashboard.read', result.roles));
-      })
-      .catch(() => {
-        if (mounted) setShowAdmin(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  // No per-component `/auth/me` request — the SessionProvider owns fetching.
+  const { session } = useSession();
+  const showAdmin = session ? can('dashboard.read', session.roles) : false;
 
   const navigation = showAdmin ? [...accountNavigation, adminEntry] : accountNavigation;
 

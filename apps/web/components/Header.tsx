@@ -3,13 +3,17 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
+import { AccountMenu, AccountMenuSkeleton } from './AccountMenu';
 import { JBIcon } from './JBIcons';
 import { JBLogo } from './JBLogo';
 import { ThemeToggle } from './ThemeProvider';
+import { can } from '../lib/admin-api';
 import { departments, getDepartmentCategories } from '../lib/catalog';
+import { useSession } from '../lib/session';
 import { getCart, getUnreadCount } from '../lib/shopping-api';
 
 export function Header() {
+  const { status, session } = useSession();
   const [cartCount, setCartCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -135,9 +139,15 @@ export function Header() {
           <Link href="/search" aria-label="Search products">
             <JBIcon name="search" /> <span className="header-label">Search</span>
           </Link>
-          <Link href="/login" aria-label="Sign in to JB Mercantile">
-            <JBIcon name="user" /> <span className="header-label">Sign in</span>
-          </Link>
+          {status === 'authenticated' && session ? (
+            <AccountMenu session={session} />
+          ) : status === 'loading' ? (
+            <AccountMenuSkeleton />
+          ) : (
+            <Link href="/login" aria-label="Sign in to JB Mercantile">
+              <JBIcon name="user" /> <span className="header-label">Sign in</span>
+            </Link>
+          )}
           <Link href="/account/notifications" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}>
             <JBIcon name="bell" /> <span className="header-label">Notifications</span>
             {unreadCount ? <span className="header-count">{unreadCount}</span> : null}
@@ -175,8 +185,22 @@ export function Header() {
           ))}
           <Link href="/collections/weekend-edit" onClick={() => setMenuOpen(false)}>Collections</Link>
           <Link href="/search" onClick={() => setMenuOpen(false)}>Search</Link>
-          <Link href="/login" onClick={() => setMenuOpen(false)}>Sign in</Link>
-          <Link href="/account" onClick={() => setMenuOpen(false)}>Account</Link>
+          {status === 'authenticated' && session ? (
+            <>
+              <Link href="/account" onClick={() => setMenuOpen(false)}>My Account</Link>
+              <Link href="/account/orders" onClick={() => setMenuOpen(false)}>Orders</Link>
+              <Link href="/account/profile" onClick={() => setMenuOpen(false)}>Profile</Link>
+              {can('dashboard.read', session.roles) ? (
+                <Link href="/admin/dashboard" onClick={() => setMenuOpen(false)}>Admin Dashboard</Link>
+              ) : null}
+            </>
+          ) : status === 'loading' ? (
+            <span className="mobile-nav__loading" role="status" aria-label="Loading account">
+              Loading account…
+            </span>
+          ) : (
+            <Link href="/login" onClick={() => setMenuOpen(false)}>Sign in</Link>
+          )}
           <Link href="/wishlist" onClick={() => setMenuOpen(false)}>Wishlist</Link>
           <Link href="/cart" onClick={() => setMenuOpen(false)}>Cart{cartCount ? ` (${cartCount})` : ''}</Link>
           <div style={{ padding: '0.5rem 0.75rem' }}>

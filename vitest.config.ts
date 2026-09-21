@@ -12,7 +12,7 @@ for (const line of envContent.split('\n')) {
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['apps/api/src/**/*.test.ts'],
+    include: ['apps/api/src/**/*.test.ts', 'apps/web/lib/**/*.test.ts'],
   },
   resolve: {
     alias: {
