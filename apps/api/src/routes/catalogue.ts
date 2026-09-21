@@ -104,56 +104,8 @@ function conflict(error: unknown): never {
 }
 
 export async function catalogueRoutes(app: FastifyInstance) {
-  app.get('/catalog/products', async () => {
-    const products = await prisma.product.findMany({
-      where: { status: 'ACTIVE', deletedAt: null },
-      include: {
-        category: true,
-        variants: true,
-        images: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return {
-      success: true,
-      data: products,
-    };
-  });
-
-  app.get('/catalog/products/:id', async (_request) => {
-    const { id } = _request.params as { id: string };
-    const product = await prisma.product.findUnique({
-      where: { id },
-      include: {
-        category: true,
-        variants: {
-          include: {
-            inventory: true,
-            variantAttributeValues: {
-              include: {
-                attribute: true,
-                attributeValue: true,
-              },
-            },
-          },
-        },
-        images: true,
-        collections: {
-          include: { collection: true },
-        },
-      },
-    });
-
-    if (!product) {
-      throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
-    }
-
-    return {
-      success: true,
-      data: product,
-    };
-  });
+  // Public storefront catalogue lives in routes/storefront.ts (Phase E).
+  // This module owns admin catalogue management + inventory operations.
 
   // ---- Admin product management (operations staff only) ----
 
@@ -504,10 +456,83 @@ export async function catalogueRoutes(app: FastifyInstance) {
     if (!attribute) throw new HttpError(404, 'ATTRIBUTE_NOT_FOUND', 'Attribute not found.');
     try {
       const value = await prisma.attributeValue.create({ data: { attributeId: id, value: payload.value.trim() } });
-      await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'ATTRIBUTE_CREATED', entity: 'AttributeValue', entityId: value.id, ...auditMeta(request) } });
+      await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'ATTRIBUTE_CREATED', entity: 'Attribute', entityId: value.id, ...auditMeta(request) } });
       return { success: true, data: value };
     } catch (error) {
       conflict(error);
     }
+  });
+
+  app.patch('/admin/attributes/:id', { preHandler: requireOperationsAccess }, async (request) => {
+    const { id } = request.params as { id: string };
+    const payload = z.object({ name: z.string().min(2).max(120).optional(), type: z.string().min(2).max(40).optional() }).parse(request.body);
+    const existing = await prisma.attribute.findUnique({ where: { id } });
+    if (!existing) throw new HttpError(404, 'ATTRIBUTE_NOT_FOUND', 'Attribute not found.');
+    // Slug is immutable: it anchors variant mappings and public facet keys.
+    const attribute = await prisma.attribute.update({
+      where: { id },
+      data: { name: payload.name?.trim(), type: payload.type?.trim().toUpperCase() },
+      include: { values: { orderBy: { value: 'asc' } } },
+    });
+    await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'ATTRIBUTE_UPDATED', entity: 'Attribute', entityId: id, ...auditMeta(request) } });
+    return { success: true, data: attribute };
+  });
+
+  app.delete('/admin/attributes/:id', { preHandler: requireOperationsAccess }, async (request) => {
+    const { id } = request.params as { id: string };
+    const existing = await prisma.attribute.findUnique({ where: { id }, include: { _count: { select: { values: true } } } });
+    if (!existing) throw new HttpError(404, 'ATTRIBUTE_NOT_FOUND', 'Attribute not found.');
+    const inUse = await prisma.variantAttributeValue.count({ where: { attributeId: id } });
+    if (inUse > 0) {
+      throw new HttpError(409, 'ATTRIBUTE_IN_USE', 'This attribute is used by product variants and cannot be deleted.');
+    }
+    await prisma.attribute.delete({ where: { id } });
+    await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'ATTRIBUTE_DELETED', entity: 'Attribute', entityId: id, ...auditMeta(request) } });
+    return { success: true, data: { deleted: true } };
+  });
+
+  app.delete('/admin/attributes/values/:valueId', { preHandler: requireOperationsAccess }, async (request) => {
+    const { valueId } = request.params as { valueId: string };
+    const existing = await prisma.attributeValue.findUnique({ where: { id: valueId } });
+    if (!existing) throw new HttpError(404, 'ATTRIBUTE_VALUE_NOT_FOUND', 'Attribute value not found.');
+    const inUse = await prisma.variantAttributeValue.count({ where: { attributeValueId: valueId } });
+    if (inUse > 0) {
+      throw new HttpError(409, 'ATTRIBUTE_VALUE_IN_USE', 'This value is used by product variants and cannot be deleted.');
+    }
+    await prisma.attributeValue.delete({ where: { id: valueId } });
+    await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'ATTRIBUTE_DELETED', entity: 'AttributeValue', entityId: valueId, ...auditMeta(request) } });
+    return { success: true, data: { deleted: true } };
+  });
+
+  app.delete('/admin/categories/:id', { preHandler: requireOperationsAccess }, async (request) => {
+    const { id } = request.params as { id: string };
+    const existing = await prisma.category.findUnique({
+      where: { id },
+      include: { _count: { select: { products: true } } },
+    });
+    if (!existing || existing.deletedAt) throw new HttpError(404, 'CATEGORY_NOT_FOUND', 'Category not found.');
+    if (existing._count.products > 0) {
+      throw new HttpError(409, 'CATEGORY_IN_USE', 'This category still has products and cannot be archived.');
+    }
+    // Archived children do not block their parent.
+    const liveChildren = await prisma.category.count({ where: { parentId: id, deletedAt: null } });
+    if (liveChildren > 0) {
+      throw new HttpError(409, 'CATEGORY_HAS_CHILDREN', 'Move or archive child categories first.');
+    }
+    const category = await prisma.category.update({ where: { id }, data: { status: 'ARCHIVED', deletedAt: new Date() } });
+    await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'CATEGORY_ARCHIVED', entity: 'Category', entityId: id, ...auditMeta(request) } });
+    return { success: true, data: category };
+  });
+
+  app.delete('/admin/collections/:id', { preHandler: requireOperationsAccess }, async (request) => {
+    const { id } = request.params as { id: string };
+    const existing = await prisma.collection.findUnique({ where: { id } });
+    if (!existing || existing.deletedAt) throw new HttpError(404, 'COLLECTION_NOT_FOUND', 'Collection not found.');
+    await prisma.$transaction([
+      prisma.productCollection.deleteMany({ where: { collectionId: id } }),
+      prisma.collection.update({ where: { id }, data: { status: 'ARCHIVED', deletedAt: new Date() } }),
+    ]);
+    await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'COLLECTION_ARCHIVED', entity: 'Collection', entityId: id, ...auditMeta(request) } });
+    return { success: true, data: { deleted: true } };
   });
 }

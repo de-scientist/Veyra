@@ -736,6 +736,10 @@ a.visually-hidden:focus-visible {
   border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 0.9rem; line-height: 1;
 }
 .chip button:hover { background: rgba(127, 127, 127, 0.25); }
+.chip-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0; padding: 0; list-style: none; }
+.admin-card-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.inline-form input { min-width: 10rem; }
 /* Filter-chip remove control: same footprint as .chip button, aligns the SVG. */
 .chip__remove {
   display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 28px;

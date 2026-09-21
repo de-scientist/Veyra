@@ -69,8 +69,8 @@ describe('production smoke journey', () => {
   it('storefront exposes the sellable product', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/v1/catalog/products' });
     expect(response.statusCode).toBe(200);
-    const products = (response.json() as { data: Array<{ slug: string }> }).data;
-    expect(products.some((p) => p.slug === slug)).toBe(true);
+    const body = response.json() as { data: { products: Array<{ slug: string }> } };
+    expect(body.data.products.some((p) => p.slug === slug)).toBe(true);
   });
 
   it('guest cart accepts the variant and validates checkout-ready', async () => {

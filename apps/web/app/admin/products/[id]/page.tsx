@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 
-import { createAdminVariant, getAdminAttributes, getAdminCategories, updateAdminProduct, updateAdminVariant, type AdminAttribute } from '../../../../lib/admin-api';
+import { createAdminVariant, getAdminAttributes, getAdminCategories, getAdminProduct, updateAdminProduct, updateAdminVariant, type AdminAttribute } from '../../../../lib/admin-api';
 import { AdminStatusBadge } from '../../../../components/admin';
 import { ProductMediaManager } from '../../../../components/ProductMediaManager';
 
@@ -19,13 +19,10 @@ type ProductDetail = {
   images: Array<{ id: string; url: string; altText: string | null }>;
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-
 async function fetchProduct(id: string): Promise<ProductDetail> {
-  const response = await fetch(`${apiBaseUrl}/api/v1/catalog/products/${id}`, { credentials: 'include' });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(body?.error?.message ?? 'Product not found');
-  return body.data as ProductDetail;
+  // Operations endpoint: works for DRAFT/ARCHIVED products the public
+  // catalogue route no longer exposes.
+  return getAdminProduct(id);
 }
 
 interface PageProps {

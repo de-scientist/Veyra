@@ -201,6 +201,10 @@ export function updateAdminCategory(id: string, input: { name?: string; slug?: s
   return request<AdminCategory>(`/admin/categories/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+export function deleteAdminCategory(id: string) {
+  return request<AdminCategory>(`/admin/categories/${id}`, { method: 'DELETE' });
+}
+
 export function getAdminCollections() {
   return request<AdminCollection[]>('/admin/collections');
 }
@@ -213,6 +217,19 @@ export function updateAdminCollection(id: string, input: { name?: string; slug?:
   return request<AdminCollection>(`/admin/collections/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+export function deleteAdminCollection(id: string) {
+  return request<{ deleted: boolean }>(`/admin/collections/${id}`, { method: 'DELETE' });
+}
+
+export function getAdminProduct(id: string) {
+  return request<{
+    id: string; name: string; slug: string; description: string | null; status: string; categoryId: string | null;
+    category: { id: string; name: string; slug: string } | null;
+    variants: Array<{ id: string; sku: string; name: string | null; status: string; priceOverride: number | null; compareAtPrice: number | null }>;
+    images: Array<{ id: string; url: string; altText: string | null }>;
+  }>(`/admin/products/${id}`);
+}
+
 export function getAdminAttributes() {
   return request<AdminAttribute[]>('/admin/attributes');
 }
@@ -223,6 +240,18 @@ export function createAdminAttribute(input: { name: string; type?: string }) {
 
 export function createAdminAttributeValue(attributeId: string, value: string) {
   return request<{ id: string }>(`/admin/attributes/${attributeId}/values`, { method: 'POST', body: JSON.stringify({ value }) });
+}
+
+export function updateAdminAttribute(id: string, input: { name?: string; type?: string }) {
+  return request<AdminAttribute>(`/admin/attributes/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function deleteAdminAttribute(id: string) {
+  return request<{ deleted: boolean }>(`/admin/attributes/${id}`, { method: 'DELETE' });
+}
+
+export function deleteAdminAttributeValue(valueId: string) {
+  return request<{ deleted: boolean }>(`/admin/attributes/values/${valueId}`, { method: 'DELETE' });
 }
 
 // ---- Inventory ----

@@ -72,20 +72,7 @@ export type DiscoveryFacet = {
 
 export type PriceBucket = { label: string; min: number; max: number | null };
 
-type ProductRow = Prisma.ProductGetPayload<{
-  include: {
-    category: true;
-    variants: {
-      include: {
-        inventory: true;
-        variantAttributeValues: { include: { attribute: true; attributeValue: true } };
-      };
-    };
-    images: true;
-    collections: { include: { collection: true } };
-    reviews: true;
-  };
-}>;
+type ProductRow = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
 
 const productInclude = {
   category: true,
@@ -234,7 +221,9 @@ export async function getPublicCategories(): Promise<StorefrontCategory[]> {
     _count: { categoryId: true },
   });
   const counts = new Map(visible.map((row) => [row.categoryId as string, row._count.categoryId]));
-  const byId = new Map(rows.map((row) => ({ ...row, productCount: counts.get(row.id) ?? 0, children: [] as StorefrontCategory[] })));
+  const byId = new Map(
+    rows.map((row) => [row.id, { ...row, productCount: counts.get(row.id) ?? 0, children: [] as StorefrontCategory[] }] as const),
+  );
   const roots: StorefrontCategory[] = [];
   for (const row of byId.values()) {
     const node: StorefrontCategory = {
@@ -395,7 +384,8 @@ export async function discoverProducts(params: DiscoveryParams): Promise<{
       );
     }
   }
-  if (params.maxPrice !== undefined) filtered = filtered.filter((product) => product.price <= params.maxPrice);
+  const maxPrice = params.maxPrice;
+  if (maxPrice !== undefined) filtered = filtered.filter((product) => product.price <= maxPrice);
   if (params.inStockOnly) filtered = filtered.filter((product) => product.variants.some((variant) => variant.inStock));
 
   switch (params.sort) {

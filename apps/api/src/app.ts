@@ -21,6 +21,7 @@ import { adminRoutes } from './routes/admin.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { mediaRoutes } from './routes/media.js';
 import { productMediaRoutes } from './routes/product-media.js';
+import { storefrontRoutes } from './routes/storefront.js';
 
 const allowedOrigins = env.CORS_ORIGIN.split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
@@ -137,6 +138,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await analyticsRoutes(instance);
     await mediaRoutes(instance);
     await productMediaRoutes(instance);
+    await storefrontRoutes(instance);
   }, { prefix: '/api/v1' });
 
   return app;
