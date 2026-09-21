@@ -59,7 +59,7 @@ async function createUser(email: string, roleSlug: string) {
   cookies[email] = `veyra_session=${rawToken}`;
 }
 
-async function call(method: string, url: string, email: string | null, payload?: Record<string, unknown>) {
+async function call(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, email: string | null, payload?: Record<string, unknown>) {
   return app.inject({ method, url, payload, headers: email ? { cookie: cookies[email] } : {} });
 }
 
@@ -180,7 +180,7 @@ describe('product image CRUD', () => {
   it('updates alt text but never provider fields', async () => {
     const response = await call('PATCH', `/api/v1/admin/products/${productA}/images/${firstId}`, emails.staff, {
       altText: '  Red  blender  ',
-      // @ts-expect-error tamper probe: schema must strip provider fields
+      // tamper probe: schema must strip provider fields (asserted below)
       publicId: 'jb-mercantile/products/tampered',
       secureUrl: 'https://example.com/tampered.webp',
     });

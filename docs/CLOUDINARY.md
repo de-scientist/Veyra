@@ -151,11 +151,28 @@ keep rendering unchanged — no migration attempted.
 - `apps/web/lib/media-upload.ts` — client helper (+ pure `normalize…`
   unit tests; XHR path covered by Phase D/F integration).
 
+## Product-image lifecycle (Phase D — implemented)
+
+`ProductImage` carries provider metadata (`publicId`, `secureUrl`,
+`width/height/format/bytes`, `updatedAt`; legacy `url` retained and mirrored
+from `secureUrl` for old readers). Domain endpoints under
+`/admin/products/:productId/images` (list, create, metadata PATCH, primary,
+reorder, replace, delete) enforce `requireOperationsAccess`, product→image
+ownership on every call, DRAFT/ACTIVE-only mutation, first-image-wins
+primary at position 0 (Pattern A: reorder never changes primary), complete-
+set transactional reorder, replace-preserves-identity with post-commit old-
+asset cleanup, delete with next-lowest-sortOrder promotion, and DB-first /
+provider-cleanup-after consistency (`providerCleanup: deleted|failed|skipped`
+is always reported, never hidden). Single-primary invariant holds via a
+partial unique index `(productId) WHERE isPrimary` plus transactions; double
+deletes are idempotent 404s. At most 20 images per product (operational
+safeguard). Display sizes use fixed delivery presets
+(`apps/web/lib/cloudinary-display.ts`); the canonical URL is never rewritten.
+Audit actions: `PRODUCT_IMAGE_CREATED/UPDATED/REORDERED/REPLACED/DELETED`,
+`PRODUCT_PRIMARY_IMAGE_CHANGED`.
+
 ## Future consumers
 
-- Phase D → product media (extend `ProductImage` with provider metadata via
-  forward-only migration; media manager UI; `normalizeUploadResult` at
-  persistence; `destroyMedia` on delete/replace).
 - Phase F → profile media (avatar upload/replace/remove; persist
   `avatarUrl` + provider reference; `notifySessionUpdated` refresh).
 
