@@ -3,12 +3,7 @@ import { Prisma } from '@prisma/client';
 import { HttpError } from '../errors.js';
 import { logger } from '../logger.js';
 import { prisma } from '../prisma.js';
-import {
-  destroyMedia,
-  getMediaConfig,
-  normalizeUploadResult,
-  type RawCloudinaryResult,
-} from './cloudinary.js';
+import { destroyMedia, getMediaConfig, normalizeUploadResult } from './cloudinary.js';
 
 /**
  * Product-image domain service (Phase D). Application/database is the source
@@ -133,15 +128,35 @@ export type ValidatedProviderResult = {
   bytes?: number;
 };
 
-function validateProviderResult(result: RawCloudinaryResult): ValidatedProviderResult {
+export type ProductImageResultInput = {
+  publicId: unknown;
+  secureUrl: unknown;
+  width: unknown;
+  height: unknown;
+  format: unknown;
+  bytes?: unknown;
+};
+
+function validateProviderResult(result: ProductImageResultInput): ValidatedProviderResult {
   const config = getMediaConfig();
-  return normalizeUploadResult(config.baseFolder, 'product', result);
+  // The HTTP contract is camelCase; the provider normalizer speaks the
+  // Cloudinary snake_case shape. resource_type is server-asserted 'image' —
+  // never accepted from the client.
+  return normalizeUploadResult(config.baseFolder, 'product', {
+    public_id: result.publicId,
+    secure_url: result.secureUrl,
+    resource_type: 'image',
+    format: result.format,
+    width: result.width,
+    height: result.height,
+    bytes: result.bytes,
+  });
 }
 
 export async function createProductImage(input: {
   productId: string;
   actorId: string;
-  result: RawCloudinaryResult;
+  result: ProductImageResultInput;
   altText?: unknown;
   variantId?: string | null;
 }): Promise<ProductImageDTO> {
@@ -265,7 +280,7 @@ export async function reorderProductImages(input: {
 export async function replaceProductImage(input: {
   productId: string;
   imageId: string;
-  result: RawCloudinaryResult;
+  result: ProductImageResultInput;
   altText?: unknown;
 }): Promise<{ image: ProductImageDTO; providerCleanup: 'deleted' | 'failed' | 'skipped' }> {
   await getEditableProduct(input.productId);
