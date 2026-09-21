@@ -8,9 +8,10 @@ import { JBIcon } from './JBIcons';
 import { JBLogo } from './JBLogo';
 import { ThemeToggle } from './ThemeProvider';
 import { can } from '../lib/admin-api';
-import { departments, getDepartmentCategories } from '../lib/catalog';
+import { departments } from '../lib/catalog';
 import { useSession } from '../lib/session';
 import { getCart, getUnreadCount } from '../lib/shopping-api';
+import { getNavCategories, type NavCategory } from '../lib/storefront-client';
 
 export function Header() {
   const { status, session } = useSession();
@@ -18,6 +19,22 @@ export function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
+  // Live catalogue categories (grouped under the static department pillars).
+  // Navigation degrades to department links alone if the fetch fails.
+  const [navCategories, setNavCategories] = useState<NavCategory[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    getNavCategories().then((categories) => {
+      if (mounted) setNavCategories(categories);
+    }).catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const departmentCategories = (pillar: string) =>
+    navCategories.filter((category) => category.pillar === pillar && category.parentSlug === pillar);
   const megaRef = useRef<HTMLDivElement>(null);
   const menuToggleRef = useRef<HTMLButtonElement>(null);
 
@@ -114,7 +131,7 @@ export function Header() {
                     </h3>
                     <p>{department.tagline}</p>
                     <ul>
-                      {getDepartmentCategories(department.slug).map((category) => (
+                      {departmentCategories(department.slug).map((category) => (
                         <li key={category.slug}>
                           <Link href={`/categories/${category.slug}`} role="menuitem" onClick={() => setMegaOpen(false)}>
                             {category.name}
@@ -175,7 +192,7 @@ export function Header() {
                 <Link href={`/shop?department=${department.slug}`} onClick={() => setMenuOpen(false)}>
                   All {department.name}
                 </Link>
-                {getDepartmentCategories(department.slug).map((category) => (
+                {departmentCategories(department.slug).map((category) => (
                   <Link key={category.slug} href={`/categories/${category.slug}`} onClick={() => setMenuOpen(false)}>
                     {category.name}
                   </Link>

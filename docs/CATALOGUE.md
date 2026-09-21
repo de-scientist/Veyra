@@ -4,8 +4,9 @@ Multi-category catalogue across three departments: **fashion**, **footwear**, **
 
 ## Data Sources (important)
 
-- **Storefront discovery** currently runs on static demo data in `apps/web/lib/catalog.ts` (13 products, KES pricing, Unsplash imagery). The backend product database is empty by design and exposes only `GET /catalog/products[/:id]` publicly. `lib/catalog.ts` documents the cutover: replace its arrays with `/catalog/*` + `/admin/*` responses; pages and filters consume identical shapes.
-- **Admin catalogue** (products, categories, collections, attributes, inventory) runs on live APIs against PostgreSQL.
+- **Storefront discovery** is database-backed (Phase E): `apps/web/lib/storefront.ts` fetches the public `/catalog/*` API (ISR 60s) and adapts rows to the `lib/catalog.ts` shapes the UI renders. Departments stay static brand pillars; categories, collections, products, facets, and suggestions are live. Merchandising content ships via `npm run db:seed:catalogue` (idempotent upserts: 12 categories, 6 collections, 13 products, variants + inventory + images + memberships).
+- **Public API** (`apps/api/src/lib/storefront.ts`, routes in `routes/storefront.ts`): `GET /catalog/categories` (tree + visible counts), `GET /catalog/collections` (counts + cover image), `GET /catalog/products` (search/category/collection/attrs/maxPrice/inStock/sort/pagination + facets + price buckets), `GET /catalog/products/:idOrSlug` (ACTIVE-only), `GET /catalog/suggest`. Admin editors use `GET /admin/products/:id` (all statuses).
+- **Admin catalogue** (products, categories, collections, attributes, inventory) runs on live APIs against PostgreSQL, with admin UI pages for each area (Phase E added categories/collections/attributes pages + attribute update/delete, value delete, category/collection archive with in-use guards).
 
 ## Categories & Collections
 
@@ -33,7 +34,9 @@ Attributes are data-driven, not hard-coded. `Attribute` + `AttributeValue` defin
 
 ## Category-Aware Discovery
 
-Shop, category, collection, and search pages share one discovery engine: `DiscoveryQuery` (department/category/q/sort/attrs/in-stock/page) in URL state (shareable, back-button-safe), `scopeProducts` → `deriveFacets` (only attributes present in scope with ≥2 values) → `derivePriceBuckets` (tertiles, suppressed when range < KES 1,000) → `applyDiscovery` → `paginate` (12/page). Sort: featured, newest, price asc/desc, name A–Z. Combobox search with keyboard navigation.
+Shop, category, collection, and search pages share one discovery engine: `DiscoveryQuery` (department/category/q/sort/attrs/in-stock/page) in URL state (shareable, back-button-safe). The API computes the scope (category includes descendants; search spans names/descriptions/SKUs/category/attribute values, token-AND) → facets (only attributes present in scope with ≥2 values; Brand excluded) → price buckets (tertiles, suppressed when range < KES 1,000) → sort (featured = `featured`-collection members first, then newest; price asc/desc; name; newest) → pagination (12/page, max 48). Combobox search with keyboard navigation (debounced, API-backed suggestions).
+
+Derived display rules (documented, not stored): `featured` = member of the `featured` collection; `newArrival` = created within 30 days; `brand` = first `Brand` variant attribute (fallback `JB Mercantile`); product `specs` = first variant's attributes minus Brand; price = minimum active-variant price (fallback base price); availability = `quantityOnHand − quantityReserved`.
 
 ## Publishing Rules
 

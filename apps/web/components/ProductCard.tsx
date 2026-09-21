@@ -5,8 +5,7 @@ import { ProductImage } from './ProductImage';
 import { WishlistButton } from './WishlistButton';
 import {
   discountPercent,
-  getProductCategory,
-  getProductDepartment,
+  getDepartmentBySlug,
   productInStock,
   type Product,
 } from '../lib/catalog';
@@ -15,8 +14,10 @@ export function ProductCard({ product, eager = false }: { product: Product; eage
   const [primaryImage, hoverImage] = product.images;
   const discount = discountPercent(product);
   const inStock = productInStock(product);
-  const category = getProductCategory(product);
-  const department = getProductDepartment(product);
+  // Category display name arrives resolved from live data; the department
+  // pillar stays a static lookup.
+  const categoryName = product.categoryName ?? product.category;
+  const department = getDepartmentBySlug(product.department);
   const variantCount = product.variants.length;
 
   return (
@@ -40,8 +41,8 @@ export function ProductCard({ product, eager = false }: { product: Product; eage
         <div className="product-card__body">
           <div className="product-card__meta">
             {department ? <span className="product-card__dept">{department.name}</span> : null}
-            {department && category ? ' · ' : null}
-            {category ? category.name : product.brand}
+            {' · '}
+            {categoryName}
           </div>
           <h3>{product.name}</h3>
           <p>{product.shortDescription}</p>

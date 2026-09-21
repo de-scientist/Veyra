@@ -60,8 +60,15 @@ async function seed() {
   });
   ids.products.push(draft.id);
 
-  const featured = await prisma.collection.create({ data: { name: `Featured ${stamp}`, slug: 'featured', description: 'Featured picks.', status: 'ACTIVE' } });
-  ids.collections.push(featured.id);
+  // Reuse the merchandising seed's `featured` collection when present
+  // (the seed owns that slug); only delete it in cleanup if we created it.
+  const existing = await prisma.collection.findUnique({ where: { slug: 'featured' } });
+  const featured =
+    existing ??
+    (await prisma.collection.create({
+      data: { name: `Featured ${stamp}`, slug: 'featured', description: 'Featured picks.', status: 'ACTIVE' },
+    }));
+  if (!existing) ids.collections.push(featured.id);
   await prisma.productCollection.create({ data: { productId: product.id, collectionId: featured.id } });
 }
 

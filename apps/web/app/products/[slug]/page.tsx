@@ -8,18 +8,13 @@ import { ProductActions } from '../../../components/ProductActions';
 import { ProductGallery } from '../../../components/ProductGallery';
 import { ProductSpecifications } from '../../../components/ProductSpecifications';
 import { StatusBadge } from '../../../components/jb-ui';
-import {
-  getProductBySlug,
-  getProductCategory,
-  getProductDepartment,
-  getPublicProducts,
-  productInStock,
-} from '../../../lib/catalog';
+import { getDepartmentBySlug, productInStock } from '../../../lib/catalog';
+import { discoverProducts, getCategoryBySlug, getProductBySlug } from '../../../lib/storefront';
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com';
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const product = getProductBySlug(params.slug);
+  const product = await getProductBySlug(params.slug).catch(() => null);
   if (!product) return { title: 'Product not found | JB Mercantile' };
   return {
     title: `${product.name} | JB Mercantile`,
@@ -38,19 +33,30 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default function ProductPage({ params }: { params: { slug: string } }) {
-  const product = getProductBySlug(params.slug);
+export default async function ProductPage({ params }: { params: { slug: string } }) {
+  const product = await getProductBySlug(params.slug).catch(() => null);
   if (!product) notFound();
 
-  const category = getProductCategory(product);
-  const department = getProductDepartment(product);
+  const category = await getCategoryBySlug(product.category).catch(() => undefined);
+  const department = getDepartmentBySlug(product.department);
   const inStock = productInStock(product);
   const prices = product.variants.map((v) => v.price);
-  const minPrice = Math.min(...prices, product.price);
-  const hasPriceRange = Math.max(...prices) !== minPrice;
-  const relatedProducts = getPublicProducts()
-    .filter((item) => item.id !== product.id && (item.department === product.department || item.category === product.category))
-    .slice(0, 4);
+  const minPrice = prices.length ? Math.min(...prices) : product.price;
+  const hasPriceRange = prices.length ? Math.max(...prices) !== minPrice : false;
+
+  // Related: same category first, then department; never the product itself.
+  const related = await discoverProducts(
+    { category: product.category, sort: 'featured' },
+    { pageSize: 5 },
+  )
+    .then((result) => result.items.filter((item) => item.id !== product.id).slice(0, 4))
+    .catch(() => []);
+  const relatedProducts =
+    related.length > 0
+      ? related
+      : await discoverProducts({ department: product.department, sort: 'featured' }, { pageSize: 5 })
+        .then((result) => result.items.filter((item) => item.id !== product.id).slice(0, 4))
+        .catch(() => []);
 
   const productJsonLd = {
     '@context': 'https://schema.org',
@@ -64,7 +70,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
       '@type': 'AggregateOffer',
       priceCurrency: 'KES',
       lowPrice: minPrice,
-      highPrice: Math.max(...prices, product.price),
+      highPrice: prices.length ? Math.max(...prices) : product.price,
       offerCount: product.variants.length,
       availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     },

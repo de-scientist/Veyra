@@ -4,10 +4,10 @@ import { notFound } from 'next/navigation';
 
 import { ProductCard } from '../../../components/ProductCard';
 import { SortControl } from '../../../components/DiscoveryFilters';
-import { getCollectionBySlug, getProductsByCollection } from '../../../lib/catalog';
+import { getCollectionBySlug, getProductsByCollection } from '../../../lib/storefront';
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const collection = getCollectionBySlug(params.slug);
+  const collection = await getCollectionBySlug(params.slug).catch(() => undefined);
   if (!collection) return { title: 'Collection not found | JB Mercantile' };
   return {
     title: `${collection.name} | JB Mercantile`,
@@ -15,25 +15,19 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default function CollectionPage({
+export default async function CollectionPage({
   params,
   searchParams,
 }: {
   params: { slug: string };
   searchParams?: { sort?: string };
 }) {
-  const collection = getCollectionBySlug(params.slug);
+  const collection = await getCollectionBySlug(params.slug).catch(() => undefined);
   if (!collection) notFound();
 
-  const sort = searchParams?.sort ?? 'featured';
-  const all = getProductsByCollection(params.slug);
-  const products = [...all].sort((a, b) => {
-    if (sort === 'price-asc') return a.price - b.price;
-    if (sort === 'price-desc') return b.price - a.price;
-    if (sort === 'name') return a.name.localeCompare(b.name);
-    if (sort === 'newest') return b.createdAt.localeCompare(a.createdAt);
-    return 0;
-  });
+  const rawSort = searchParams?.sort;
+  const sort = rawSort === 'price-asc' || rawSort === 'price-desc' || rawSort === 'name' || rawSort === 'newest' ? rawSort : 'featured';
+  const products = await getProductsByCollection(params.slug, sort).catch(() => []);
 
   return (
     <main className="container page-shell">

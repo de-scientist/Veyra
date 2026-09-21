@@ -3,17 +3,30 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
-import { getSearchSuggestions } from '../lib/catalog';
+import { getSuggestions, type Suggestion } from '../lib/storefront-client';
 import { JBIcon } from './JBIcons';
 
-/** Global search: prominent input, suggestions, clear, keyboard support, URL state. */
+/** Global search: prominent input, live suggestions, clear, keyboard support, URL state. */
 export function SearchBar({ initialQuery = '', autoFocus = false }: { initialQuery?: string; autoFocus?: boolean }) {
   const router = useRouter();
   const [value, setValue] = useState(initialQuery);
   const [focused, setFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const boxRef = useRef<HTMLDivElement>(null);
-  const suggestions = getSearchSuggestions(value);
+
+  // Debounced live suggestions from the public catalogue API.
+  useEffect(() => {
+    const query = value.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      getSuggestions(query).then(setSuggestions).catch(() => setSuggestions([]));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [value]);
 
   useEffect(() => {
     setActiveIndex(-1);

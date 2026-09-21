@@ -1,9 +1,12 @@
 import Link from 'next/link';
 
 import { JBLogo } from './JBLogo';
-import { collections, departments } from '../lib/catalog';
+import { departments } from '../lib/catalog';
+import { getCollections } from '../lib/storefront';
 
-export function Footer() {
+export async function Footer() {
+  // Live collections; footer degrades to departments alone on API failure.
+  const collections = await getCollections().catch(() => []);
   return (
     <footer className="site-footer">
       <div className="container site-footer__inner">

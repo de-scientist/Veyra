@@ -5,23 +5,13 @@ import { notFound } from 'next/navigation';
 
 import { ProductCard } from '../../../components/ProductCard';
 import { FilterPanel, FilterSheetHost, SortControl } from '../../../components/DiscoveryFilters';
-import {
-  applyDiscovery,
-  deriveFacets,
-  derivePriceBuckets,
-  discoveryQueryString,
-  getCategoryBySlug,
-  getDepartmentBySlug,
-  getProductsByCategory,
-  getSubcategories,
-  paginate,
-  parseDiscoveryQuery,
-} from '../../../lib/catalog';
+import { discoveryQueryString, getDepartmentBySlug, parseDiscoveryQuery } from '../../../lib/catalog';
+import { discoverProducts, getCategoryBySlug, getSubcategories } from '../../../lib/storefront';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const category = getCategoryBySlug(params.slug);
+  const category = await getCategoryBySlug(params.slug).catch(() => undefined);
   if (!category) return { title: 'Category not found | JB Mercantile' };
   return {
     title: `${category.name} | JB Mercantile`,
@@ -29,8 +19,8 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default function CategoryPage({ params, searchParams }: { params: { slug: string }; searchParams?: SearchParams }) {
-  const category = getCategoryBySlug(params.slug);
+export default async function CategoryPage({ params, searchParams }: { params: { slug: string }; searchParams?: SearchParams }) {
+  const category = await getCategoryBySlug(params.slug).catch(() => undefined);
   if (!category) notFound();
 
   const raw = searchParams ?? {};
@@ -38,17 +28,12 @@ export default function CategoryPage({ params, searchParams }: { params: { slug:
   const maxPriceRaw = Array.isArray(raw.maxPrice) ? raw.maxPrice[0] : raw.maxPrice;
   const maxPrice = maxPriceRaw && !Number.isNaN(Number(maxPriceRaw)) ? Number(maxPriceRaw) : null;
 
-  const facetScope = getProductsByCategory(category.slug).filter((p) => p.status === 'ACTIVE');
-  const facets = deriveFacets(facetScope);
-  const priceBuckets = derivePriceBuckets(facetScope);
-
-  let scoped = facetScope;
-  if (maxPrice !== null) scoped = scoped.filter((p) => p.price <= maxPrice);
-  const filtered = applyDiscovery(scoped, query);
-  const { items, page, totalPages, total } = paginate(filtered, query.page ?? 1);
+  const [{ items, facets, priceBuckets, page, totalPages, total }, children] = await Promise.all([
+    discoverProducts(query, { maxPrice }),
+    getSubcategories(category.slug).catch(() => []),
+  ]);
 
   const department = getDepartmentBySlug(category.department);
-  const children = getSubcategories(category.slug);
   const basePath = `/categories/${category.slug}`;
   const fixed = { category: category.slug };
   const panelProps = { facets, priceBuckets, query, basePath, fixed, selectedMaxPrice: maxPrice };

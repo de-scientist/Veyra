@@ -2,20 +2,23 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 import { ProductCard } from '../components/ProductCard';
+import { departments } from '../lib/catalog';
 import {
-  collections,
-  departments,
+  getCollections,
   getFeaturedProducts,
   getNewArrivals,
   getProductsByDepartment,
-} from '../lib/catalog';
+} from '../lib/storefront';
 
-export default function HomePage() {
-  const featuredProducts = getFeaturedProducts();
-  const newArrivals = getNewArrivals();
-  const fashionPicks = getProductsByDepartment('fashion').slice(0, 4);
-  const footwearPicks = getProductsByDepartment('footwear').slice(0, 4);
-  const kitchenPicks = getProductsByDepartment('kitchen-home').slice(0, 4);
+export default async function HomePage() {
+  const [collections, featuredProducts, newArrivals, fashionPicks, footwearPicks, kitchenPicks] = await Promise.all([
+    getCollections().catch(() => []),
+    getFeaturedProducts().catch(() => []),
+    getNewArrivals().catch(() => []),
+    getProductsByDepartment('fashion').catch(() => []),
+    getProductsByDepartment('footwear').catch(() => []),
+    getProductsByDepartment('kitchen-home').catch(() => []),
+  ]);
 
   return (
     <main className="container page-shell">
@@ -63,17 +66,19 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="section-block" aria-labelledby="jb-featured-heading">
-        <div className="section-heading">
-          <h2 id="jb-featured-heading">Featured products</h2>
-          <Link href="/shop">See more</Link>
-        </div>
-        <div className="product-grid">
-          {featuredProducts.map((product, index) => (
-            <ProductCard key={product.id} product={product} eager={index < 2} />
-          ))}
-        </div>
-      </section>
+      {featuredProducts.length > 0 ? (
+        <section className="section-block" aria-labelledby="jb-featured-heading">
+          <div className="section-heading">
+            <h2 id="jb-featured-heading">Featured products</h2>
+            <Link href="/shop">See more</Link>
+          </div>
+          <div className="product-grid">
+            {featuredProducts.map((product, index) => (
+              <ProductCard key={product.id} product={product} eager={index < 2} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {fashionPicks.length >= 2 ? (
         <section className="section-block" aria-labelledby="jb-fashion-heading">
@@ -132,17 +137,19 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="section-block" aria-labelledby="jb-new-heading">
-        <div className="section-heading">
-          <h2 id="jb-new-heading">New arrivals</h2>
-          <Link href="/shop?sort=newest">View all</Link>
-        </div>
-        <div className="product-grid">
-          {newArrivals.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-      </section>
+      {newArrivals.length > 0 ? (
+        <section className="section-block" aria-labelledby="jb-new-heading">
+          <div className="section-heading">
+            <h2 id="jb-new-heading">New arrivals</h2>
+            <Link href="/shop?sort=newest">View all</Link>
+          </div>
+          <div className="product-grid">
+            {newArrivals.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="trust-strip" aria-label="Why shop with JB Mercantile">
         <div className="trust-strip__item">

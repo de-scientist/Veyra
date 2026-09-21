@@ -5,17 +5,8 @@ import type { Route } from 'next';
 import { ProductCard } from '../../components/ProductCard';
 import { JBIcon } from '../../components/JBIcons';
 import { FilterPanel, FilterSheetHost, SortControl } from '../../components/DiscoveryFilters';
-import {
-  applyDiscovery,
-  deriveFacets,
-  derivePriceBuckets,
-  discoveryQueryString,
-  getDepartmentBySlug,
-  getDepartmentCategories,
-  paginate,
-  parseDiscoveryQuery,
-  scopeProducts,
-} from '../../lib/catalog';
+import { discoveryQueryString, getDepartmentBySlug, parseDiscoveryQuery } from '../../lib/catalog';
+import { discoverProducts, getDepartmentCategories } from '../../lib/storefront';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -29,25 +20,20 @@ export async function generateMetadata({ searchParams }: { searchParams?: Search
   return { title, description };
 }
 
-export default function ShopPage({ searchParams }: { searchParams?: SearchParams }) {
+export default async function ShopPage({ searchParams }: { searchParams?: SearchParams }) {
   const raw = searchParams ?? {};
   const query = parseDiscoveryQuery(raw);
   const maxPriceRaw = Array.isArray(raw.maxPrice) ? raw.maxPrice[0] : raw.maxPrice;
   const maxPrice = maxPriceRaw && !Number.isNaN(Number(maxPriceRaw)) ? Number(maxPriceRaw) : null;
 
-  // Facets derive from the department/category/search scope — category-aware,
-  // never showing attributes that don't exist in the current selection.
-  const facetScope = scopeProducts({ department: query.department, category: query.category, q: query.q });
-  const facets = deriveFacets(facetScope);
-  const priceBuckets = derivePriceBuckets(facetScope);
-
-  let scoped = scopeProducts(query);
-  if (maxPrice !== null) scoped = scoped.filter((p) => p.price <= maxPrice);
-  const filtered = applyDiscovery(scoped, query);
-  const { items, page, totalPages, total } = paginate(filtered, query.page ?? 1);
+  // Server-side discovery: facets and buckets derive from the live scope,
+  // items are filtered/sorted/paginated by the API.
+  const [{ items, facets, priceBuckets, page, totalPages, total }, subcategories] = await Promise.all([
+    discoverProducts(query, { maxPrice }),
+    query.department ? getDepartmentCategories(query.department).catch(() => []) : Promise.resolve([]),
+  ]);
 
   const department = query.department ? getDepartmentBySlug(query.department) : undefined;
-  const subcategories = query.department ? getDepartmentCategories(query.department) : [];
   const fixed = {
     ...(query.department ? { department: query.department } : {}),
     ...(query.category ? { category: query.category } : {}),
