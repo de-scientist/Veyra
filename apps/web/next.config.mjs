@@ -5,9 +5,13 @@ const nextConfig = {
     typedRoutes: true,
   },
   // Static demo storefront imagery lives on Unsplash (see lib/storefront-data.ts).
-  // Production product media should extend this list (e.g. Cloudinary) via deployment config.
+  // Phase C: Cloudinary delivery host added for provider-hosted media.
+  // Hostname-only (no wildcards); Unsplash pattern preserved for legacy assets.
   images: {
-    remotePatterns: [{ protocol: 'https', hostname: 'images.unsplash.com' }],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: 'res.cloudinary.com' },
+    ],
   },
   // Safe baseline headers. A strict Content-Security-Policy is intentionally
   // deferred: Next.js hydration requires nonce-based CSP architecture, which is
