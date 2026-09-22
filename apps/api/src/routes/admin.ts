@@ -264,8 +264,10 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get('/admin/customers/:id', { preHandler: requireOperationsAccess }, async (request) => {
     const { id } = request.params as { id: string };
-    const customer = await prisma.user.findUnique({
-      where: { id },
+    // Scoped to the customer directory (same role filter as the list endpoint):
+    // staff/admin lookups of non-customer user IDs return 404, never PII.
+    const customer = await prisma.user.findFirst({
+      where: { id, roles: { some: { role: { slug: 'customer' } } } },
       select: {
         id: true, email: true, firstName: true, lastName: true, phone: true, status: true, emailVerifiedAt: true, lastLoginAt: true, createdAt: true,
         addresses: { orderBy: { createdAt: 'desc' } },
@@ -285,7 +287,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (payload.status !== undefined) {
       await requireAdminAccess(request, reply);
     }
-    const existing = await prisma.user.findUnique({ where: { id } });
+    const existing = await prisma.user.findFirst({ where: { id, roles: { some: { role: { slug: 'customer' } } } } });
     if (!existing) throw new HttpError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found.');
     const customer = await prisma.user.update({ where: { id }, data: { firstName: payload.firstName?.trim(), lastName: payload.lastName?.trim(), phone: payload.phone, status: payload.status }, select: { id: true, email: true, firstName: true, lastName: true, phone: true, status: true } });
     await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'CUSTOMER_UPDATED', entity: 'User', entityId: id, before: { status: existing.status } as Prisma.InputJsonValue, after: { status: customer.status } as Prisma.InputJsonValue, ...auditMeta(request) } });

@@ -24,7 +24,9 @@ psql -v ON_ERROR_STOP=1 -f prisma/migrations/<each_20260917_*>/migration.sql
 
 Order: `init`, `phase5_cart_wishlist`, `phase6_checkout_order`, `phase7_payments_mpesa`,
 `phase8_fulfillment_delivery`, `phase9_returns_exchanges_refunds`,
-`phase10_customer_account`, `phase11_notifications`, `phase12_admin`, `phase13_analytics`.
+`phase10_customer_account`, `phase11_notifications`, `phase12_admin`, `phase13_analytics`,
+`phase14_product_media`, `phase14b_product_media_audit`, `phase15_catalogue_crud`,
+`phase16_profile_avatar`.
 All files are additive (`IF NOT EXISTS` guards). Never run `prisma migrate reset`.
 Regenerate the client with `npx -y prisma@5.22.0 generate` (matches `@prisma/client` 5.22.0).
 

@@ -21,6 +21,11 @@ Server-only via environment (see `.env.example`). Never in Git (`.env` gitignore
 
 - Explicit DTOs everywhere; no raw entity serialization. Password hashes, session tokens, provider secrets, and raw callback payloads never leave the API.
 - Customer data is owner-scoped; guest orders require confirmation tokens; admin PII views are role-gated and audited.
+- Customer directory scope (Phase 15 fix): `GET`/`PATCH /admin/customers/:id`
+  apply the same `customer`-role filter as the list endpoint. Non-customer IDs
+  (staff/admin/super_admin) return `404 CUSTOMER_NOT_FOUND`, never PII; the
+  customer endpoint cannot be used to read or edit operations users.
+  Regression suite: `apps/api/src/routes/admin-customers-authz.test.ts` (10 tests).
 - Sensitive mutations (inventory, refunds, role-adjacent changes, exports) write append-only `AuditLog` rows with actor, IP, and user-agent.
 
 ## Rate Limiting

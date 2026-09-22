@@ -17,3 +17,16 @@ validation; items marked BLOCKER gate public launch.
 - Analytics thresholds carried as technical defaults (high-value KES 20,000; inactive 90 days).
 - Next.js major-upgrade window for advisory remediation.
 - Release tagging/versioning convention (currently unversioned).
+- Password reset / email verification flows — FORMALLY DEFERRED (Phase 15 decision):
+  `PasswordResetToken` / `EmailVerificationToken` models exist but no endpoints
+  consume them and no production email vendor is configured, so there is no
+  reset-token attack surface deployed. Authenticated password change works.
+  Rationale: implementing email-delivered single-use tokens without a verified
+  sender identity, SPF/DKIM/DMARC, and rate-limited delivery would create
+  account-takeover risk rather than reduce it. UX impact: users who forget
+  passwords must contact support for an assisted reset until the flow ships.
+  Alternative recovery: support-assisted reset via an audited admin/bootstrap
+  process (least-privilege operator, temporary credential rotated immediately).
+  Owner: business/product. Target: dedicated auth follow-up once email vendor
+  and sender-domain authentication are provisioned. Launch approval accepts
+  this limitation; status is FORMALLY DEFERRED, not NOT VERIFIED.

@@ -45,6 +45,13 @@
 - [ ] No secrets in Git/logs/errors/bundles; secret scan clean
 - [ ] CORS exact origins; security headers verified; rate limits reviewed
 - [ ] Security regression suite green; Next.js advisory upgrade scheduled
+- [x] (Phase 15) Customer-detail authorization asymmetry closed — `GET`/`PATCH
+      /admin/customers/:id` scoped to customer role (`admin-customers-authz.test.ts`, 10 tests)
+- [x] (Phase 15) Password reset / email verification FORMALLY DEFERRED — see BUSINESS-DECISIONS.md
+- [x] (Phase 15) Dependency audit: 17 vulns, all requiring breaking majors
+      (Next 16 / Prisma 7) — deferred per stability policy; no `audit fix --force`
+- [x] (Phase 15) Migrations verified forward-only/additive (no DROP/TRUNCATE/reset);
+      DEPLOYMENT.md order updated to include phase14–phase16 migrations
 
 ## Customer Experience
 
