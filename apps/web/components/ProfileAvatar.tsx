@@ -11,6 +11,10 @@ import { useConfirm } from './ConfirmDialog';
 import { useToast } from './Toast';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
+// Mirrors the server profile policy (MEDIA_POLICY.profile.maxBytes = 5MB).
+// Authoritative enforcement stays server-side (sign-upload pre-check +
+// normalizeUploadResult at finalize); this is immediate UX feedback only.
+const MAX_BYTES = 5_000_000;
 
 type UploadState = { status: 'idle' | 'uploading'; progress: number; message: string | null };
 
@@ -44,6 +48,10 @@ export function ProfileAvatar({
     if (!file) return;
     if (!ACCEPT.split(',').includes(file.type)) {
       notify('error', 'Only JPEG, PNG, or WebP images are allowed.');
+      return;
+    }
+    if (file.size <= 0 || file.size > MAX_BYTES) {
+      notify('error', 'That image is too large. Please choose a photo up to 5MB.');
       return;
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);

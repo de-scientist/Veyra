@@ -19,6 +19,7 @@ const ACCOUNT_ENTRIES: MenuEntry[] = [
   { href: '/account/orders', label: 'Orders', icon: 'box' },
   { href: '/account/wishlist', label: 'Wishlist', icon: 'heart' },
   { href: '/account/profile', label: 'Profile', icon: 'user' },
+  { href: '/account/addresses', label: 'Addresses', icon: 'pin' },
   { href: '/account/preferences', label: 'Preferences', icon: 'sliders' },
 ];
 

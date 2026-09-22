@@ -65,6 +65,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   setMediaConfigForTests(null);
+  await prisma.auditLog.deleteMany({ where: { actorId: { in: createdUserIds } } });
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
