@@ -108,8 +108,59 @@ export default function AdminCustomerDetailPage({ params }: PageProps) {
 
       <section className="account-section">
         <h2>Profile</h2>
-        <p>Phone: {customer.phone ?? '—'} • Joined: {formatAdminDate(customer.createdAt)} • Last login: {formatAdminDate(customer.lastLoginAt)}</p>
-        <p className="muted-copy">Email verified: {customer.emailVerifiedAt ? 'yes' : 'no'}</p>
+        {editing ? (
+          <form
+            className="account-form"
+            onSubmit={async (e: React.FormEvent<HTMLFormElement>) => {
+              e.preventDefault();
+              if (!customerId) return;
+              if (!profileForm.firstName.trim() || !profileForm.lastName.trim()) {
+                setError('First and last name are required.');
+                return;
+              }
+              try {
+                await updateAdminCustomer(customerId, {
+                  firstName: profileForm.firstName.trim(),
+                  lastName: profileForm.lastName.trim(),
+                  phone: profileForm.phone.trim() ? profileForm.phone.trim() : null,
+                });
+                setEditing(false);
+                setError(null);
+                setMessage('Customer profile updated. Change audited.');
+                await load(customerId);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Profile update failed');
+              }
+            }}
+          >
+            <div className="form-grid">
+              <label>
+                <span>First name *</span>
+                <input type="text" value={profileForm.firstName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfileForm((prev) => ({ ...prev, firstName: e.currentTarget.value }))} required maxLength={120} />
+              </label>
+              <label>
+                <span>Last name *</span>
+                <input type="text" value={profileForm.lastName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfileForm((prev) => ({ ...prev, lastName: e.currentTarget.value }))} required maxLength={120} />
+              </label>
+              <label>
+                <span>Phone</span>
+                <input type="tel" value={profileForm.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfileForm((prev) => ({ ...prev, phone: e.currentTarget.value }))} maxLength={32} autoComplete="tel" />
+              </label>
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="button button--secondary">Save</button>
+              <button type="button" className="text-button" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <p>Phone: {customer.phone ?? '—'} • Joined: {formatAdminDate(customer.createdAt)} • Last login: {formatAdminDate(customer.lastLoginAt)}</p>
+            <p className="muted-copy">Email verified: {customer.emailVerifiedAt ? 'yes' : 'no'}</p>
+            <div className="account-actions">
+              <button type="button" className="button button--secondary" onClick={() => setEditing(true)}>Edit name / phone</button>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="account-section">

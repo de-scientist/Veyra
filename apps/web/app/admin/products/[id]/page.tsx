@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 
 import { createAdminVariant, getAdminAttributes, getAdminCategories, getAdminProduct, updateAdminProduct, updateAdminVariant, type AdminAttribute } from '../../../../lib/admin-api';
-import { AdminStatusBadge } from '../../../../components/admin';
+import { AdminStatusBadge, ConfirmAction } from '../../../../components/admin';
 import { ProductMediaManager } from '../../../../components/ProductMediaManager';
 
 type ProductDetail = {
@@ -210,9 +210,18 @@ export default function AdminProductDetailPage({ params }: PageProps) {
                 <button type="submit" className="button button--secondary">Update Price</button>
               </form>
               {variant.status !== 'ARCHIVED' ? (
-                <button type="button" className="text-button text-button--danger" onClick={() => handleVariantStatus(variant.id, 'ARCHIVED')}>Archive</button>
+                <ConfirmAction
+                  label="Archive"
+                  confirmMessage={`Archive variant ${variant.sku}? It will stop being purchasable. Stock history is preserved.`}
+                  onConfirm={() => handleVariantStatus(variant.id, 'ARCHIVED')}
+                  danger
+                />
               ) : (
-                <button type="button" className="text-button" onClick={() => handleVariantStatus(variant.id, 'ACTIVE')}>Restore</button>
+                <ConfirmAction
+                  label="Restore"
+                  confirmMessage={`Restore variant ${variant.sku} to ACTIVE?`}
+                  onConfirm={() => handleVariantStatus(variant.id, 'ACTIVE')}
+                />
               )}
             </div>
           </div>

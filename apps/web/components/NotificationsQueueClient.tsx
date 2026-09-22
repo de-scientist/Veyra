@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { AdminStatusBadge, formatAdminDate } from './admin';
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 type DeliveryRow = {
@@ -124,10 +126,10 @@ export function NotificationsQueueClient() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{new Date(row.createdAt).toLocaleString('en-KE')}</td>
+                  <td>{formatAdminDate(row.createdAt)}</td>
                   <td>{row.channel}</td>
                   <td>{row.provider}</td>
-                  <td>{row.status}</td>
+                  <td><AdminStatusBadge status={row.status} /></td>
                   <td>{row.attemptCount}</td>
                   <td>{row.notification.title}</td>
                   <td>{row.failureCode ?? '—'}</td>

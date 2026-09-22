@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { getAdminSettings } from '../../../lib/admin-api';
+import { AdminStatusBadge, formatMoney } from '../../../components/admin';
 
 type Settings = {
   currency: string;
@@ -85,9 +86,9 @@ export default function AdminSettingsPage() {
                 <tr key={rate.id}>
                   <td>{rate.zone.name}</td>
                   <td>{rate.method.name}</td>
-                  <td>{rate.basePrice}</td>
-                  <td>{rate.minOrderValue}</td>
-                  <td>{rate.status}</td>
+                  <td>{formatMoney(rate.basePrice, settings.currency)}</td>
+                  <td>{formatMoney(rate.minOrderValue, settings.currency)}</td>
+                  <td><AdminStatusBadge status={rate.status} /></td>
                 </tr>
               ))}
             </tbody>

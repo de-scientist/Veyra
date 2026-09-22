@@ -23,7 +23,7 @@ export default function AdminOrdersPage() {
     search: '',
     status: searchParams.get('status') ?? '',
     paymentStatus: searchParams.get('paymentStatus') ?? '',
-    fulfillmentStatus: '',
+    fulfillmentStatus: searchParams.get('fulfillmentStatus') ?? '',
   });
 
   const load = useCallback(async () => {

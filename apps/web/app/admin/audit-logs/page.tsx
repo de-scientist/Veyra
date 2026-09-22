@@ -89,6 +89,7 @@ export default function AuditLogsPage() {
                   <th>Action</th>
                   <th>Entity</th>
                   <th>Actor</th>
+                  <th>Details</th>
                 </tr>
               </thead>
               <tbody>
@@ -98,6 +99,18 @@ export default function AuditLogsPage() {
                     <td><AdminStatusBadge status={log.action} /></td>
                     <td>{log.entity}<br /><span className="muted-copy">{log.entityId.slice(0, 8)}…</span></td>
                     <td>{log.actor ? `${log.actor.firstName} ${log.actor.lastName}` : 'System'}<br /><span className="muted-copy">{log.actor?.email ?? ''}</span></td>
+                    <td>
+                      {log.before != null || log.after != null ? (
+                        <details>
+                          <summary className="text-button" style={{ cursor: 'pointer' }}>Changes</summary>
+                          <pre className="muted-copy" style={{ whiteSpace: 'pre-wrap', maxWidth: '32rem', marginTop: '0.5rem' }}>
+                            {JSON.stringify({ before: log.before, after: log.after }, null, 2)}
+                          </pre>
+                        </details>
+                      ) : (
+                        <span className="muted-copy">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
