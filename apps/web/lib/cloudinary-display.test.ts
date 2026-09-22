@@ -14,6 +14,12 @@ describe('cloudinaryDisplayUrl', () => {
     );
   });
 
+  it('derives a square avatar variant for navbar/profile slots', () => {
+    expect(cloudinaryDisplayUrl(canonical, 'avatar')).toBe(
+      'https://res.cloudinary.com/jb-cloud/image/upload/c_fill,w_128,h_128,g_face/f_auto/q_auto/v1/jb-mercantile/products/abc.webp',
+    );
+  });
+
   it('passes legacy and external URLs through untouched', () => {
     expect(cloudinaryDisplayUrl('https://images.unsplash.com/photo-1?w=400', 'thumbnail')).toBe(
       'https://images.unsplash.com/photo-1?w=400',

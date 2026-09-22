@@ -128,4 +128,64 @@ describe('profile avatar lifecycle', () => {
     });
     expect(bad.statusCode).toBe(400);
   });
+
+  it('rejects oversized assets, untrusted URLs, missing dimensions, and foreign folders', async () => {
+    const alice = userIds[emails.alice];
+    const auth = { cookie: cookies[emails.alice] };
+    const base = avatarResult(alice, 'edge');
+
+    const oversized = await app.inject({
+      method: 'POST',
+      url: '/api/v1/account/profile/avatar',
+      payload: { ...base, bytes: 50_000_000 },
+      headers: auth,
+    });
+    expect(oversized.statusCode).toBe(413);
+
+    const untrusted = await app.inject({
+      method: 'POST',
+      url: '/api/v1/account/profile/avatar',
+      payload: { ...base, secureUrl: 'https://evil.example.com/avatar.webp' },
+      headers: auth,
+    });
+    expect(untrusted.statusCode).toBe(400);
+
+    const noDims = await app.inject({
+      method: 'POST',
+      url: '/api/v1/account/profile/avatar',
+      payload: { ...base, width: 0, height: -1 },
+      headers: auth,
+    });
+    expect(noDims.statusCode).toBe(400);
+
+    // Arbitrary public ID outside the app namespace can never target a
+    // foreign asset for persistence (and destroyMedia is prefix-guarded too).
+    const traversal = await app.inject({
+      method: 'POST',
+      url: '/api/v1/account/profile/avatar',
+      payload: { ...base, publicId: 'jb-mercantile/products/foreign-asset' },
+      headers: auth,
+    });
+    expect(traversal.statusCode).toBe(400);
+  });
+
+  it('audits avatar set and remove as profile updates', async () => {
+    const alice = userIds[emails.alice];
+    const auth = { cookie: cookies[emails.alice] };
+
+    await app.inject({ method: 'POST', url: '/api/v1/account/profile/avatar', payload: avatarResult(alice, 'audit'), headers: auth });
+    const setAudit = await prisma.auditLog.findFirst({
+      where: { actorId: alice, action: 'PROFILE_UPDATED', entity: 'User', entityId: alice },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(setAudit).not.toBeNull();
+
+    await app.inject({ method: 'DELETE', url: '/api/v1/account/profile/avatar', headers: auth });
+    const removeAudit = await prisma.auditLog.findFirst({
+      where: { actorId: alice, action: 'PROFILE_UPDATED', entity: 'User', entityId: alice },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(removeAudit).not.toBeNull();
+    expect(removeAudit?.after as unknown as { avatarRemoved?: boolean }).toMatchObject({ avatarRemoved: true });
+  });
 });
