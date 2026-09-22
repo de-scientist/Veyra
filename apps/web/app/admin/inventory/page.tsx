@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-import { adjustVariant, getAdminInventory, restockVariant, type AdminInventoryRow, type Pagination } from '../../../lib/admin-api';
-import { AdminEmptyState, AdminPagination, AdminStatusBadge } from '../../../components/admin';
+import { adjustVariant, getAdminInventory, getInventoryReservations, restockVariant, type AdminInventoryRow, type Pagination } from '../../../lib/admin-api';
+import { AdminEmptyState, AdminPagination, AdminStatusBadge, formatAdminDate } from '../../../components/admin';
 
 export default function AdminInventoryPage() {
   const searchParams = useSearchParams();
@@ -22,6 +22,23 @@ export default function AdminInventoryPage() {
     outOfStock: searchParams.get('outOfStock') === 'true',
   });
   const [action, setAction] = useState({ variantId: '', mode: 'restock' as 'restock' | 'adjust', quantity: '', reason: '' });
+  const [reservations, setReservations] = useState<Array<{ id: string; quantity: number; status: string; createdAt: string; expiresAt: string | null; variant: { id: string; sku: string }; order: { id: string; orderNumber: string } }>>([]);
+  const [reservationStatus, setReservationStatus] = useState('');
+  const [reservationsError, setReservationsError] = useState<string | null>(null);
+
+  const loadReservations = useCallback(async () => {
+    setReservationsError(null);
+    try {
+      const result = await getInventoryReservations({ status: reservationStatus || undefined, pageSize: 20 });
+      setReservations(result.reservations);
+    } catch (e) {
+      setReservationsError(e instanceof Error ? e.message : 'Failed to load reservations');
+    }
+  }, [reservationStatus]);
+
+  useEffect(() => {
+    loadReservations();
+  }, [loadReservations]);
 
   const load = useCallback(async () => {
     setLoading(true);
