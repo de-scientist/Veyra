@@ -10,6 +10,8 @@ import { discoverProducts, getDepartmentCategories } from '../../lib/storefront'
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
+const siteUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com').replace(/\/$/, '');
+
 export async function generateMetadata({ searchParams }: { searchParams?: SearchParams }): Promise<Metadata> {
   const query = parseDiscoveryQuery(searchParams ?? {});
   const department = query.department ? getDepartmentBySlug(query.department) : undefined;
@@ -17,7 +19,11 @@ export async function generateMetadata({ searchParams }: { searchParams?: Search
   const description = department
     ? `Shop ${department.name.toLowerCase()} at JB Mercantile — ${department.description}`
     : 'Shop fashion, footwear and kitchen & home essentials at JB Mercantile.';
-  return { title, description };
+  return {
+    title,
+    description,
+    alternates: { canonical: department ? `${siteUrl}/shop?department=${department.slug}` : `${siteUrl}/shop` },
+  };
 }
 
 export default async function ShopPage({ searchParams }: { searchParams?: SearchParams }) {

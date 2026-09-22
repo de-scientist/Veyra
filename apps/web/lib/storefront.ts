@@ -225,6 +225,7 @@ function discoveryParams(query: DiscoveryQuery, extra?: Record<string, string | 
   const params = new URLSearchParams();
   if (query.department) params.set('category', query.department);
   if (query.category) params.set('category', query.category);
+  if (query.collection) params.set('collection', query.collection);
   if (query.q) params.set('q', query.q);
   if (query.sort && query.sort !== 'featured') params.set('sort', query.sort);
   if (query.attrs) {

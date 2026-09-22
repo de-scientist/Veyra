@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import type { Metadata } from 'next';
 
 import { ProductCard } from '../components/ProductCard';
 import { departments } from '../lib/catalog';
@@ -9,6 +10,17 @@ import {
   getNewArrivals,
   getProductsByDepartment,
 } from '../lib/storefront';
+
+const siteUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com').replace(/\/$/, '');
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'JB Mercantile — Fashion • Footwear • Kitchen & Home',
+    description:
+      'Shop everyday fashion, footwear and kitchen & home essentials at JB Mercantile — secure checkout with M-Pesa payments.',
+    alternates: { canonical: `${siteUrl}/` },
+  };
+}
 
 export default async function HomePage() {
   const [collections, featuredProducts, newArrivals, fashionPicks, footwearPicks, kitchenPicks] = await Promise.all([
@@ -20,8 +32,27 @@ export default async function HomePage() {
     getProductsByDepartment('kitchen-home').catch(() => []),
   ]);
 
+  // ItemList structured data from real featured products only — omitted
+  // entirely when the catalogue returns nothing (never fabricated).
+  const featuredJsonLd =
+    featuredProducts.length > 0
+      ? {
+          '@context': 'https://schema.org',
+          '@type': 'ItemList',
+          itemListElement: featuredProducts.map((product, index) => ({
+            '@type': 'ListItem',
+            position: index + 1,
+            url: `${siteUrl}/products/${product.slug}`,
+            name: product.name,
+          })),
+        }
+      : null;
+
   return (
     <main className="container page-shell">
+      {featuredJsonLd ? (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(featuredJsonLd) }} />
+      ) : null}
       <section className="hero hero--mercantile" aria-labelledby="jb-hero-heading">
         <div className="hero__content">
           <p className="eyebrow">JB Mercantile · Nairobi, Kenya</p>

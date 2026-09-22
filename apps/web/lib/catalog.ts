@@ -162,6 +162,8 @@ export function discountPercent(product: { price: number; compareAtPrice?: numbe
 export type DiscoveryQuery = {
   department?: DepartmentSlug;
   category?: string;
+  /** Collection scope (path-driven on collection pages; never user-typed). */
+  collection?: string;
   q?: string;
   sort?: 'featured' | 'price-asc' | 'price-desc' | 'name' | 'newest';
   attrs?: Record<string, string[]>;
@@ -187,7 +189,7 @@ export function parseDiscoveryQuery(params: Record<string, string | string[] | u
   };
   const attrs: Record<string, string[]> = {};
   for (const [key, value] of Object.entries(params)) {
-    if (['department', 'category', 'q', 'sort', 'inStock', 'page'].includes(key)) continue;
+    if (['department', 'category', 'collection', 'q', 'sort', 'inStock', 'page'].includes(key)) continue;
     const values = all(value);
     if (values.length) attrs[key] = values;
   }
@@ -196,6 +198,7 @@ export function parseDiscoveryQuery(params: Record<string, string | string[] | u
   return {
     department: departments.some((d) => d.slug === department) ? (department as DepartmentSlug) : undefined,
     category: first(params.category),
+    collection: first(params.collection),
     q: first(params.q),
     sort: sort === 'price-asc' || sort === 'price-desc' || sort === 'name' || sort === 'newest' ? sort : 'featured',
     attrs,
@@ -209,6 +212,7 @@ export function discoveryQueryString(query: DiscoveryQuery): string {
   const params = new URLSearchParams();
   if (query.department) params.set('department', query.department);
   if (query.category) params.set('category', query.category);
+  if (query.collection) params.set('collection', query.collection);
   if (query.q) params.set('q', query.q);
   if (query.sort && query.sort !== 'featured') params.set('sort', query.sort);
   if (query.attrs) {

@@ -13,7 +13,7 @@ import {
   type PriceBucket,
 } from '../lib/catalog';
 
-export type FixedParams = { department?: DepartmentSlug; category?: string; q?: string };
+export type FixedParams = { department?: DepartmentSlug; category?: string; collection?: string; q?: string };
 
 type FilterProps = {
   facets: Facet[];
@@ -57,6 +57,7 @@ export function FilterPanel({ facets, priceBuckets, query, basePath, fixed, sele
     const params = new URLSearchParams();
     if (fixed.department) params.set('department', fixed.department);
     if (fixed.category) params.set('category', fixed.category);
+    if (fixed.collection) params.set('collection', fixed.collection);
     if (fixed.q) params.set('q', fixed.q);
     const s = params.toString();
     router.push(`${basePath}${s ? `?${s}` : ''}` as never, { scroll: false });

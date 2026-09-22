@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
 
-import { departments } from '../lib/catalog';
 import { getCategories, getCollections, getPublicProducts } from '../lib/storefront';
 
 /**
@@ -16,11 +15,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     getCollections().catch(() => []),
     getPublicProducts().catch(() => []),
   ]);
-  const departmentRoutes = departments.map((department) => `/shop?department=${department.slug}`);
+  // Note: department scoped views (`/shop?department=…`) are intentionally
+  // excluded — crawlers ignore query strings, and every department is
+  // reachable via its category pages below.
   const categoryRoutes = categories.map((category) => `/categories/${category.slug}`);
   const collectionRoutes = collections.map((collection) => `/collections/${collection.slug}`);
   const productRoutes = products.map((product) => `/products/${product.slug}`);
-  return [...staticRoutes, ...departmentRoutes, ...categoryRoutes, ...collectionRoutes, ...productRoutes].map((route) => ({
+  return [...staticRoutes, ...categoryRoutes, ...collectionRoutes, ...productRoutes].map((route) => ({
     url: `${base}${route}`,
     lastModified: now,
   }));

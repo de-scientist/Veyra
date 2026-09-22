@@ -15,6 +15,9 @@ export async function generateMetadata({ searchParams }: { searchParams?: Search
   return {
     title: q ? `Search: ${q} | JB Mercantile` : 'Search | JB Mercantile',
     description: 'Search fashion, footwear and kitchen & home essentials at JB Mercantile.',
+    // Search result URLs are unbounded — keep them out of the index while
+    // still allowing crawlers to follow through to product pages.
+    robots: { index: false, follow: true },
   };
 }
 

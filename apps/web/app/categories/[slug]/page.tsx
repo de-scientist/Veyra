@@ -10,12 +10,15 @@ import { discoverProducts, getCategoryBySlug, getSubcategories } from '../../../
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
+const siteUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com').replace(/\/$/, '');
+
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const category = await getCategoryBySlug(params.slug).catch(() => undefined);
   if (!category) return { title: 'Category not found | JB Mercantile' };
   return {
     title: `${category.name} | JB Mercantile`,
     description: `${category.description} Shop ${category.name.toLowerCase()} at JB Mercantile with secure checkout and M-Pesa payments.`,
+    alternates: { canonical: `${siteUrl}/categories/${category.slug}` },
   };
 }
 
