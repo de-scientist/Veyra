@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 import { logger } from './logger.js';
 import { prisma } from './prisma.js';
@@ -19,7 +19,12 @@ import { prisma } from './prisma.js';
 
 export const STALE_RESERVATION_MINUTES = 60;
 
-type DbClient = typeof prisma | Prisma.TransactionClient;
+/**
+ * The sweep needs nested interactive transactions (`$transaction`), which
+ * only the root client provides — a `TransactionClient` cannot open one.
+ * The parameter is therefore `PrismaClient`, not a client union.
+ */
+type DbClient = PrismaClient;
 
 function staleBefore(now: Date = new Date()): Date {
   return new Date(now.getTime() - STALE_RESERVATION_MINUTES * 60 * 1000);
@@ -47,7 +52,7 @@ export async function releaseStaleReservations(
   let released = 0;
   for (const reservation of stale) {
     try {
-      await client.$transaction(async (transaction) => {
+      await client.$transaction(async (transaction: Prisma.TransactionClient) => {
         const updated = await transaction.inventory.updateMany({
           where: { variantId: reservation.variantId, quantityReserved: { gte: reservation.quantity } },
           data: { quantityReserved: { decrement: reservation.quantity } },
