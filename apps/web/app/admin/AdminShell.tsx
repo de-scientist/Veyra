@@ -9,9 +9,9 @@ import { useModalFocus } from '../../components/a11y';
 import { JBIcon, type JBIconName } from '../../components/JBIcons';
 import { JBLogo } from '../../components/JBLogo';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { getSessionUser, isOperationsRole, logout, type SessionUser } from '../../lib/admin-api';
+import { getSessionUser, isOperationsRole, isSuperAdminRole, logout, type SessionUser } from '../../lib/admin-api';
 
-const NAVIGATION: Array<{ href: Route; label: string; icon: JBIconName }> = [
+const NAVIGATION: Array<{ href: Route; label: string; icon: JBIconName; superAdminOnly?: boolean }> = [
   { href: '/admin/dashboard' as Route, label: 'Dashboard', icon: 'grid' },
   { href: '/admin/analytics', label: 'Analytics', icon: 'chart' },
   { href: '/admin/orders', label: 'Orders', icon: 'box' },
@@ -29,6 +29,10 @@ const NAVIGATION: Array<{ href: Route; label: string; icon: JBIconName }> = [
   { href: '/admin/notifications', label: 'Notifications', icon: 'bell' },
   { href: '/admin/audit-logs', label: 'Audit Logs', icon: 'doc' },
   { href: '/admin/settings', label: 'Settings', icon: 'sliders' },
+  // Super-admin only (mirrors the backend requireSuperAdmin guards exactly;
+  // hiding is UX-only — the APIs re-authorize every request).
+  { href: '/admin/users' as Route, label: 'Users', icon: 'users', superAdminOnly: true },
+  { href: '/admin/roles' as Route, label: 'Roles', icon: 'lock', superAdminOnly: true },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -132,7 +136,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </button>
         ) : null}
         <ul className="account-nav-list">
-          {NAVIGATION.map((item) => {
+          {NAVIGATION.filter((item) => !item.superAdminOnly || isSuperAdminRole(session.roles)).map((item) => {
             const active = pathname === item.href || (item.href !== '/admin/dashboard' && pathname.startsWith(item.href));
             return (
               <li key={item.href}>

@@ -32,12 +32,16 @@ export default function AdminCustomerDetailPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', phone: '' });
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   const load = useCallback(async (id: string) => {
     try {
       const result = await getAdminCustomerDetail(id);
-      setCustomer(result as unknown as Detail);
+      const detail = result as unknown as Detail;
+      setCustomer(detail);
+      setProfileForm({ firstName: detail.firstName, lastName: detail.lastName, phone: detail.phone ?? '' });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load customer');
     } finally {

@@ -32,7 +32,7 @@ function isAdminRole(roles: string[]) {
   return roles.some((role) => ['admin', 'super_admin', 'super-admin'].includes(role.toLowerCase()));
 }
 
-function isSuperAdminRole(roles: string[]) {
+export function isSuperAdminRole(roles: string[]) {
   return roles.some((role) => ['super_admin', 'super-admin'].includes(role.toLowerCase()));
 }
 
@@ -436,4 +436,53 @@ export function updateAdminCoupon(id: string, input: { status?: string; maxUses?
 
 export function getAdminSettings() {
   return request<Record<string, unknown>>('/admin/settings');
+}
+
+// ---- User & role administration (super-admin only; backend enforces) ----
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+  createdAt: string;
+  roles: string[];
+};
+
+export function getAdminUsers(params?: { page?: number; pageSize?: number; search?: string; status?: string; role?: string }) {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.status) searchParams.set('status', params.status);
+  if (params?.role) searchParams.set('role', params.role);
+  return request<{ users: AdminUser[]; pagination: Pagination }>(`/admin/users?${searchParams.toString()}`);
+}
+
+export type AdminUserDetail = AdminUser & {
+  phone: string | null;
+  emailVerifiedAt: string | null;
+  lastLoginAt: string | null;
+  roles: Array<{ id: string; name: string; slug: string }>;
+};
+
+export function getAdminUserDetail(id: string) {
+  return request<AdminUserDetail>(`/admin/users/${id}`);
+}
+
+export function changeUserRole(id: string, input: { role: string; action: 'assign' | 'revoke' }) {
+  return request<{ roles: string[] }>(`/admin/users/${id}/roles`, { method: 'POST', body: JSON.stringify(input) });
+}
+
+export type AdminRole = {
+  id: string;
+  name: string;
+  slug: string;
+  memberCount: number;
+  permissions: string[];
+};
+
+export function getAdminRoles() {
+  return request<{ roles: AdminRole[] }>('/admin/roles');
 }

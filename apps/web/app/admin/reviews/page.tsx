@@ -74,6 +74,16 @@ export default function AdminReviewsPage() {
       {error && <div className="inline-message" role="alert">{error}</div>}
 
       <section className="account-filters">
+        <form
+          className="account-search"
+          onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
+            e.preventDefault();
+            const form = new FormData(e.currentTarget);
+            setParams((prev) => ({ ...prev, page: 1, search: String(form.get('search') ?? '') }));
+          }}
+        >
+          <input type="search" name="search" defaultValue={params.search} placeholder="Title or body…" aria-label="Search reviews" />
+        </form>
         <div className="account-status-filters" role="group" aria-label="Review status">
           {STATUSES.map((status) => (
             <button key={status || 'all'} type="button" className={`account-filter-chip ${params.status === status ? 'active' : ''}`} onClick={() => setParams((prev) => ({ ...prev, page: 1, status }))}>

@@ -18,20 +18,22 @@ type CouponRow = {
   createdAt: string;
 };
 
+const COUPON_STATUSES = ['', 'ACTIVE', 'INACTIVE'];
+
 export default function AdminCouponsPage() {
   const [coupons, setCoupons] = useState<CouponRow[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [params, setParams] = useState({ page: 1, pageSize: 20, search: '' });
+  const [params, setParams] = useState({ page: 1, pageSize: 20, search: '', status: '' });
   const [form, setForm] = useState({ code: '', discountType: 'PERCENTAGE', value: '', maxUses: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getAdminCoupons({ page: params.page, pageSize: params.pageSize, search: params.search || undefined });
+      const result = await getAdminCoupons({ page: params.page, pageSize: params.pageSize, search: params.search || undefined, status: params.status || undefined });
       setCoupons(result.coupons as unknown as CouponRow[]);
       setPagination(result.pagination);
     } catch (e) {
@@ -85,6 +87,26 @@ export default function AdminCouponsPage() {
 
       {error && <div className="inline-message" role="alert">{error}</div>}
       {message && <div className="success-message" role="status">{message}</div>}
+
+      <section className="account-filters">
+        <form
+          className="account-search"
+          onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
+            e.preventDefault();
+            const form = new FormData(e.currentTarget);
+            setParams((prev) => ({ ...prev, page: 1, search: String(form.get('search') ?? '') }));
+          }}
+        >
+          <input type="search" name="search" defaultValue={params.search} placeholder="Coupon code…" aria-label="Search coupons" />
+        </form>
+        <div className="account-status-filters" role="group" aria-label="Coupon status">
+          {COUPON_STATUSES.map((status) => (
+            <button key={status || 'all'} type="button" className={`account-filter-chip ${params.status === status ? 'active' : ''}`} onClick={() => setParams((prev) => ({ ...prev, page: 1, status }))}>
+              {status || 'All'}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="account-section">
         <h2>New Coupon</h2>
