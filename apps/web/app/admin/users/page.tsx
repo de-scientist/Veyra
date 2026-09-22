@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type { Route } from 'next';
 
 import { getAdminUsers, getSessionUser, isSuperAdminRole, type AdminUser, type Pagination } from '../../../lib/admin-api';
 import { AdminEmptyState, AdminPagination, AdminStatusBadge, formatAdminDate } from '../../../components/admin';
@@ -134,7 +135,7 @@ export default function AdminUsersPage() {
                     <td>{user.roles.join(', ') || '—'}</td>
                     <td><AdminStatusBadge status={user.status} /></td>
                     <td>{formatAdminDate(user.createdAt)}</td>
-                    <td><Link href={`/admin/users/${user.id}`} className="text-button">Manage roles</Link></td>
+                    <td><Link href={`/admin/users/${user.id}` as Route} className="text-button">Manage roles</Link></td>
                   </tr>
                 ))}
               </tbody>

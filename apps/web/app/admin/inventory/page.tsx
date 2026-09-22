@@ -188,6 +188,58 @@ export default function AdminInventoryPage() {
           {pagination && <AdminPagination pagination={pagination} onPage={(page) => setParams((prev) => ({ ...prev, page }))} />}
         </>
       )}
+
+      <section className="account-section">
+        <div className="section-heading">
+          <div>
+            <h2>Active Reservations</h2>
+            <p className="muted-copy">Read-only: stock held for open orders. Reservations convert or release through order processing — there is no manual mutation.</p>
+          </div>
+          <label>
+            <span className="muted-copy">Status</span>
+            <select value={reservationStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setReservationStatus(e.currentTarget.value)}>
+              <option value="">All</option>
+              <option value="ACTIVE">Active</option>
+              <option value="CONVERTED">Converted</option>
+              <option value="RELEASED">Released</option>
+              <option value="EXPIRED">Expired</option>
+            </select>
+          </label>
+        </div>
+
+        {reservationsError && <div className="inline-message" role="alert">{reservationsError}</div>}
+
+        {reservations.length === 0 ? (
+          <p className="muted-copy">No reservations match the current filter.</p>
+        ) : (
+          <div className="admin-table-wrapper">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>SKU</th>
+                  <th>Quantity</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Expires</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reservations.map((reservation) => (
+                  <tr key={reservation.id}>
+                    <td><Link href={`/admin/orders/${reservation.order.orderNumber}`}>{reservation.order.orderNumber}</Link></td>
+                    <td>{reservation.variant.sku}</td>
+                    <td>{reservation.quantity}</td>
+                    <td><AdminStatusBadge status={reservation.status} /></td>
+                    <td>{formatAdminDate(reservation.createdAt)}</td>
+                    <td>{formatAdminDate(reservation.expiresAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
