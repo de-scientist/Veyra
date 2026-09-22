@@ -378,6 +378,43 @@ export async function adminRoutes(app: FastifyInstance) {
     return { success: true, data: { ...coupon, value: Number(coupon.value) } };
   });
 
+  // ---- User directory for role administration (super-admin only) ----
+  // Data-minimized like the customer directory: no secrets, roles included
+  // so super-admins can find accounts for role assignment. There is no
+  // self-registration path to elevated roles; assignment stays on the
+  // POST /admin/users/:id/roles endpoint below with its self-lockout guard.
+  app.get('/admin/users', { preHandler: requireSuperAdmin }, async (request) => {
+    const query = paginationSchema.extend({
+      status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'DELETED']).optional(),
+      role: z.string().trim().max(60).optional(),
+    }).parse(request.query);
+    const where: Prisma.UserWhereInput = {};
+    if (query.status) where.status = query.status;
+    if (query.role) where.roles = { some: { role: { slug: query.role.toLowerCase() } } };
+    if (query.search) where.OR = [{ email: { contains: query.search, mode: 'insensitive' } }, { firstName: { contains: query.search, mode: 'insensitive' } }, { lastName: { contains: query.search, mode: 'insensitive' } }];
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: { id: true, email: true, firstName: true, lastName: true, status: true, createdAt: true, roles: { select: { role: { select: { slug: true } } } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      prisma.user.count({ where }),
+    ]);
+    return { success: true, data: { users: users.map((u) => ({ ...u, roles: u.roles.map((entry) => entry.role.slug) })), pagination: paginate(query.page, query.pageSize, total) } };
+  });
+
+  app.get('/admin/users/:id', { preHandler: requireSuperAdmin }, async (request) => {
+    const { id } = request.params as { id: string };
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, firstName: true, lastName: true, phone: true, status: true, emailVerifiedAt: true, lastLoginAt: true, createdAt: true, roles: { select: { role: { select: { id: true, name: true, slug: true } } } } },
+    });
+    if (!user) throw new HttpError(404, 'USER_NOT_FOUND', 'User not found.');
+    return { success: true, data: { ...user, roles: user.roles.map((entry) => entry.role) } };
+  });
+
   // ---- Role & permission administration (super-admin only) ----
   // There is intentionally no public registration path to these endpoints:
   // roles can only be listed/changed by an already-authenticated super-admin.
