@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useState } from 'react';
 
 import { getDisplayName, getInitials, type AvatarUser } from '../lib/avatar';
+import { cloudinaryDisplayUrl } from '../lib/cloudinary-display';
 
 type AvatarSize = 'sm' | 'md' | 'lg';
 
@@ -26,7 +27,10 @@ export function UserAvatar({
 }) {
   const [failed, setFailed] = useState(false);
   const px = SIZE_PX[size];
-  const src = user.avatarUrl?.trim() || null;
+  const rawSrc = user.avatarUrl?.trim() || null;
+  // Optimized avatar delivery: square crop at render time; legacy/external
+  // URLs pass through untouched. Never loads original-resolution bytes.
+  const src = rawSrc ? (cloudinaryDisplayUrl(rawSrc, 'avatar') ?? rawSrc) : null;
   const showImage = Boolean(src) && !failed;
 
   if (showImage && src) {

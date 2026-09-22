@@ -5,12 +5,15 @@
  * No user input ever reaches the transformation string.
  */
 
-export type DisplayPreset = 'thumbnail' | 'detail';
+export type DisplayPreset = 'thumbnail' | 'detail' | 'avatar';
 
 const PRESETS: Record<DisplayPreset, string> = {
   // Bounded (never upscale), format/quality auto — identical output everywhere.
   thumbnail: 'c_limit,w_400/f_auto/q_auto',
   detail: 'c_limit,w_1200/f_auto/q_auto',
+  // Square face-safe crop for navbar/profile/initials-sized slots. The stored
+  // canonical secureUrl is never rewritten — this is render-time only.
+  avatar: 'c_fill,w_128,h_128,g_face/f_auto/q_auto',
 };
 
 const DELIVERY_HOST = 'https://res.cloudinary.com/';

@@ -1,3 +1,5 @@
+import { AuditAction, Prisma } from '@prisma/client';
+
 import { HttpError } from '../errors.js';
 import { logger } from '../logger.js';
 import { prisma } from '../prisma.js';
@@ -55,6 +57,22 @@ export async function setUserAvatar(userId: string, result: AvatarResultInput): 
     where: { id: userId },
     data: { avatarUrl: validated.secureUrl, avatarPublicId: validated.publicId },
   });
+  // Reuse the existing PROFILE_UPDATED audit action (no new enum value, no
+  // migration): avatar set/replace is a profile mutation. Best-effort so a
+  // logging failure never breaks the avatar lifecycle itself.
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: userId,
+        action: AuditAction.PROFILE_UPDATED,
+        entity: 'User',
+        entityId: userId,
+        after: { avatarUpdated: true } as Prisma.InputJsonValue,
+      },
+    });
+  } catch (error) {
+    logger.error({ err: error, userId }, 'media.avatar_audit_failed');
+  }
 
   // Old asset cleanup only after the new avatar is safely persisted.
   let providerCleanup: AvatarOutcome['providerCleanup'] = 'skipped';
@@ -79,6 +97,19 @@ export async function removeUserAvatar(userId: string): Promise<AvatarOutcome> {
   }
 
   await prisma.user.update({ where: { id: userId }, data: { avatarUrl: null, avatarPublicId: null } });
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: userId,
+        action: AuditAction.PROFILE_UPDATED,
+        entity: 'User',
+        entityId: userId,
+        after: { avatarRemoved: true } as Prisma.InputJsonValue,
+      },
+    });
+  } catch (error) {
+    logger.error({ err: error, userId }, 'media.avatar_audit_failed');
+  }
 
   let providerCleanup: AvatarOutcome['providerCleanup'] = 'skipped';
   if (current.avatarPublicId) {
