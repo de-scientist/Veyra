@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 
 import { ProductCard } from '../components/ProductCard';
 import { departments } from '../lib/catalog';
+import { toJsonLd } from '../lib/json-ld';
 import {
   getCollections,
   getFeaturedProducts,
@@ -51,7 +52,7 @@ export default async function HomePage() {
   return (
     <main className="container page-shell">
       {featuredJsonLd ? (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(featuredJsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(featuredJsonLd) }} />
       ) : null}
       <section className="hero hero--mercantile" aria-labelledby="jb-hero-heading">
         <div className="hero__content">

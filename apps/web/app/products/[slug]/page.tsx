@@ -10,6 +10,7 @@ import { ProductSpecifications } from '../../../components/ProductSpecifications
 import { StatusBadge } from '../../../components/jb-ui';
 import { getDepartmentBySlug, productInStock } from '../../../lib/catalog';
 import { discoverProducts, getCategoryBySlug, getProductBySlug } from '../../../lib/storefront';
+import { toJsonLd } from '../../../lib/json-ld';
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jb.example.com';
 
@@ -90,8 +91,8 @@ export default async function ProductPage({ params }: { params: { slug: string }
 
   return (
     <main className="container page-shell product-page">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(productJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(breadcrumbJsonLd) }} />
 
       <nav aria-label="Breadcrumb" className="breadcrumbs">
         <ol>
