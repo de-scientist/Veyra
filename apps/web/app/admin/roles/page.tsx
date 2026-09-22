@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type { Route } from 'next';
 
 import { getAdminRoles, getSessionUser, isSuperAdminRole, type AdminRole } from '../../../lib/admin-api';
 import { AdminEmptyState } from '../../../components/admin';
@@ -65,7 +66,7 @@ export default function AdminRolesPage() {
           <h1>Roles</h1>
           <p className="muted-copy">Platform roles and their permission grants — assignment happens per user</p>
         </div>
-        <Link href="/admin/users" className="button button--secondary">Manage Users</Link>
+        <Link href={'/admin/users' as Route} className="button button--secondary">Manage Users</Link>
       </header>
 
       {error && <div className="inline-message" role="alert">{error}</div>}

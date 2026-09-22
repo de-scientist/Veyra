@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type { Route } from 'next';
 
 import { changeUserRole, getAdminRoles, getAdminUserDetail, getSessionUser, isSuperAdminRole, type AdminRole, type AdminUserDetail } from '../../../../lib/admin-api';
 import { AdminStatusBadge, formatAdminDate } from '../../../../components/admin';
@@ -125,7 +126,7 @@ export default function AdminUserDetailPage({ params }: PageProps) {
       {confirmDialog}
       <header className="account-page__header">
         <div>
-          <Link href="/admin/users" className="text-button">← Back to Users</Link>
+          <Link href={'/admin/users' as Route} className="text-button">← Back to Users</Link>
           <h1 style={{ marginTop: '0.5rem' }}>{user.firstName} {user.lastName}</h1>
           <p className="muted-copy">{user.email} • <AdminStatusBadge status={user.status} /></p>
         </div>

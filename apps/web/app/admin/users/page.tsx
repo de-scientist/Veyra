@@ -76,7 +76,7 @@ export default function AdminUsersPage() {
           <h1>Users</h1>
           <p className="muted-copy">Super-admin directory — every role change is audited and guarded against self-lockout</p>
         </div>
-        <Link href="/admin/roles" className="button button--secondary">View Roles</Link>
+        <Link href={'/admin/roles' as Route} className="button button--secondary">View Roles</Link>
       </header>
 
       {error && <div className="inline-message" role="alert">{error}</div>}
