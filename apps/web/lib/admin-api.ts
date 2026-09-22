@@ -460,7 +460,7 @@ export function getAdminUsers(params?: { page?: number; pageSize?: number; searc
   return request<{ users: AdminUser[]; pagination: Pagination }>(`/admin/users?${searchParams.toString()}`);
 }
 
-export type AdminUserDetail = AdminUser & {
+export type AdminUserDetail = Omit<AdminUser, 'roles'> & {
   phone: string | null;
   emailVerifiedAt: string | null;
   lastLoginAt: string | null;

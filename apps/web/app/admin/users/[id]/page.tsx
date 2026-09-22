@@ -114,7 +114,7 @@ export default function AdminUserDetailPage({ params }: PageProps) {
       <div className="empty-state">
         <h1>User not found</h1>
         {error ? <p>{error}</p> : null}
-        <Link href="/admin/users" className="button">Back to Users</Link>
+        <Link href={'/admin/users' as Route} className="button">Back to Users</Link>
       </div>
     );
   }
