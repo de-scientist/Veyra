@@ -6,12 +6,19 @@ import { getOrderTracking } from '../../../../../lib/shopping-api';
 import { StatusBadge } from '../../../../../components/jb-ui';
 
 interface TrackingPageProps {
+<<<<<<< HEAD
   // Next.js 14 (installed: 14.2.15): route params are synchronous.
   params: { orderNumber: string };
 }
 
 export default function TrackingPage({ params }: TrackingPageProps) {
   const routeOrderNumber = params.orderNumber;
+=======
+  params: Promise<{ orderNumber: string }>;
+}
+
+export default function TrackingPage({ params }: TrackingPageProps) {
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
   const [data, setData] = useState<{
     orderNumber: string;
     status: string;
@@ -32,6 +39,7 @@ export default function TrackingPage({ params }: TrackingPageProps) {
 
   useEffect(() => {
     let mounted = true;
+<<<<<<< HEAD
     // Next.js 14: params is a synchronous object — never a Promise.
     getOrderTracking(routeOrderNumber)
       .then((d) => { if (mounted) setData(d); })
@@ -39,6 +47,16 @@ export default function TrackingPage({ params }: TrackingPageProps) {
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, [routeOrderNumber]);
+=======
+    params.then(({ orderNumber }) => {
+      getOrderTracking(orderNumber)
+        .then((d) => { if (mounted) setData(d); })
+        .catch((e) => { if (mounted) setError(e instanceof Error ? e.message : 'Failed to load tracking'); })
+        .finally(() => { if (mounted) setLoading(false); });
+    });
+    return () => { mounted = false; };
+  }, [params]);
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 
   function formatDate(dateString: string | null) {
     if (!dateString) return '—';

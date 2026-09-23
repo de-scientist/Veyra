@@ -24,19 +24,31 @@ type Detail = {
 };
 
 interface PageProps {
+<<<<<<< HEAD
   // Next.js 14 (installed: 14.2.15): route params are synchronous.
   params: { orderNumber: string };
 }
 
 export default function AdminOrderDetailPage({ params }: PageProps) {
   const routeOrderNumber = params.orderNumber;
+=======
+  params: Promise<{ orderNumber: string }>;
+}
+
+export default function AdminOrderDetailPage({ params }: PageProps) {
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
   const [order, setOrder] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
+<<<<<<< HEAD
     getAdminOrderDetail(routeOrderNumber)
+=======
+    params
+      .then(({ orderNumber }) => getAdminOrderDetail(orderNumber))
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
       .then((result) => {
         if (mounted) setOrder(result as unknown as Detail);
       })
@@ -49,7 +61,11 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
     return () => {
       mounted = false;
     };
+<<<<<<< HEAD
   }, [routeOrderNumber]);
+=======
+  }, [params]);
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 
   if (loading) return <div className="empty-state"><p>Loading order…</p></div>;
   if (error) return <div className="empty-state"><h1>Order not found</h1><p>{error}</p><Link href="/admin/orders" className="button">Back to Orders</Link></div>;

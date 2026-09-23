@@ -6,20 +6,32 @@ import { getAccountReturnDetail, type AccountReturn } from '../../../../lib/shop
 import { PriceDisplay } from '../../../../components/PriceDisplay';
 
 interface ReturnDetailPageProps {
+<<<<<<< HEAD
   // Next.js 14 (installed: 14.2.15): route params are synchronous.
   params: { returnId: string };
 }
 
 export default function AccountReturnDetailPage({ params }: ReturnDetailPageProps) {
   const routeReturnId = params.returnId;
+=======
+  params: Promise<{ returnId: string }>;
+}
+
+export default function AccountReturnDetailPage({ params }: ReturnDetailPageProps) {
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
   const [ret, setRet] = useState<AccountReturn | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
+<<<<<<< HEAD
     // Next.js 14: params is a synchronous object — never a Promise.
     getAccountReturnDetail(routeReturnId)
+=======
+    params
+      .then(({ returnId }) => getAccountReturnDetail(returnId))
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
       .then((r) => {
         if (mounted) setRet(r);
       })
@@ -32,7 +44,11 @@ export default function AccountReturnDetailPage({ params }: ReturnDetailPageProp
     return () => {
       mounted = false;
     };
+<<<<<<< HEAD
   }, [routeReturnId]);
+=======
+  }, [params]);
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 
   if (loading) return <div className="empty-state"><p>Loading return…</p></div>;
   if (error) return <div className="empty-state"><h1>Return not found</h1><p>{error}</p><Link href="/account/returns" className="button">Back to Returns</Link></div>;

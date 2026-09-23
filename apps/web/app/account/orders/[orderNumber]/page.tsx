@@ -9,12 +9,19 @@ import { StatusBadge } from '../../../../components/jb-ui';
 import { useToast } from '../../../../components/Toast';
 
 interface OrderDetailPageProps {
+<<<<<<< HEAD
   // Next.js 14 (installed: 14.2.15): route params are synchronous.
   params: { orderNumber: string };
 }
 
 export default function OrderDetailPage({ params }: OrderDetailPageProps) {
   const routeOrderNumber = params.orderNumber;
+=======
+  params: Promise<{ orderNumber: string }>;
+}
+
+export default function OrderDetailPage({ params }: OrderDetailPageProps) {
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
   const [order, setOrder] = useState<AccountOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,12 +30,23 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
 
   useEffect(() => {
     let mounted = true;
+<<<<<<< HEAD
     getOrderDetail(routeOrderNumber)
       .then((o: AccountOrder) => { if (mounted) setOrder(o); })
       .catch((e: unknown) => { if (mounted) setError(e instanceof Error ? e.message : 'Failed to load order'); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, [routeOrderNumber]);
+=======
+    params.then(({ orderNumber }) => {
+      getOrderDetail(orderNumber)
+        .then((o: AccountOrder) => { if (mounted) setOrder(o); })
+        .catch((e: unknown) => { if (mounted) setError(e instanceof Error ? e.message : 'Failed to load order'); })
+        .finally(() => { if (mounted) setLoading(false); });
+    });
+    return () => { mounted = false; };
+  }, [params]);
+>>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 
   function formatDate(dateString: string | Date | null) {
     if (!dateString) return '—';
