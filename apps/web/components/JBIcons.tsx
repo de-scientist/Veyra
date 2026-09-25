@@ -39,7 +39,7 @@ const PATHS: Record<string, string[]> = {
   logout: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'M16 17l5-5-5-5', 'M21 12H9'],
   filter: ['M22 3H2l8 9.5V19l4 2v-8.5L22 3Z'],
   trash: ['M3 6h18', 'M8 6V4h8v2', 'M19 6l-1 14H6L5 6', 'M10 11v6', 'M14 11v6'],
-'arrow-left': ['M19 12H5', 'M12 19l-7-7 7-7'],
+  'arrow-left': ['M19 12H5', 'M12 19l-7-7 7-7'],
   'arrow-right': ['M5 12h14', 'M12 5l7 7-7 7'],
   'chevron-left': ['M15 18l-6-6 6-6'],
   'chevron-right': ['M9 18l6-6-6-6'],

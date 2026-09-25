@@ -5,10 +5,7 @@ import Link from 'next/link';
 
 import { createAdminVariant, getAdminAttributes, getAdminCategories, getAdminProduct, updateAdminProduct, updateAdminVariant, type AdminAttribute } from '../../../../lib/admin-api';
 import { AdminStatusBadge, ConfirmAction } from '../../../../components/admin';
-<<<<<<< HEAD
 import { JBIcon } from '../../../../components/JBIcons';
-=======
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 import { ProductMediaManager } from '../../../../components/ProductMediaManager';
 
 type ProductDetail = {
@@ -30,19 +27,12 @@ async function fetchProduct(id: string): Promise<ProductDetail> {
 }
 
 interface PageProps {
-<<<<<<< HEAD
   // Next.js 14 (installed: 14.2.15): route params are synchronous.
   params: { id: string };
 }
 
 export default function AdminProductDetailPage({ params }: PageProps) {
   const routeId = params.id;
-=======
-  params: Promise<{ id: string }>;
-}
-
-export default function AdminProductDetailPage({ params }: PageProps) {
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
   const [productId, setProductId] = useState<string | null>(null);
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
@@ -68,23 +58,9 @@ export default function AdminProductDetailPage({ params }: PageProps) {
   }, []);
 
   useEffect(() => {
-<<<<<<< HEAD
     setProductId(routeId);
     load(routeId);
   }, [routeId, load]);
-=======
-    let mounted = true;
-    params.then(({ id }) => {
-      if (mounted) {
-        setProductId(id);
-        load(id);
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [params, load]);
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,13 +114,10 @@ export default function AdminProductDetailPage({ params }: PageProps) {
       setError('SKU and a valid non-negative price are required.');
       return;
     }
-<<<<<<< HEAD
     if (!variantForm.attributeId || !variantForm.attributeValue.trim()) {
       setError('Each variant needs an attribute and value (e.g. Size / Large) — required by the catalogue model.');
       return;
     }
-=======
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
     try {
       await createAdminVariant(productId, {
         sku: variantForm.sku.trim(),
@@ -165,32 +138,23 @@ export default function AdminProductDetailPage({ params }: PageProps) {
   if (!product) return <div className="empty-state"><h1>Product not found</h1></div>;
 
   return (
-<<<<<<< HEAD
     <div className="account-page product-workspace">
-=======
-    <div className="account-page">
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
       <header className="account-page__header">
         <div>
           <Link href="/admin/products" className="text-button">← Back to Products</Link>
           <h1 style={{ marginTop: '0.5rem' }}>{product.name}</h1>
-<<<<<<< HEAD
           <p className="muted-copy">
             {product.slug} • <AdminStatusBadge status={product.status} /> • {product.variants.length} variant(s) • {product.images.length} image(s)
           </p>
         </div>
         <div className="account-page__actions">
           <Link href={`/products/${product.slug}`} className="button button--secondary">View storefront</Link>
-=======
-          <p className="muted-copy">{product.slug} • <AdminStatusBadge status={product.status} /></p>
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
         </div>
       </header>
 
       {error && <div className="inline-message" role="alert">{error}</div>}
       {message && <div className="success-message" role="status">{message}</div>}
 
-<<<<<<< HEAD
       <div className="product-workspace__layout">
         <div className="product-workspace__main">
           <section className="workspace-card" aria-labelledby="edit-details-heading">
@@ -236,51 +200,6 @@ export default function AdminProductDetailPage({ params }: PageProps) {
 
       <section className="workspace-card" aria-labelledby="edit-variants-heading">
         <h2 id="edit-variants-heading">Variants ({product.variants.length})</h2>
-=======
-      <section className="account-section">
-        <h2>Details</h2>
-        <form onSubmit={handleSave} className="account-form">
-          <div className="form-grid">
-            <label>
-              <span>Name *</span>
-              <input type="text" value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, name: e.currentTarget.value }))} required minLength={2} />
-            </label>
-            <label>
-              <span>Status</span>
-              <select value={form.status} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm((prev) => ({ ...prev, status: e.currentTarget.value }))}>
-                <option value="DRAFT">Draft</option>
-                <option value="ACTIVE">Active</option>
-                <option value="ARCHIVED">Archived</option>
-              </select>
-            </label>
-            <label className="form-field-full">
-              <span>Description *</span>
-              <textarea value={form.description} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, description: e.currentTarget.value }))} required minLength={12} rows={4} />
-            </label>
-            <label>
-              <span>Category</span>
-              <select value={form.categoryId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm((prev) => ({ ...prev, categoryId: e.currentTarget.value }))}>
-                <option value="">No category</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="button">Save Changes</button>
-          </div>
-        </form>
-      </section>
-
-      <section className="account-section" aria-labelledby="product-media-heading">
-        <h2 id="product-media-heading">Images</h2>
-        {productId ? <ProductMediaManager productId={productId} editable={product.status !== 'ARCHIVED'} /> : null}
-      </section>
-
-      <section className="account-section">
-        <h2>Variants ({product.variants.length})</h2>
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
         {product.variants.map((variant) => (
           <div key={variant.id} className="account-summary-card">
             <p><strong>{variant.sku}</strong> {variant.name ? `• ${variant.name}` : ''} • <AdminStatusBadge status={variant.status} /></p>
@@ -330,22 +249,15 @@ export default function AdminProductDetailPage({ params }: PageProps) {
               <input type="number" value={variantForm.price} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariantForm((prev) => ({ ...prev, price: e.currentTarget.value }))} required min="0" step="0.01" />
             </label>
             <label>
-<<<<<<< HEAD
               <span>Attribute *</span>
               <select value={variantForm.attributeId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setVariantForm((prev) => ({ ...prev, attributeId: e.currentTarget.value }))} required>
                 <option value="">Select attribute</option>
-=======
-              <span>Attribute</span>
-              <select value={variantForm.attributeId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setVariantForm((prev) => ({ ...prev, attributeId: e.currentTarget.value }))}>
-                <option value="">None</option>
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
                 {attributes.map((attribute) => (
                   <option key={attribute.id} value={attribute.id}>{attribute.name}</option>
                 ))}
               </select>
             </label>
             <label>
-<<<<<<< HEAD
               <span>Attribute value *</span>
               <input type="text" value={variantForm.attributeValue} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariantForm((prev) => ({ ...prev, attributeValue: e.currentTarget.value }))} placeholder="e.g. Large" required maxLength={120} />
             </label>
@@ -408,17 +320,6 @@ export default function AdminProductDetailPage({ params }: PageProps) {
           </section>
         </div>
       </div>
-=======
-              <span>Attribute value</span>
-              <input type="text" value={variantForm.attributeValue} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariantForm((prev) => ({ ...prev, attributeValue: e.currentTarget.value }))} placeholder="e.g. Large" />
-            </label>
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="button button--secondary">Add Variant</button>
-          </div>
-        </form>
-      </section>
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
     </div>
   );
 }

@@ -192,8 +192,13 @@ export async function catalogueRoutes(app: FastifyInstance) {
       throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
     }
 
-
-const validation = validateCatalogProduct({
+    // Variant creation gates on variant-level publish readiness (sku, price,
+    // attributes, product basics) — not on media. Media is required before
+    // *publishing* (validateCatalogProduct), and images can only exist after
+    // the product exists, so requiring media here would make the first
+    // variant impossible to create. Pass the product's real image count.
+    const imageCount = await prisma.productImage.count({ where: { productId } });
+    const validation = validateCatalogProduct({
       name: product.name,
       slug: product.slug,
       categoryId: product.categoryId ?? undefined,
@@ -206,7 +211,7 @@ const validation = validateCatalogProduct({
           attributeValues: payload.attributeValues,
         },
       ],
-images: Array.from({ length: imageCount }, (_, i) => ({ url: `existing-image-${i}` })),
+      images: Array.from({ length: imageCount }, (_, i) => ({ url: `existing-image-${i}` })),
     });
     const variantOnlyErrors = validation.ok
       ? []
@@ -214,8 +219,6 @@ images: Array.from({ length: imageCount }, (_, i) => ({ url: `existing-image-${i
     if (variantOnlyErrors.length > 0) {
       throw new HttpError(400, 'PRODUCT_NOT_PUBLISHABLE', variantOnlyErrors.join('; '));
     }
-
-});
 
     if (!validation.ok) {
       throw new HttpError(400, 'PRODUCT_NOT_PUBLISHABLE', validation.errors.join('; '));

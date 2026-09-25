@@ -11,12 +11,8 @@ import { useConfirm } from '../../../../components/ConfirmDialog';
 import { useToast } from '../../../../components/Toast';
 
 interface PageProps {
-<<<<<<< HEAD
   // Next.js 14 (installed: 14.2.15): route params are synchronous.
   params: { id: string };
-=======
-  params: Promise<{ id: string }>;
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 }
 
 /**
@@ -26,10 +22,7 @@ interface PageProps {
  * every outcome surfaces here without leaking internals.
  */
 export default function AdminUserDetailPage({ params }: PageProps) {
-<<<<<<< HEAD
   const routeId = params.id;
-=======
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
   const router = useRouter();
   const { notify } = useToast();
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -76,23 +69,9 @@ export default function AdminUserDetailPage({ params }: PageProps) {
 
   useEffect(() => {
     if (!allowed) return;
-<<<<<<< HEAD
     setUserId(routeId);
     load(routeId);
   }, [routeId, allowed, load]);
-=======
-    let mounted = true;
-    params.then(({ id }) => {
-      if (mounted) {
-        setUserId(id);
-        load(id);
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [params, allowed, load]);
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 
   const handleRole = async (slug: string, action: 'assign' | 'revoke') => {
     if (!userId || busy) return;

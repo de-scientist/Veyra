@@ -23,19 +23,12 @@ type Detail = {
 };
 
 interface PageProps {
-<<<<<<< HEAD
   // Next.js 14 (installed: 14.2.15): route params are synchronous.
   params: { id: string };
 }
 
 export default function AdminCustomerDetailPage({ params }: PageProps) {
   const routeId = params.id;
-=======
-  params: Promise<{ id: string }>;
-}
-
-export default function AdminCustomerDetailPage({ params }: PageProps) {
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customer, setCustomer] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,23 +52,9 @@ export default function AdminCustomerDetailPage({ params }: PageProps) {
   }, []);
 
   useEffect(() => {
-<<<<<<< HEAD
     setCustomerId(routeId);
     load(routeId);
   }, [routeId, load]);
-=======
-    let mounted = true;
-    params.then(({ id }) => {
-      if (mounted) {
-        setCustomerId(id);
-        load(id);
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [params, load]);
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 
   const handleStatus = async (status: 'ACTIVE' | 'SUSPENDED') => {
     if (!customerId) return;

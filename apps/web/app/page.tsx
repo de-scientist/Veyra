@@ -2,10 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-<<<<<<< HEAD
 import { HeroCarousel } from '../components/HeroCarousel';
-=======
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 import { ProductCard } from '../components/ProductCard';
 import { departments } from '../lib/catalog';
 import { toJsonLd } from '../lib/json-ld';
@@ -58,32 +55,7 @@ export default async function HomePage() {
       {featuredJsonLd ? (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(featuredJsonLd) }} />
       ) : null}
-<<<<<<< HEAD
       <HeroCarousel />
-=======
-      <section className="hero hero--mercantile" aria-labelledby="jb-hero-heading">
-        <div className="hero__content">
-          <p className="eyebrow">JB Mercantile · Nairobi, Kenya</p>
-          <h1 id="jb-hero-heading">Fashion. Footwear. Kitchen &amp; Home.</h1>
-          <p>
-            One store for the way you live — everyday clothing, shoes for every step,
-            and kitchen essentials, with secure checkout and M-Pesa payments.
-          </p>
-          <div className="cta-row">
-            <Link href="/shop" className="button">Shop now</Link>
-            <Link href="#jb-departments" className="button button--secondary">Explore categories</Link>
-          </div>
-        </div>
-        <div className="hero__media" aria-hidden="true">
-          {departments.map((department) => (
-            <span key={department.slug} className="hero__media-item">
-              <Image src={department.image} alt="" width={300} height={380} priority />
-              <span className="hero__media-label">{department.name}</span>
-            </span>
-          ))}
-        </div>
-      </section>
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
 
       <section className="section-block" aria-labelledby="jb-departments" id="jb-departments">
         <div className="section-heading">
