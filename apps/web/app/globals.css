@@ -1136,8 +1136,6 @@ a.visually-hidden:focus-visible {
   .account-menu__name { display: none; }
   .account-menu__panel { position: fixed; left: 1rem; right: 1rem; top: 70px; min-width: 0; }
 }
-<<<<<<< HEAD
-
 /* ---------- Hero carousel (JB brand; functional carousel UX) ---------- */
 .jb-hero-carousel { margin: 2rem 0 3rem; display: grid; gap: 0.75rem; }
 .jb-hero-carousel__viewport { overflow: hidden; border-radius: 24px; }
@@ -1190,5 +1188,3 @@ a.visually-hidden:focus-visible {
 @media (max-width: 1020px) {
   .product-workspace__layout { grid-template-columns: 1fr; }
 }
-=======
->>>>>>> ac387ed232ea2543b5a26574332714696e14b3d5
