@@ -18,7 +18,8 @@ const addressSchema = z.object({
   country: z.string().trim().length(2).default('KE'),
 });
 
-const checkoutSchema = z.object({
+// Exported for contract tests: blank zone codes are rejected at validation.
+export const checkoutSchema = z.object({
   customerName: z.string().trim().min(2).max(120),
   customerEmail: z.string().email().max(200),
   customerPhone: z.string().min(7).max(30),

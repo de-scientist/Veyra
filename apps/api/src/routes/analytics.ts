@@ -18,7 +18,9 @@ import { buildReportCsv, clampExportLimit, REPORT_KEYS, type ReportKey } from '.
 import { exchangeMetrics, refundMetrics, returnMetrics, returnProcessingTime, returnReasons } from '../lib/analytics/returns.js';
 import { revenueByCategory, revenueByPaymentMethod, salesSeries, salesSummary } from '../lib/analytics/sales.js';
 
-const rangeSchema = z.object({
+// Exported for contract tests: the frontend must send full ISO datetimes with
+// an offset (see apps/web/lib/analytics-api.ts `toAnalyticsDateTime`).
+export const rangeSchema = z.object({
   preset: z.enum(['today', 'yesterday', 'last7', 'last30', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'thisQuarter', 'thisYear']).optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
