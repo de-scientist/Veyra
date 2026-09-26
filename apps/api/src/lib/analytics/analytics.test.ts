@@ -50,6 +50,15 @@ describe('reporting timezone', () => {
     expect(previous.end.getTime() - previous.start.getTime()).toBe(current.end.getTime() - current.start.getTime());
   });
 
+  it('maps frontend-normalized Nairobi datetimes to the reported range', () => {
+    // Frontend converts date-only `from=2026-09-25&to=2026-09-27` to Nairobi
+    // midnight with offset; Nairobi (UTC+3, no DST) midnight == 21:00Z prior day.
+    const now = new Date('2026-09-28T12:00:00Z');
+    const period = parseRange('2026-09-25T00:00:00+03:00', '2026-09-27T00:00:00+03:00', now);
+    expect(period.start.toISOString()).toBe('2026-09-24T21:00:00.000Z');
+    expect(period.end.toISOString()).toBe('2026-09-26T21:00:00.000Z');
+  });
+
   it('selects granularity by range length', () => {
     expect(granularityFor({ start: NOON_UTC, end: new Date(NOON_UTC.getTime() + 24 * 3600 * 1000) })).toBe('hour');
     expect(granularityFor(presetRange('last30', NOON_UTC))).toBe('day');
