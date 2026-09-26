@@ -455,10 +455,7 @@ export function getPaymentStatus(paymentId: string, confirmationToken?: string) 
  */
 export function queryPaymentStatus(paymentId: string, confirmationToken?: string) {
   const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
-  return request<{ payment: Payment; transactionId: string | null; refreshed: boolean; pending: boolean }>.
-
-
-(`/payments/${encodeURIComponent(paymentId)}/query${suffix}`, { method: 'POST' });
+  return request<{ payment: Payment; transactionId: string | null; refreshed: boolean; pending: boolean }>(`/payments/${encodeURIComponent(paymentId)}/query${suffix}`, { method: 'POST' });
 }
 
 export function getOrderDelivery(orderNumber: string, confirmationToken?: string) {

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-import { getOrder, getOrderDelivery, getPaymentStatus, initiateMpesaPayment, type Delivery, type Order, type Payment } from '../lib/shopping-api';
+import { getOrder, getOrderDelivery, getPaymentStatus, initiateMpesaPayment, queryPaymentStatus, type Delivery, type Order, type Payment } from '../lib/shopping-api';
 import { PriceDisplay } from './PriceDisplay';
 
 type Props = { orderNumber: string; confirmationToken?: string };
@@ -14,6 +14,7 @@ export function OrderConfirmationClient({ orderNumber, confirmationToken }: Prop
   const [payment, setPayment] = useState<Payment | null>(null);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState('');
+  const [querying, setQuerying] = useState(false);
   const [paymentAttemptKey, setPaymentAttemptKey] = useState(() => `payment-${orderNumber}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const [delivery, setDelivery] = useState<Delivery | null>(null);
 
