@@ -114,11 +114,17 @@ export default function AdminCouponsPage() {
           <div className="form-grid">
             <label>
               <span>Code *</span>
-              <input type="text" value={form.code} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, code: e.currentTarget.value }))} required minLength={3} placeholder="WELCOME10" />
+              <input type="text" value={form.code} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = e.currentTarget.value;
+                setForm((prev) => ({ ...prev, code: value }));
+              }} required minLength={3} placeholder="WELCOME10" />
             </label>
             <label>
               <span>Type</span>
-              <select value={form.discountType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm((prev) => ({ ...prev, discountType: e.currentTarget.value }))}>
+              <select value={form.discountType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                const value = e.currentTarget.value;
+                setForm((prev) => ({ ...prev, discountType: value }));
+              }}>
                 <option value="PERCENTAGE">Percentage</option>
                 <option value="FIXED">Fixed amount</option>
               </select>

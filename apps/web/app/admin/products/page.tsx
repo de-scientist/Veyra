@@ -83,7 +83,10 @@ export default function AdminProductsPage() {
         </div>
         <label>
           <span className="muted-copy">Category</span>
-          <select value={params.categoryId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setParams((prev) => ({ ...prev, page: 1, categoryId: e.currentTarget.value }))}>
+          <select value={params.categoryId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+            const value = e.currentTarget.value;
+            setParams((prev) => ({ ...prev, page: 1, categoryId: value }));
+          }}>
             <option value="">All categories</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>{category.name}</option>

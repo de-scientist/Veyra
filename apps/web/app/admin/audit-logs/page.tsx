@@ -69,11 +69,17 @@ export default function AuditLogsPage() {
         </form>
         <label>
           <span className="muted-copy">Entity</span>
-          <input type="text" value={params.entity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setParams((prev) => ({ ...prev, page: 1, entity: e.currentTarget.value }))} placeholder="Product, Order, …" />
+          <input type="text" value={params.entity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+            const value = e.currentTarget.value;
+            setParams((prev) => ({ ...prev, page: 1, entity: value }));
+          }} placeholder="Product, Order, …" />
         </label>
         <label>
           <span className="muted-copy">Action</span>
-          <input type="text" value={params.action} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setParams((prev) => ({ ...prev, page: 1, action: e.currentTarget.value }))} placeholder="PRICE_CHANGED, …" />
+          <input type="text" value={params.action} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+            const value = e.currentTarget.value;
+            setParams((prev) => ({ ...prev, page: 1, action: value }));
+          }} placeholder="PRICE_CHANGED, …" />
         </label>
       </section>
 

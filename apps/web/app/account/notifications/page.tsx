@@ -127,7 +127,10 @@ export default function NotificationsPage() {
           <input
             type="checkbox"
             checked={params.unreadOnly}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setParams((prev) => ({ ...prev, page: 1, unreadOnly: e.currentTarget.checked }))}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const checked = e.currentTarget.checked;
+              setParams((prev) => ({ ...prev, page: 1, unreadOnly: checked }));
+            }}
           />
           <span>Unread only</span>
         </label>

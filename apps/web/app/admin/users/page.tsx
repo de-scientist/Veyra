@@ -101,7 +101,10 @@ export default function AdminUsersPage() {
         </div>
         <label>
           <span className="muted-copy">Role</span>
-          <select value={params.role} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setParams((prev) => ({ ...prev, page: 1, role: e.currentTarget.value }))}>
+          <select value={params.role} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+            const value = e.currentTarget.value;
+            setParams((prev) => ({ ...prev, page: 1, role: value }));
+          }}>
             <option value="">All roles</option>
             <option value="customer">Customer</option>
             <option value="staff">Staff</option>

@@ -116,7 +116,10 @@ export default function OrdersPage() {
               name="search"
               placeholder="Search by order number…"
               value={params.search}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setParams((prev) => ({ ...prev, search: e.currentTarget.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = e.currentTarget.value;
+                setParams((prev) => ({ ...prev, search: value }));
+              }}
             />
           </label>
         </form>

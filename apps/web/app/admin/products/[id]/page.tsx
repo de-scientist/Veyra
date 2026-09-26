@@ -43,6 +43,16 @@ export default function AdminProductDetailPage({ params }: PageProps) {
   const [form, setForm] = useState({ name: '', description: '', categoryId: '', status: 'DRAFT' });
   const [variantForm, setVariantForm] = useState({ sku: '', name: '', price: '', attributeId: '', attributeValue: '' });
 
+  // Event values must be captured synchronously: React clears `currentTarget`
+  // once the handler returns, so a functional updater that dereferences the
+  // event would read `null.value` (same pattern as `new/page.tsx`).
+  const set = (key: 'name' | 'description' | 'categoryId' | 'status', value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+  const setVariant = (key: 'sku' | 'name' | 'price' | 'attributeId' | 'attributeValue', value: string) => {
+    setVariantForm((prev) => ({ ...prev, [key]: value }));
+  };
+
   const load = useCallback(async (id: string) => {
     try {
       const [detail, cats, attrs] = await Promise.all([fetchProduct(id), getAdminCategories(), getAdminAttributes()]);
@@ -163,11 +173,11 @@ export default function AdminProductDetailPage({ params }: PageProps) {
               <div className="form-grid">
                 <label>
                   <span>Name *</span>
-                  <input type="text" value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, name: e.currentTarget.value }))} required minLength={2} maxLength={200} />
+                  <input type="text" value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('name', e.currentTarget.value)} required minLength={2} maxLength={200} />
                 </label>
                 <label>
                   <span>Status</span>
-                  <select value={form.status} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm((prev) => ({ ...prev, status: e.currentTarget.value }))}>
+                  <select value={form.status} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => set('status', e.currentTarget.value)}>
                     <option value="DRAFT">Draft</option>
                     <option value="ACTIVE">Active</option>
                     <option value="ARCHIVED">Archived</option>
@@ -175,11 +185,11 @@ export default function AdminProductDetailPage({ params }: PageProps) {
                 </label>
                 <label className="form-field-full">
                   <span>Description *</span>
-                  <textarea value={form.description} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, description: e.currentTarget.value }))} required minLength={12} rows={4} />
+                  <textarea value={form.description} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => set('description', e.currentTarget.value)} required minLength={12} rows={4} />
                 </label>
                 <label>
                   <span>Category</span>
-                  <select value={form.categoryId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm((prev) => ({ ...prev, categoryId: e.currentTarget.value }))}>
+                  <select value={form.categoryId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => set('categoryId', e.currentTarget.value)}>
                     <option value="">No category</option>
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>{category.name}</option>
@@ -238,28 +248,31 @@ export default function AdminProductDetailPage({ params }: PageProps) {
           <div className="form-grid">
             <label>
               <span>SKU *</span>
-              <input type="text" value={variantForm.sku} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariantForm((prev) => ({ ...prev, sku: e.currentTarget.value }))} required minLength={3} />
+              <input type="text" value={variantForm.sku} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariant('sku', e.currentTarget.value)} required minLength={3} />
             </label>
             <label>
               <span>Name</span>
-              <input type="text" value={variantForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariantForm((prev) => ({ ...prev, name: e.currentTarget.value }))} />
+              <input type="text" value={variantForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariant('name', e.currentTarget.value)} />
             </label>
             <label>
               <span>Price (KES) *</span>
-              <input type="number" value={variantForm.price} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariantForm((prev) => ({ ...prev, price: e.currentTarget.value }))} required min="0" step="0.01" />
+              <input type="number" value={variantForm.price} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariant('price', e.currentTarget.value)} required min="0" step="0.01" />
             </label>
             <label>
               <span>Attribute *</span>
-              <select value={variantForm.attributeId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setVariantForm((prev) => ({ ...prev, attributeId: e.currentTarget.value }))} required>
+              <select value={variantForm.attributeId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setVariant('attributeId', e.currentTarget.value)} required>
                 <option value="">Select attribute</option>
                 {attributes.map((attribute) => (
                   <option key={attribute.id} value={attribute.id}>{attribute.name}</option>
                 ))}
               </select>
+              {attributes.length === 0 ? (
+                <span className="muted-copy">No attributes are available yet — create one from the Attributes section first.</span>
+              ) : null}
             </label>
             <label>
               <span>Attribute value *</span>
-              <input type="text" value={variantForm.attributeValue} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariantForm((prev) => ({ ...prev, attributeValue: e.currentTarget.value }))} placeholder="e.g. Large" required maxLength={120} />
+              <input type="text" value={variantForm.attributeValue} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariant('attributeValue', e.currentTarget.value)} placeholder="e.g. Large" required maxLength={120} />
             </label>
           </div>
           <div className="form-actions">
