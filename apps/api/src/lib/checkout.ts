@@ -325,12 +325,13 @@ export async function placeOrder(cartId: string, input: CheckoutInput, scope: st
     }
     if (
       error instanceof Prisma.PrismaClientKnownRequestError
-      && error.code === 'P2010'
-      && (error.meta as { code?: unknown } | undefined)?.code === '40001'
+      && ((error.code === 'P2010' && (error.meta as { code?: unknown } | undefined)?.code === '40001')
+        || error.code === 'P2034')
     ) {
-      // Serializable-isolation loser under concurrent checkout (e.g. two
-      // buyers racing the last unit): a controlled, retryable conflict —
-      // never a 500, never a partial order (the transaction rolled back).
+      // Concurrency loser during order placement: serializable-isolation
+      // conflict (40001) or write/deadlock conflict (P2034) under parallel
+      // load. A controlled, retryable conflict — never a 500, never a
+      // partial order (the transaction rolled back).
       throw new HttpError(409, 'CHECKOUT_CONFLICT', 'Your cart changed while placing the order. Please review and try again.');
     }
     throw error;

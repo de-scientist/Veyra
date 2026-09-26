@@ -57,6 +57,22 @@ describe('commerce flow (Phase B)', () => {
     return app.inject({ method: 'POST', url: '/api/v1/checkout', headers: { cookie, 'idempotency-key': key }, payload: checkoutInput(overrides) });
   }
 
+  /**
+   * Placement with retry on transient write races. When suites run in
+   * parallel, a placement may lose a lock race and receive the retryable
+   * 409 CHECKOUT_CONFLICT (its transaction rolled back); retrying with a
+   * fresh key is the documented client contract.
+   */
+  async function placeSettled(cookie: string, keyBase: string, overrides: Record<string, unknown> = {}) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const key = `${keyBase}-try${attempt}`;
+      const response = await place(cookie, key, overrides);
+      const code = response.statusCode === 409 ? (response.json() as { error?: { code?: string } }).error?.code : undefined;
+      if (code !== 'CHECKOUT_CONFLICT') return { response, key };
+    }
+    throw new Error('placement repeatedly lost write races');
+  }
+
   beforeAll(async () => {
     app = await buildApp();
     const category = await prisma.category.create({ data: { name: `Commerce ${stamp}`, slug: `commerce-${stamp}` } });
@@ -309,8 +325,7 @@ describe('commerce flow (Phase B)', () => {
     it('is idempotent: replaying the same key returns the same order once', async () => {
       const cookie = await freshGuestCart();
       await addItem(cookie, variantId, 1);
-      const key = `phase-b-idem-${stamp}-123456`;
-      const first = await place(cookie, key);
+      const { response: first, key } = await placeSettled(cookie, `phase-b-idem-${stamp}-123456`);
       expect(first.statusCode).toBe(200);
       const firstNumber = ((first.json() as { data: { order: { orderNumber: string } } }).data.order.orderNumber);
       await trackOrder(firstNumber);
