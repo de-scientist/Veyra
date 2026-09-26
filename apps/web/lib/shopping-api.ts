@@ -554,8 +554,21 @@ export function getRefunds() {
   return request<AccountRefund[]>('/account/refunds');
 }
 
-export function getSessions() {
-  return request<AccountSession[]>('/account/security');
+type SessionsEnvelope = { sessions: AccountSession[] };
+
+/**
+ * Backend contract: GET /account/security responds with
+ * `{ success: true, data: { sessions: [...] } }`, so the shared `request`
+ * helper resolves the envelope `{ sessions }` — not a bare array.
+ * Normalization lives here (API-client layer) so the Security page always
+ * receives a typed array. Unknown shapes resolve to `[]` instead of
+ * crashing `sessions.filter` in the component.
+ */
+export async function getSessions(): Promise<AccountSession[]> {
+  const data = await request<AccountSession[] | SessionsEnvelope>('/account/security');
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray((data as SessionsEnvelope).sessions)) return (data as SessionsEnvelope).sessions;
+  return [];
 }
 
 export function changePassword(input: { currentPassword: string; newPassword: string; confirmPassword: string }) {
