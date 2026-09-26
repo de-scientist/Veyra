@@ -261,6 +261,7 @@ describe('payments + M-Pesa (Phase C)', () => {
       const { order: order2, token: token2 } = await createOrder();
       const abort = new Error('aborted');
       abort.name = 'AbortError';
+      resetMpesaTokenCacheForTests();
       oauthScript = { reject: abort };
       try {
         const timeout = await initiate(order2.orderNumber, `phase-c-timeout-${stamp}-123456`, token2);
