@@ -323,6 +323,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body?.data as T;
 }
 
+/**
+ * Event dispatched (same-tab) after any cart mutation, so the header cart
+ * count and any cart views refresh without a full page reload. Same pattern
+ * as `jb:session-updated` in `lib/session.tsx` — no second cart store, no
+ * new state library: the backend stays authoritative and listeners re-fetch.
+ */
+export const CART_UPDATED_EVENT = 'jb:cart-updated';
+
+export function notifyCartUpdated() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(CART_UPDATED_EVENT));
+  }
+}
+
 export function getCart() {
   return request<Cart>('/cart');
 }

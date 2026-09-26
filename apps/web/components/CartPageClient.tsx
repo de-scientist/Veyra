@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-import { clearCart, getCart, removeCartItem, updateCartItem, type Cart } from '../lib/shopping-api';
+import { clearCart, getCart, notifyCartUpdated, removeCartItem, updateCartItem, type Cart } from '../lib/shopping-api';
 import { PriceDisplay } from './PriceDisplay';
 
 export function CartPageClient() {
@@ -17,12 +17,18 @@ export function CartPageClient() {
 
   async function update(itemId: string, quantity: number) {
     setBusyItem(itemId);
-    try { setCart(await updateCartItem(itemId, quantity)); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to update your cart.'); } finally { setBusyItem(null); }
+    try {
+      setCart(await updateCartItem(itemId, quantity));
+      notifyCartUpdated();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to update your cart.'); } finally { setBusyItem(null); }
   }
 
   async function remove(itemId: string) {
     setBusyItem(itemId);
-    try { setCart(await removeCartItem(itemId)); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to remove that item.'); } finally { setBusyItem(null); }
+    try {
+      setCart(await removeCartItem(itemId));
+      notifyCartUpdated();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to remove that item.'); } finally { setBusyItem(null); }
   }
 
   if (error && !cart) return <div className="empty-state"><h1>We could not load your cart</h1><p>{error}</p><Link className="button" href="/shop">Continue shopping</Link></div>;
@@ -49,7 +55,7 @@ export function CartPageClient() {
           ))}
         </div>
       </section>
-      <aside className="cart-summary"><p className="eyebrow">Summary</p><h2>Subtotal</h2><PriceDisplay price={cart.subtotal} /><p className="muted-copy">Delivery and the final total are calculated securely at checkout.</p><Link href="/checkout" className="button">Continue to checkout</Link><button type="button" className="button button--secondary" onClick={() => clearCart().then(setCart).catch(() => setError('Unable to clear your cart.'))}>Clear cart</button><Link href="/shop" className="text-button">Continue shopping</Link></aside>
+      <aside className="cart-summary"><p className="eyebrow">Summary</p><h2>Subtotal</h2><PriceDisplay price={cart.subtotal} /><p className="muted-copy">Delivery and the final total are calculated securely at checkout.</p><Link href="/checkout" className="button">Continue to checkout</Link><button type="button" className="button button--secondary" onClick={() => clearCart().then((cart) => { setCart(cart); notifyCartUpdated(); }).catch(() => setError('Unable to clear your cart.'))}>Clear cart</button><Link href="/shop" className="text-button">Continue shopping</Link></aside>
     </div>
   );
 }

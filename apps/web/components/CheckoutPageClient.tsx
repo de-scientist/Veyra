@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { buildCheckoutInput, getCart, getCheckoutOptions, getSavedAddresses, placeCheckout, previewCheckout, type Cart, type CheckoutInput, type CheckoutOptions, type CheckoutPreview } from '../lib/shopping-api';
+import { buildCheckoutInput, getCart, getCheckoutOptions, getSavedAddresses, notifyCartUpdated, placeCheckout, previewCheckout, type Cart, type CheckoutInput, type CheckoutOptions, type CheckoutPreview } from '../lib/shopping-api';
 import { PriceDisplay } from './PriceDisplay';
 
 const emptyAddress = { line1: '', city: '', state: '', postalCode: '', country: 'KE' };
@@ -60,6 +60,8 @@ export function CheckoutPageClient() {
     setError('');
     try {
       const result = await placeCheckout(input(), idempotencyKey);
+      // Backend finalized the cart (CHECKED_OUT) — sync header count before leaving.
+      notifyCartUpdated();
       const token = result.confirmationToken ? `?token=${encodeURIComponent(result.confirmationToken)}` : '';
       router.push(`/order-confirmation/${result.order.orderNumber}${token}` as never);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to place the order. Please review your cart.'); } finally { setBusy(false); }

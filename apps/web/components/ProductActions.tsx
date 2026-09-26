@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 
-import { addToCart } from '../lib/shopping-api';
+import { addToCart, notifyCartUpdated } from '../lib/shopping-api';
 import { attributeDef, type ProductVariant } from '../lib/catalog';
 import { OptionButton, Swatch } from './AttributeControls';
 import { useToast } from './Toast';
@@ -66,6 +66,7 @@ export function ProductActions({ productId, productName, variants }: ProductActi
     setError('');
     try {
       await addToCart(selectedVariant.id, quantity);
+      notifyCartUpdated();
       notify('success', `${productName} added to cart.`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to update your cart.');

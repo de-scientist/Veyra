@@ -10,7 +10,7 @@ import { ThemeToggle } from './ThemeProvider';
 import { can } from '../lib/admin-api';
 import { departments } from '../lib/catalog';
 import { useSession } from '../lib/session';
-import { getCart, getUnreadCount } from '../lib/shopping-api';
+import { getCart, getUnreadCount, CART_UPDATED_EVENT } from '../lib/shopping-api';
 import { getNavCategories, type NavCategory } from '../lib/storefront-client';
 
 export function Header() {
@@ -38,9 +38,23 @@ export function Header() {
   const megaRef = useRef<HTMLDivElement>(null);
   const menuToggleRef = useRef<HTMLButtonElement>(null);
 
+  // Cart count revalidates from the authoritative backend cart on mount,
+  // on session change (login/logout triggers server-side guest→user merge),
+  // and whenever any component reports a cart mutation via CART_UPDATED_EVENT.
   useEffect(() => {
-    getCart().then((cart) => setCartCount(cart.itemCount)).catch(() => undefined);
-  }, []);
+    let mounted = true;
+    const refresh = () => {
+      getCart().then((cart) => {
+        if (mounted) setCartCount(cart.itemCount);
+      }).catch(() => undefined);
+    };
+    refresh();
+    window.addEventListener(CART_UPDATED_EVENT, refresh);
+    return () => {
+      mounted = false;
+      window.removeEventListener(CART_UPDATED_EVENT, refresh);
+    };
+  }, [status]);
 
   useEffect(() => {
     let mounted = true;

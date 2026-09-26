@@ -323,6 +323,16 @@ export async function placeOrder(cartId: string, input: CheckoutInput, scope: st
       const retry = await prisma.checkoutIdempotency.findUnique({ where: { key: idempotencyKey }, include: { order: { include: orderInclude } } });
       if (retry?.requestHash === requestHash && retry.order) return { order: serializeOrder(retry.order), confirmationToken: undefined, replayed: true };
     }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === 'P2010'
+      && (error.meta as { code?: unknown } | undefined)?.code === '40001'
+    ) {
+      // Serializable-isolation loser under concurrent checkout (e.g. two
+      // buyers racing the last unit): a controlled, retryable conflict —
+      // never a 500, never a partial order (the transaction rolled back).
+      throw new HttpError(409, 'CHECKOUT_CONFLICT', 'Your cart changed while placing the order. Please review and try again.');
+    }
     throw error;
   }
 }

@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 
 import { HttpError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
+import { releaseStaleReservations } from '../lib/reservations.js';
 import {
   requireAdminAccess,
   requireOperationsAccess,
@@ -491,6 +492,24 @@ export async function adminRoutes(app: FastifyInstance) {
       select: { id: true, email: true, status: true, roles: { select: { role: { select: { slug: true } } } } },
     });
     return { success: true, data: { ...updated, roles: updated?.roles.map((entry) => entry.role.slug) } };
+  });
+
+  // ---- Stale reservation sweep (explicit admin trigger; no background worker) ----
+  // Audited as INVENTORY_ADJUSTED (the closed AuditAction enum has no sweep
+  // member; entity + payload distinguish automated sweeps from manual edits).
+  app.post('/admin/inventory/reservations/release-stale', { preHandler: requireOperationsAccess }, async (request) => {
+    const released = await releaseStaleReservations(prisma);
+    await prisma.auditLog.create({
+      data: {
+        actorId: actorId(request),
+        action: 'INVENTORY_ADJUSTED',
+        entity: 'InventoryReservation',
+        entityId: 'sweep',
+        after: { released, automated: 'STALE_RESERVATION_SWEEP' } as Prisma.InputJsonValue,
+        ...auditMeta(request),
+      },
+    });
+    return { success: true, data: { released } };
   });
 
   // ---- Operational settings (safe subset; secrets stay in environment) ----
