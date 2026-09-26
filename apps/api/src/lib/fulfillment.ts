@@ -100,16 +100,24 @@ async function moveDelivery(deliveryId: string, toStatus: DeliveryStatus, actor:
       : transitStatuses.includes(toStatus) ? FulfillmentStatus.SHIPPED
         : terminalStatuses.includes(toStatus) ? FulfillmentStatus.DELIVERED : undefined;
     const orderStatus = terminalStatuses.includes(toStatus) ? OrderStatus.COMPLETED : toStatus === DeliveryStatus.PREPARING ? OrderStatus.PROCESSING : undefined;
-    const updated = await client.delivery.update({
-      where: { id: deliveryId },
+    // Atomic claim on the expected from-status: a concurrent worker (double
+    // click, two staff members) that already moved this delivery loses here
+    // with a controlled 409 instead of writing a duplicate transition,
+    // history entry, and notification.
+    const claimed = await client.delivery.updateMany({
+      where: { id: deliveryId, status: delivery.status },
       data: {
         status: toStatus,
         trackingNumber: transitStatuses.includes(toStatus) ? delivery.trackingNumber ?? trackingNumber() : undefined,
         shippedAt: transitStatuses.includes(toStatus) ? delivery.shippedAt ?? now : undefined,
         pickedUpAt: toStatus === DeliveryStatus.PICKED_UP ? now : undefined,
         deliveredAt: toStatus === DeliveryStatus.DELIVERED || toStatus === DeliveryStatus.PICKED_UP ? now : undefined,
-        history: { create: { fromStatus: delivery.status, toStatus, actorId: actor.id, note: note?.trim() || null } },
       },
+    });
+    if (claimed.count !== 1) throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', `Delivery is no longer ${delivery.status} and cannot move to ${toStatus}.`);
+    const updated = await client.delivery.update({
+      where: { id: deliveryId },
+      data: { history: { create: { fromStatus: delivery.status, toStatus, actorId: actor.id, note: note?.trim() || null } } },
       include: deliveryInclude,
     });
 
@@ -204,9 +212,12 @@ export async function assignDelivery(deliveryId: string, assigneeId: string, act
   if (!assignee || !assignee.roles.some((entry) => ['staff', 'admin', 'super_admin', 'super-admin'].includes(entry.role.slug.toLowerCase()))) throw new HttpError(400, 'INVALID_ASSIGNEE', 'Delivery must be assigned to an operations user.');
   const delivery = await prisma.delivery.findUnique({ where: { id: deliveryId }, include: deliveryInclude });
   if (!delivery) throw new HttpError(404, 'DELIVERY_NOT_FOUND', 'Delivery not found.');
+  assertPaid(delivery);
   if (delivery.status !== DeliveryStatus.PACKED) throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Only packed deliveries can be assigned.');
   const updated = await prisma.$transaction(async (client) => {
-    const result = await client.delivery.update({ where: { id: deliveryId }, data: { assignedTo: assigneeId, status: DeliveryStatus.ASSIGNED, history: { create: { fromStatus: delivery.status, toStatus: DeliveryStatus.ASSIGNED, actorId: actor.id, note: 'Delivery assigned.' } } }, include: deliveryInclude });
+    const claimed = await client.delivery.updateMany({ where: { id: deliveryId, status: DeliveryStatus.PACKED }, data: { assignedTo: assigneeId, status: DeliveryStatus.ASSIGNED } });
+    if (claimed.count !== 1) throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Delivery is no longer packed and cannot be assigned.');
+    const result = await client.delivery.update({ where: { id: deliveryId }, data: { history: { create: { fromStatus: delivery.status, toStatus: DeliveryStatus.ASSIGNED, actorId: actor.id, note: 'Delivery assigned.' } } }, include: deliveryInclude });
     await enqueueEvent(client, buildEvent('ORDER_SHIPPED', 'Delivery', deliveryId, {
       orderId: delivery.orderId,
       orderNumber: delivery.order.orderNumber,
@@ -227,9 +238,61 @@ export async function customerDelivery(orderNumber: string, userId?: string, con
   const safe = serializeDelivery(delivery);
   return {
     ...safe,
+    // Internal operational identifiers never leave the admin boundary.
+    internalReference: undefined,
+    providerShipmentId: undefined,
     recipient: undefined,
     address: undefined,
     assignee: undefined,
     history: safe.history.map((event) => ({ ...event, note: null })),
   };
+}
+
+export type DeliveryDetailsInput = { courierProvider?: string; estimatedDeliveryAt?: string | null };
+
+/**
+ * Staff-managed delivery details (courier name, ETA). Never changes delivery
+ * or order state and never touches financial fields — a history entry records
+ * the change with its actor.
+ */
+export async function updateDeliveryDetails(deliveryId: string, input: DeliveryDetailsInput, actor: Actor) {
+  const courierProvider = input.courierProvider?.trim() || null;
+  if (courierProvider && courierProvider.length > 120) throw new HttpError(400, 'INVALID_DELIVERY_DETAILS', 'Courier name must be 120 characters or fewer.');
+  let estimatedDeliveryAt: Date | null | undefined;
+  if (input.estimatedDeliveryAt !== undefined) {
+    if (input.estimatedDeliveryAt === null || input.estimatedDeliveryAt === '') {
+      estimatedDeliveryAt = null;
+    } else {
+      const parsed = new Date(input.estimatedDeliveryAt);
+      if (Number.isNaN(parsed.getTime())) throw new HttpError(400, 'INVALID_DELIVERY_DETAILS', 'Estimated delivery must be a valid datetime.');
+      estimatedDeliveryAt = parsed;
+    }
+  }
+  const delivery = await prisma.delivery.findUnique({ where: { id: deliveryId }, include: deliveryInclude });
+  if (!delivery) throw new HttpError(404, 'DELIVERY_NOT_FOUND', 'Delivery not found.');
+  assertPaid(delivery);
+  if (courierProvider === null && estimatedDeliveryAt === undefined) {
+    throw new HttpError(400, 'INVALID_DELIVERY_DETAILS', 'Provide a courier name or an estimated delivery date.');
+  }
+  const updated = await prisma.$transaction(async (client) => {
+    const result = await client.delivery.update({
+      where: { id: deliveryId },
+      data: {
+        ...(courierProvider !== null ? { courierProvider } : {}),
+        ...(estimatedDeliveryAt !== undefined ? { estimatedDeliveryAt } : {}),
+        history: {
+          create: {
+            fromStatus: delivery.status,
+            toStatus: delivery.status,
+            actorId: actor.id,
+            note: `Delivery details updated${courierProvider ? ` (courier: ${courierProvider})` : ''}${estimatedDeliveryAt !== undefined ? ` (ETA: ${estimatedDeliveryAt?.toISOString() ?? 'cleared'})` : ''}.`,
+          },
+        },
+      },
+      include: deliveryInclude,
+    });
+    return result;
+  });
+  afterCommitNotify();
+  return serializeDelivery(updated);
 }

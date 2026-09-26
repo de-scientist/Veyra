@@ -192,8 +192,14 @@ describe('production smoke journey', () => {
       await prisma.checkoutIdempotency.deleteMany({ where: { orderId: order.id } });
       await prisma.order.delete({ where: { id: order.id } });
     }
-    await prisma.cartItem.deleteMany({ where: { cart: { user: null } } });
-    await prisma.cart.deleteMany({ where: { user: null } });
+    // Scoped to this suite's guest session: sweeping every anonymous cart
+    // deadlocks against other suites' live checkouts under parallel load.
+    const smokeSession = guestCookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('veyra_guest_cart='))?.slice('veyra_guest_cart='.length);
+    const smokeCarts = smokeSession
+      ? await prisma.cart.findMany({ where: { sessionId: decodeURIComponent(smokeSession) }, select: { id: true } })
+      : [];
+    await prisma.cartItem.deleteMany({ where: { cartId: { in: smokeCarts.map((cart) => cart.id) } } });
+    await prisma.cart.deleteMany({ where: { id: { in: smokeCarts.map((cart) => cart.id) } } });
     await prisma.inventory.deleteMany({ where: { variantId } });
     await prisma.productVariant.deleteMany({ where: { id: variantId } });
     await prisma.product.deleteMany({ where: { id: createdIds.product } });

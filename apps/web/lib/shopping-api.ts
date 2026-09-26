@@ -588,8 +588,23 @@ export function getOrderDetail(orderNumber: string) {
 }
 
 export function getOrderTracking(orderNumber: string) {
-  return request<{ orderNumber: string; status: string; fulfillmentStatus: string; trackingNumber: string | null; internalReference: string | null; courierProvider: string | null; method: { name: string; type: string } | null; zone: { code: string; name: string } | null; estimatedDeliveryAt: string | null; shippedAt: string | null; pickedUpAt: string | null; deliveredAt: string | null; history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }> }>(`/account/orders/${encodeURIComponent(orderNumber)}/tracking`);
+  return request<CustomerTracking>(`/account/orders/${encodeURIComponent(orderNumber)}/tracking`);
 }
+
+export type CustomerTracking = {
+  orderNumber: string;
+  status: string;
+  fulfillmentStatus: string;
+  trackingNumber: string | null;
+  courierProvider: string | null;
+  method: { name: string; type: string } | null;
+  zone: { code: string; name: string } | null;
+  estimatedDeliveryAt: string | null;
+  shippedAt: string | null;
+  pickedUpAt: string | null;
+  deliveredAt: string | null;
+  history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }>;
+};
 
 export function reorder(orderNumber: string) {
   return request<ReorderResult>(`/account/orders/${encodeURIComponent(orderNumber)}/reorder`, { method: 'POST' });

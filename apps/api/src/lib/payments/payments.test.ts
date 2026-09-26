@@ -24,7 +24,7 @@ describe('payments + M-Pesa (Phase C)', () => {
   let methodId = '';
   let zoneCode = '';
   let otherCookie = '';
-  const created = { users: [] as string[], orders: [] as string[] };
+  const created = { users: [] as string[], orders: [] as string[], guestSessions: [] as string[] };
   const ids = { category: '', product: '', zone: '', method: '' };
   const savedEnv = { ...env } as Record<string, unknown>;
 
@@ -88,15 +88,23 @@ describe('payments + M-Pesa (Phase C)', () => {
     };
   }
 
-  /** Fresh guest order (PENDING/UNPAID) with confirmation token. */
+  /** Fresh guest order (PENDING/UNPAID) with confirmation token; session tracked for scoped cleanup. */
   async function createOrder(quantity = 1) {
     const cartResponse = await app.inject({ method: 'GET', url: '/api/v1/cart' });
     const cookie = cookies(cartResponse);
+    const sessionId = cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('veyra_guest_cart='))?.slice('veyra_guest_cart='.length);
+    if (sessionId) created.guestSessions.push(decodeURIComponent(sessionId));
     const variant = await prisma.productVariant.findUniqueOrThrow({ where: { id: variantId } });
     await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie }, payload: { variantId, quantity } });
-    const placed = await app.inject({
-      method: 'POST', url: '/api/v1/checkout', headers: { cookie, 'idempotency-key': `phase-c-${stamp}-${crypto.randomUUID()}` }, payload: checkoutInput(),
-    });
+    // Contractual retry for transient write-race losers under parallel-suite load.
+    let placed;
+    for (let attempt = 0; ; attempt += 1) {
+      placed = await app.inject({
+        method: 'POST', url: '/api/v1/checkout', headers: { cookie, 'idempotency-key': `phase-c-${stamp}-${crypto.randomUUID()}` }, payload: checkoutInput(),
+      });
+      const conflict = placed.statusCode === 409 && (placed.json() as { error?: { code?: string } }).error?.code === 'CHECKOUT_CONFLICT';
+      if (!conflict || attempt >= 2) break;
+    }
     expect(placed.statusCode).toBe(200);
     const data = (placed.json() as { data: { order: { orderNumber: string; grandTotal: number }; confirmationToken?: string } }).data;
     const order = await prisma.order.findUniqueOrThrow({ where: { orderNumber: data.order.orderNumber } });
@@ -164,8 +172,9 @@ describe('payments + M-Pesa (Phase C)', () => {
       await prisma.payment.deleteMany({ where: { orderId } });
     }
     await prisma.order.deleteMany({ where: { id: { in: created.orders } } });
-    await prisma.cartItem.deleteMany({ where: { cart: { user: null } } });
-    await prisma.cart.deleteMany({ where: { user: null } });
+    const ownCarts = await prisma.cart.findMany({ where: { sessionId: { in: created.guestSessions } }, select: { id: true } });
+    await prisma.cartItem.deleteMany({ where: { cartId: { in: ownCarts.map((c) => c.id) } } });
+    await prisma.cart.deleteMany({ where: { id: { in: ownCarts.map((c) => c.id) } } });
     await prisma.inventory.deleteMany({ where: { variantId } });
     await prisma.productVariant.deleteMany({ where: { id: variantId } });
     await prisma.product.deleteMany({ where: { id: ids.product } });

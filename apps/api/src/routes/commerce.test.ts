@@ -21,7 +21,7 @@ describe('commerce flow (Phase B)', () => {
   let methodId = '';
   let zoneCode = '';
   let customerCookie = '';
-  const created = { users: [] as string[], orders: [] as string[], carts: [] as string[] };
+  const created = { users: [] as string[], orders: [] as string[], carts: [] as string[], guestSessions: [] as string[] };
   const ids = { category: '', product: '', zone: '', method: '' };
 
   function cookies(response: { headers: Record<string, unknown> }): string {
@@ -42,11 +42,14 @@ describe('commerce flow (Phase B)', () => {
     };
   }
 
-  /** Fresh guest cart with captured cookie. */
+  /** Fresh guest cart with captured cookie (session tracked for scoped cleanup). */
   async function freshGuestCart() {
     const response = await app.inject({ method: 'GET', url: '/api/v1/cart' });
     expect(response.statusCode).toBe(200);
-    return cookies(response);
+    const cookie = cookies(response);
+    const sessionId = cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('veyra_guest_cart='))?.slice('veyra_guest_cart='.length);
+    if (sessionId) created.guestSessions.push(decodeURIComponent(sessionId));
+    return cookie;
   }
 
   async function addItem(cookie: string, variant: string, quantity: number) {
@@ -116,8 +119,10 @@ describe('commerce flow (Phase B)', () => {
     await prisma.order.deleteMany({ where: { id: { in: created.orders } } });
     await prisma.cartItem.deleteMany({ where: { cartId: { in: created.carts } } });
     await prisma.cart.deleteMany({ where: { id: { in: created.carts } } });
-    await prisma.cartItem.deleteMany({ where: { cart: { user: null } } });
-    await prisma.cart.deleteMany({ where: { user: null } });
+    // Scoped to sessions minted by this file: never sweep other suites' live guest carts.
+    const ownCarts = await prisma.cart.findMany({ where: { sessionId: { in: created.guestSessions } }, select: { id: true } });
+    await prisma.cartItem.deleteMany({ where: { cartId: { in: ownCarts.map((c) => c.id) } } });
+    await prisma.cart.deleteMany({ where: { id: { in: ownCarts.map((c) => c.id) } } });
     await prisma.inventory.deleteMany({ where: { variantId: { in: [variantId, lowStockVariantId] } } });
     await prisma.productVariant.deleteMany({ where: { id: { in: [variantId, lowStockVariantId] } } });
     await prisma.product.deleteMany({ where: { id: ids.product } });
@@ -343,7 +348,7 @@ describe('commerce flow (Phase B)', () => {
       for (const suffix of ['a', 'b']) {
         const cookie = await freshGuestCart();
         await addItem(cookie, variantId, 1);
-        const response = await place(cookie, `phase-b-uniq-${stamp}-${suffix}12345`);
+        const { response } = await placeSettled(cookie, `phase-b-uniq-${stamp}-${suffix}12345`);
         expect(response.statusCode).toBe(200);
         const orderNumber = ((response.json() as { data: { order: { orderNumber: string } } }).data.order.orderNumber);
         numbers.add(orderNumber);

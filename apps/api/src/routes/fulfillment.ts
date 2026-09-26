@@ -4,7 +4,7 @@ import { DeliveryStatus } from '@prisma/client';
 
 import { requireOperationsAccess } from '../middleware/operations.js';
 import { getSessionUserId } from '../lib/shopping.js';
-import { customerDelivery, fulfillmentDetail, fulfillmentQueue, operationsUsers, startFulfillment, pickFulfillment, packFulfillment, assignDelivery, transitionDelivery } from '../lib/fulfillment.js';
+import { customerDelivery, fulfillmentDetail, fulfillmentQueue, operationsUsers, startFulfillment, pickFulfillment, packFulfillment, assignDelivery, transitionDelivery, updateDeliveryDetails } from '../lib/fulfillment.js';
 import { HttpError } from '../lib/errors.js';
 
 const noteSchema = z.object({ note: z.string().trim().max(500).optional() });
@@ -66,6 +66,12 @@ export async function fulfillmentRoutes(app: FastifyInstance) {
     const { deliveryId } = request.params as { deliveryId: string };
     const payload = statusSchema.parse(request.body);
     return { success: true, data: await transitionDelivery(deliveryId, payload.status, actor(request), payload.note) };
+  });
+
+  app.post('/admin/deliveries/:deliveryId/details', { preHandler: requireOperationsAccess }, async (request) => {
+    const { deliveryId } = request.params as { deliveryId: string };
+    const payload = z.object({ courierProvider: z.string().trim().max(120).optional(), estimatedDeliveryAt: z.string().trim().max(64).nullable().optional() }).parse(request.body ?? {});
+    return { success: true, data: await updateDeliveryDetails(deliveryId, payload, actor(request)) };
   });
 
   app.get('/orders/:orderNumber/delivery', async (request) => {

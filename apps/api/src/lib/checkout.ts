@@ -217,6 +217,13 @@ export async function previewCheckout(cartId: string, input: CheckoutInput) {
   };
 }
 
+function isTransientWriteConflict(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError
+    && ((error.code === 'P2010' && (error.meta as { code?: unknown } | undefined)?.code === '40001') || error.code === 'P2034')
+  );
+}
+
 export async function placeOrder(cartId: string, input: CheckoutInput, scope: string, idempotencyKey: string, userId?: string) {
   validateInput(input);
   const requestHash = hashToken(JSON.stringify({ cartId, input, scope }));
@@ -226,9 +233,15 @@ export async function placeOrder(cartId: string, input: CheckoutInput, scope: st
     if (existing.order) return { order: serializeOrder(existing.order), confirmationToken: undefined, replayed: true };
   }
 
-  const confirmationToken = crypto.randomBytes(32).toString('hex');
-  try {
-    const order = await prisma.$transaction(async (transaction) => {
+  // Bounded retry for transient write conflicts (serializable-isolation or
+  // deadlock loser under concurrent load). Safe: the losing transaction
+  // rolled back entirely (including its idempotency row), and nothing
+  // external — no provider calls, no notifications — happens before commit.
+  const maxAttempts = 3;
+  for (let attempt = 1; ; attempt += 1) {
+    const confirmationToken = crypto.randomBytes(32).toString('hex');
+    try {
+      const order = await prisma.$transaction(async (transaction) => {
       await transaction.checkoutIdempotency.create({ data: { key: idempotencyKey, scope, requestHash, userId } });
       const cart = await loadCart(cartId, transaction);
       if (!cart) throw new HttpError(404, 'CART_NOT_FOUND', 'Cart not found.');
@@ -318,23 +331,19 @@ export async function placeOrder(cartId: string, input: CheckoutInput, scope: st
     afterCommitNotify();
 
     return { order: serializeOrder(order), confirmationToken, replayed: false };
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      const retry = await prisma.checkoutIdempotency.findUnique({ where: { key: idempotencyKey }, include: { order: { include: orderInclude } } });
-      if (retry?.requestHash === requestHash && retry.order) return { order: serializeOrder(retry.order), confirmationToken: undefined, replayed: true };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const retry = await prisma.checkoutIdempotency.findUnique({ where: { key: idempotencyKey }, include: { order: { include: orderInclude } } });
+        if (retry?.requestHash === requestHash && retry.order) return { order: serializeOrder(retry.order), confirmationToken: undefined, replayed: true };
+      }
+      if (isTransientWriteConflict(error)) {
+        if (attempt < maxAttempts) continue;
+        // Persistent contention: a controlled, retryable conflict — never a
+        // 500, never a partial order (the transaction rolled back).
+        throw new HttpError(409, 'CHECKOUT_CONFLICT', 'Your cart changed while placing the order. Please review and try again.');
+      }
+      throw error;
     }
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError
-      && ((error.code === 'P2010' && (error.meta as { code?: unknown } | undefined)?.code === '40001')
-        || error.code === 'P2034')
-    ) {
-      // Concurrency loser during order placement: serializable-isolation
-      // conflict (40001) or write/deadlock conflict (P2034) under parallel
-      // load. A controlled, retryable conflict — never a 500, never a
-      // partial order (the transaction rolled back).
-      throw new HttpError(409, 'CHECKOUT_CONFLICT', 'Your cart changed while placing the order. Please review and try again.');
-    }
-    throw error;
   }
 }
 

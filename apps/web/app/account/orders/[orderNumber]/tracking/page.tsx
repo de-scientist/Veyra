@@ -17,7 +17,6 @@ export default function TrackingPage({ params }: TrackingPageProps) {
     status: string;
     fulfillmentStatus: string;
     trackingNumber: string | null;
-    internalReference: string | null;
     courierProvider: string | null;
     method: { name: string; type: string } | null;
     zone: { code: string; name: string } | null;
