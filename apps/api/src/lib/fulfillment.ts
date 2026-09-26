@@ -48,6 +48,68 @@ function assertPaid(delivery: DeliveryWithContext) {
   if (delivery.order.status === 'CANCELLED') throw new HttpError(409, 'ORDER_CANCELLED', 'Cancelled orders cannot be fulfilled.');
 }
 
+export type FulfillmentEligibility = {
+  eligible: boolean;
+  reasons: string[];
+  orderNumber: string;
+  deliveryStatus: DeliveryStatus;
+};
+
+/**
+ * Authoritative fulfillment-eligibility check (Phase D §14). Single source of
+ * truth: enforced when fulfillment begins (PENDING → PREPARING) and exposed
+ * read-only for staff UIs so admin buttons never duplicate this logic.
+ */
+export function checkEligibility(delivery: DeliveryWithContext, reservations: Array<{ status: string }>): FulfillmentEligibility {
+  const reasons: string[] = [];
+  if (delivery.order.status === 'CANCELLED') reasons.push('Order is cancelled.');
+  if (delivery.order.paymentStatus !== 'PAID') reasons.push('Payment is not confirmed (PAID required).');
+  if (delivery.order.items.length === 0) reasons.push('Order has no items.');
+  if (!delivery.shippingMethod) reasons.push('No delivery method is configured for this order.');
+  if (delivery.shippingMethod && delivery.shippingMethod.type !== 'PICKUP') {
+    if (!delivery.deliveryAddress) reasons.push('Delivery address is missing.');
+    if (!delivery.recipientPhone) reasons.push('Recipient phone is missing.');
+  }
+  if (reservations.length === 0) {
+    reasons.push('No inventory reservations exist for this order.');
+  } else if (reservations.some((reservation) => reservation.status !== 'CONVERTED')) {
+    reasons.push('Inventory reservations are not converted (payment conversion incomplete).');
+  }
+  return { eligible: reasons.length === 0, reasons, orderNumber: delivery.order.orderNumber, deliveryStatus: delivery.status };
+}
+
+async function assertEligibleToStart(
+  delivery: DeliveryWithContext,
+  client: typeof prisma | Prisma.TransactionClient,
+) {
+  const reservations = await client.inventoryReservation.findMany({ where: { orderId: delivery.orderId }, select: { status: true } });
+  const eligibility = checkEligibility(delivery, reservations);
+  if (!eligibility.eligible) {
+    throw new HttpError(409, 'FULFILLMENT_INELIGIBLE', 'This order is not eligible for fulfillment.', { reasons: eligibility.reasons });
+  }
+}
+
+function auditDelivery(
+  client: Prisma.TransactionClient,
+  actor: Actor,
+  deliveryId: string,
+  orderNumber: string,
+  before: DeliveryStatus,
+  after: DeliveryStatus,
+  note?: string,
+) {
+  return client.auditLog.create({
+    data: {
+      actorId: actor.id,
+      action: 'ORDER_UPDATED',
+      entity: 'Delivery',
+      entityId: deliveryId,
+      before: { status: before } as Prisma.InputJsonValue,
+      after: { status: after, orderNumber, note: note?.trim() || null } as Prisma.InputJsonValue,
+    },
+  });
+}
+
 function assertTransition(from: DeliveryStatus, to: DeliveryStatus) {
   if (!isLegalDeliveryTransition(from, to)) throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', `Delivery cannot move from ${from} to ${to}.`);
 }
@@ -87,6 +149,9 @@ async function moveDelivery(deliveryId: string, toStatus: DeliveryStatus, actor:
     if (!delivery) throw new HttpError(404, 'DELIVERY_NOT_FOUND', 'Delivery not found.');
     assertPaid(delivery);
     assertTransition(delivery.status, toStatus);
+    // Fulfillment beginning (leaving PENDING) additionally requires full
+    // eligibility: items, delivery info, and converted inventory reservations.
+    if (delivery.status === DeliveryStatus.PENDING) await assertEligibleToStart(delivery, client);
 
     const methodType = delivery.shippingMethod?.type;
     if (toStatus === DeliveryStatus.READY_FOR_PICKUP && methodType !== 'PICKUP') throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Only pickup orders can be marked ready for pickup.');
@@ -120,6 +185,7 @@ async function moveDelivery(deliveryId: string, toStatus: DeliveryStatus, actor:
       data: { history: { create: { fromStatus: delivery.status, toStatus, actorId: actor.id, note: note?.trim() || null } } },
       include: deliveryInclude,
     });
+    await auditDelivery(client, actor, deliveryId, delivery.order.orderNumber, delivery.status, toStatus, note);
 
     if (orderFulfillment || orderStatus) {
       await client.order.update({ where: { id: delivery.orderId }, data: { fulfillmentStatus: orderFulfillment, status: orderStatus } });
@@ -185,6 +251,13 @@ export async function fulfillmentDetail(orderNumber: string) {
   return serializeDelivery(delivery);
 }
 
+export async function fulfillmentEligibility(orderNumber: string): Promise<FulfillmentEligibility> {
+  const delivery = await prisma.delivery.findFirst({ where: { order: { orderNumber } }, include: deliveryInclude });
+  if (!delivery) throw new HttpError(404, 'DELIVERY_NOT_FOUND', 'Delivery not found.');
+  const reservations = await prisma.inventoryReservation.findMany({ where: { orderId: delivery.orderId }, select: { status: true } });
+  return checkEligibility(delivery, reservations);
+}
+
 export async function startFulfillment(orderNumber: string, actor: Actor, note?: string) {
   const delivery = await prisma.delivery.findFirst({ where: { order: { orderNumber } }, select: { id: true } });
   if (!delivery) throw new HttpError(404, 'DELIVERY_NOT_FOUND', 'Delivery not found.');
@@ -218,6 +291,7 @@ export async function assignDelivery(deliveryId: string, assigneeId: string, act
     const claimed = await client.delivery.updateMany({ where: { id: deliveryId, status: DeliveryStatus.PACKED }, data: { assignedTo: assigneeId, status: DeliveryStatus.ASSIGNED } });
     if (claimed.count !== 1) throw new HttpError(409, 'INVALID_DELIVERY_TRANSITION', 'Delivery is no longer packed and cannot be assigned.');
     const result = await client.delivery.update({ where: { id: deliveryId }, data: { history: { create: { fromStatus: delivery.status, toStatus: DeliveryStatus.ASSIGNED, actorId: actor.id, note: 'Delivery assigned.' } } }, include: deliveryInclude });
+    await auditDelivery(client, actor, deliveryId, delivery.order.orderNumber, delivery.status, DeliveryStatus.ASSIGNED, 'Delivery assigned.');
     await enqueueEvent(client, buildEvent('ORDER_SHIPPED', 'Delivery', deliveryId, {
       orderId: delivery.orderId,
       orderNumber: delivery.order.orderNumber,
@@ -275,6 +349,7 @@ export async function updateDeliveryDetails(deliveryId: string, input: DeliveryD
     throw new HttpError(400, 'INVALID_DELIVERY_DETAILS', 'Provide a courier name or an estimated delivery date.');
   }
   const updated = await prisma.$transaction(async (client) => {
+    const detailNote = `Delivery details updated${courierProvider ? ` (courier: ${courierProvider})` : ''}${estimatedDeliveryAt !== undefined ? ` (ETA: ${estimatedDeliveryAt?.toISOString() ?? 'cleared'})` : ''}.`;
     const result = await client.delivery.update({
       where: { id: deliveryId },
       data: {
@@ -285,11 +360,21 @@ export async function updateDeliveryDetails(deliveryId: string, input: DeliveryD
             fromStatus: delivery.status,
             toStatus: delivery.status,
             actorId: actor.id,
-            note: `Delivery details updated${courierProvider ? ` (courier: ${courierProvider})` : ''}${estimatedDeliveryAt !== undefined ? ` (ETA: ${estimatedDeliveryAt?.toISOString() ?? 'cleared'})` : ''}.`,
+            note: detailNote,
           },
         },
       },
       include: deliveryInclude,
+    });
+    await client.auditLog.create({
+      data: {
+        actorId: actor.id,
+        action: 'ORDER_UPDATED',
+        entity: 'Delivery',
+        entityId: deliveryId,
+        before: { courierProvider: delivery.courierProvider, estimatedDeliveryAt: delivery.estimatedDeliveryAt } as Prisma.InputJsonValue,
+        after: { courierProvider: result.courierProvider, estimatedDeliveryAt: result.estimatedDeliveryAt, orderNumber: delivery.order.orderNumber, note: detailNote } as Prisma.InputJsonValue,
+      },
     });
     return result;
   });

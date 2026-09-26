@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 import { getAdminOrderDetail } from '../../../../lib/admin-api';
 import { AdminStatusBadge, formatAdminDate, formatMoney } from '../../../../components/admin';
+import { AdminOrderFulfillmentPanel } from '../../../../components/AdminOrderFulfillmentPanel';
 
 type Detail = {
   orderNumber: string;
@@ -15,7 +16,7 @@ type Detail = {
   totals: { subtotal: number; discountTotal: number; shippingTotal: number; taxTotal: number; grandTotal: number; currency: string };
   items: Array<{ id: string; productName: string; sku: string; variantDescription: string | null; quantity: number; unitPrice: number; discountAmount: number; subtotal: number; total: number }>;
   payments: Array<{ id: string; provider: string; status: string; amount: number; currency: string; providerReference: string | null; failureReason: string | null; paidAt: string | null; createdAt: string; transactions: Array<{ id: string; status: string; providerReference: string | null; failureReason: string | null; createdAt: string }> }>;
-  deliveries: Array<{ id: string; status: string; trackingNumber: string | null; courierProvider: string | null; method: { name: string; type: string } | null; zone: { code: string; name: string } | null; recipientName: string | null; recipientPhone: string | null; deliveryAddress: unknown; estimatedDeliveryAt: string | null; shippedAt: string | null; deliveredAt: string | null; history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }> }>;
+  deliveries: Array<{ id: string; status: string; trackingNumber: string | null; courierProvider: string | null; method: { name: string; type: string } | null; zone: { code: string; name: string } | null; recipientName: string | null; recipientPhone: string | null; deliveryAddress: unknown; estimatedDeliveryAt: string | null; shippedAt: string | null; pickedUpAt: string | null; deliveredAt: string | null; history: Array<{ fromStatus: string | null; toStatus: string; note: string | null; createdAt: string }> }>;
   statusHistory: Array<{ status: string; changedBy: string | null; note: string | null; createdAt: string }>;
   returns: Array<{ id: string; returnNumber: string; type: string; status: string; reason: string; requestedAt: string; refund: { refundNumber: string; amount: number; status: string } | null }>;
   refunds: Array<{ id: string; refundNumber: string; amount: number; currency: string; status: string; providerReference: string | null; reason: string; requestedAt: string; processedAt: string | null }>;
@@ -33,6 +34,21 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
   const [order, setOrder] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  function refresh() {
+    setLoading(true);
+    getAdminOrderDetail(routeOrderNumber)
+      .then((result) => {
+        setOrder(result as unknown as Detail);
+        setError(null);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : 'Failed to load order');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -72,6 +88,27 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
         <h2>Status</h2>
         <p><AdminStatusBadge status={order.status} /> <AdminStatusBadge status={order.paymentStatus} /> <AdminStatusBadge status={order.fulfillmentStatus} /></p>
       </section>
+
+      {order.deliveries.map((delivery) => (
+        <AdminOrderFulfillmentPanel
+          key={delivery.id}
+          orderNumber={order.orderNumber}
+          delivery={{
+            id: delivery.id,
+            orderNumber: order.orderNumber,
+            status: delivery.status,
+            trackingNumber: delivery.trackingNumber,
+            provider: delivery.courierProvider,
+            estimatedDeliveryAt: delivery.estimatedDeliveryAt,
+            shippedAt: delivery.shippedAt,
+            pickedUpAt: delivery.pickedUpAt,
+            deliveredAt: delivery.deliveredAt,
+            method: delivery.method,
+          }}
+          paymentStatus={order.paymentStatus}
+          onChanged={refresh}
+        />
+      ))}
 
       <section className="account-section">
         <h2>Customer</h2>

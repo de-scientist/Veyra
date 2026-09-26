@@ -467,6 +467,25 @@ export function getFulfillmentQueue(status?: string) {
   return request<Delivery[]>(`/admin/fulfillments${status ? `?status=${encodeURIComponent(status)}` : ''}`);
 }
 
+export function getFulfillmentDetail(orderNumber: string) {
+  return request<Delivery>(`/admin/fulfillments/${encodeURIComponent(orderNumber)}`);
+}
+
+export type FulfillmentEligibility = {
+  eligible: boolean;
+  reasons: string[];
+  orderNumber: string;
+  deliveryStatus: string;
+};
+
+export function getFulfillmentEligibility(orderNumber: string) {
+  return request<FulfillmentEligibility>(`/admin/fulfillments/${encodeURIComponent(orderNumber)}/eligibility`);
+}
+
+export function updateDeliveryDetails(deliveryId: string, input: { courierProvider?: string; estimatedDeliveryAt?: string | null }) {
+  return request<Delivery>(`/admin/deliveries/${encodeURIComponent(deliveryId)}/details`, { method: 'POST', body: JSON.stringify(input) });
+}
+
 export function updateFulfillment(orderNumber: string, action: 'start' | 'pick' | 'pack') {
   return request<Delivery>(`/admin/fulfillments/${encodeURIComponent(orderNumber)}/${action}`, { method: 'POST', body: JSON.stringify({}) });
 }

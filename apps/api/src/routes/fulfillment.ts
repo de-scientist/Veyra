@@ -4,7 +4,7 @@ import { DeliveryStatus } from '@prisma/client';
 
 import { requireOperationsAccess } from '../middleware/operations.js';
 import { getSessionUserId } from '../lib/shopping.js';
-import { customerDelivery, fulfillmentDetail, fulfillmentQueue, operationsUsers, startFulfillment, pickFulfillment, packFulfillment, assignDelivery, transitionDelivery, updateDeliveryDetails } from '../lib/fulfillment.js';
+import { customerDelivery, fulfillmentDetail, fulfillmentEligibility, fulfillmentQueue, operationsUsers, startFulfillment, pickFulfillment, packFulfillment, assignDelivery, transitionDelivery, updateDeliveryDetails } from '../lib/fulfillment.js';
 import { HttpError } from '../lib/errors.js';
 
 const noteSchema = z.object({ note: z.string().trim().max(500).optional() });
@@ -36,6 +36,11 @@ export async function fulfillmentRoutes(app: FastifyInstance) {
   app.get('/admin/fulfillments/:orderNumber', { preHandler: requireOperationsAccess }, async (request) => {
     const { orderNumber } = request.params as { orderNumber: string };
     return { success: true, data: await fulfillmentDetail(orderNumber) };
+  });
+
+  app.get('/admin/fulfillments/:orderNumber/eligibility', { preHandler: requireOperationsAccess }, async (request) => {
+    const { orderNumber } = request.params as { orderNumber: string };
+    return { success: true, data: await fulfillmentEligibility(orderNumber) };
   });
 
   app.post('/admin/fulfillments/:orderNumber/start', { preHandler: requireOperationsAccess }, async (request) => {

@@ -153,6 +153,7 @@ describe('fulfillment + delivery (Phase D)', () => {
       await prisma.orderItem.deleteMany({ where: { orderId } });
       const deliveries = await prisma.delivery.findMany({ where: { orderId }, select: { id: true } });
       await prisma.deliveryStatusHistory.deleteMany({ where: { deliveryId: { in: deliveries.map((d) => d.id) } } });
+      await prisma.auditLog.deleteMany({ where: { entity: 'Delivery', entityId: { in: deliveries.map((d) => d.id) } } });
       await prisma.delivery.deleteMany({ where: { orderId } });
       await prisma.orderStatusHistory.deleteMany({ where: { orderId } });
       await prisma.checkoutIdempotency.deleteMany({ where: { orderId } });
@@ -301,6 +302,8 @@ describe('fulfillment + delivery (Phase D)', () => {
       expect(body.status).toBe('PENDING');
       const history = await prisma.deliveryStatusHistory.findFirstOrThrow({ where: { deliveryId }, orderBy: { createdAt: 'desc' } });
       expect(history.note).toMatch(/Delivery details updated/);
+      const detailAudit = await prisma.auditLog.findFirst({ where: { entity: 'Delivery', entityId: deliveryId }, orderBy: { createdAt: 'desc' } });
+      expect(detailAudit).toMatchObject({ action: 'ORDER_UPDATED', actorId: staffId });
       const customer = await app.inject({ method: 'POST', url: `/api/v1/admin/deliveries/${deliveryId}/details`, headers: { cookie: customerCookie }, payload: { courierProvider: 'Evil' } });
       expect(customer.statusCode).toBe(403);
       const badEta = await app.inject({ method: 'POST', url: `/api/v1/admin/deliveries/${deliveryId}/details`, headers: { cookie: staffCookie }, payload: { estimatedDeliveryAt: 'not-a-date' } });

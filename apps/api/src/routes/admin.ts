@@ -115,6 +115,7 @@ function serializeAdminOrder(order: Prisma.OrderGetPayload<{ include: typeof ord
       deliveryAddress: delivery.deliveryAddress,
       estimatedDeliveryAt: delivery.estimatedDeliveryAt,
       shippedAt: delivery.shippedAt,
+      pickedUpAt: delivery.pickedUpAt,
       deliveredAt: delivery.deliveredAt,
       history: delivery.history,
     })),
