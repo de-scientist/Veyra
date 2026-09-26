@@ -1,8 +1,12 @@
-import { createElement } from 'react';
+import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { PriceDisplay } from '../components/PriceDisplay';
+
+// PriceDisplay.tsx relies on the automatic JSX runtime (no React import),
+// while vitest compiles it with the classic transform: provide the global.
+(globalThis as { React?: typeof React }).React = React;
 
 describe('PriceDisplay valid HTML structure', () => {
   it('renders a span root — never a div — so it can nest inside <p>', () => {
