@@ -448,6 +448,19 @@ export function getPaymentStatus(paymentId: string, confirmationToken?: string) 
   return request<Payment>(`/payments/${encodeURIComponent(paymentId)}/status${suffix}`);
 }
 
+/**
+ * Recovery probe for delayed/missing M-Pesa callbacks: asks the backend to
+ * check the provider for the latest pending attempt. Never marks anything
+ * paid client-side — the returned payment is still authoritative backend state.
+ */
+export function queryPaymentStatus(paymentId: string, confirmationToken?: string) {
+  const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
+  return request<{ payment: Payment; transactionId: string | null; refreshed: boolean; pending: boolean }>.
+
+
+(`/payments/${encodeURIComponent(paymentId)}/query${suffix}`, { method: 'POST' });
+}
+
 export function getOrderDelivery(orderNumber: string, confirmationToken?: string) {
   const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
   return request<Delivery>(`/orders/${encodeURIComponent(orderNumber)}/delivery${suffix}`);

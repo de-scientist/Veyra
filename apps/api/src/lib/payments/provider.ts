@@ -17,8 +17,26 @@ export type ProviderInitiation = {
   rawResponse: unknown;
 };
 
+export type TransactionQueryInput = {
+  providerRequestId: string;
+  providerMerchantRequestId?: string | null;
+};
+
+export type TransactionQueryResult = {
+  /** Provider-side lookup completed (network + auth + schema OK). */
+  found: boolean;
+  /** Daraja ResultCode when the provider has a concluded outcome; absent while still pending/unknown. */
+  resultCode?: number;
+  resultDesc?: string;
+  amount?: number;
+  receipt?: string;
+  rawResponse: unknown;
+};
+
 export interface PaymentProvider {
   initialize(input: InitializePaymentInput): Promise<ProviderInitiation>;
+  /** Recovery probe for delayed/missing callbacks. Never throws for UNKNOWN states — reports them. */
+  queryTransaction(input: TransactionQueryInput): Promise<TransactionQueryResult>;
 }
 
 export class PaymentProviderError extends Error {

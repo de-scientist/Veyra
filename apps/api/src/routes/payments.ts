@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getSessionUserId } from '../lib/shopping.js';
 import { sensitiveLimit } from '../lib/rateLimits.js';
 import { HttpError } from '../lib/errors.js';
-import { getPaymentStatus, handleMpesaCallback, initiateMpesaPayment } from '../lib/payments/service.js';
+import { getPaymentStatus, handleMpesaCallback, initiateMpesaPayment, queryPaymentTransaction } from '../lib/payments/service.js';
 
 function headerValue(request: FastifyRequest, name: string) {
   const value = request.headers[name];
@@ -33,5 +33,11 @@ export async function paymentRoutes(app: FastifyInstance) {
     const { paymentId } = request.params as { paymentId: string };
     const userId = await getSessionUserId(request);
     return { success: true, data: await getPaymentStatus(paymentId, userId, confirmationToken(request)) };
+  });
+
+  app.post('/payments/:paymentId/query', sensitiveLimit(), async (request) => {
+    const { paymentId } = request.params as { paymentId: string };
+    const userId = await getSessionUserId(request);
+    return { success: true, data: await queryPaymentTransaction(paymentId, userId, confirmationToken(request)) };
   });
 }

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import { env } from '../env.js';
-import { PaymentProviderError, type InitializePaymentInput, type PaymentProvider, type ProviderInitiation } from './provider.js';
+import { PaymentProviderError, type InitializePaymentInput, type PaymentProvider, type ProviderInitiation, type TransactionQueryInput, type TransactionQueryResult } from './provider.js';
 
 const sandboxBaseUrl = 'https://sandbox.safaricom.co.ke';
 const productionBaseUrl = 'https://api.safaricom.co.ke';
@@ -111,6 +111,35 @@ export class MpesaPaymentProvider implements PaymentProvider {
       providerRequestId: typeof body.CheckoutRequestID === 'string' ? body.CheckoutRequestID : null,
       providerMerchantRequestId: typeof body.MerchantRequestID === 'string' ? body.MerchantRequestID : null,
       customerMessage: typeof body.CustomerMessage === 'string' ? body.CustomerMessage : accepted ? 'Payment request sent.' : 'M-Pesa could not start the payment.',
+      rawResponse: body,
+    };
+  }
+  async queryTransaction(input: TransactionQueryInput): Promise<TransactionQueryResult> {
+    const config = configuration();
+    if (!input.providerRequestId) throw new PaymentProviderError('MPESA_QUERY_REQUIRES_REFERENCE', 'A provider request identifier is required to query payment status.', false);
+    const token = await getAccessToken();
+    const requestTimestamp = timestamp();
+    const password = Buffer.from(`${config.shortcode}${config.passkey}${requestTimestamp}`).toString('base64');
+    const body = await requestJson(`${config.baseUrl}/mpesa/stkpushquery/v1/query`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        BusinessShortCode: config.shortcode,
+        Password: password,
+        Timestamp: requestTimestamp,
+        CheckoutRequestID: input.providerRequestId,
+      }),
+    });
+
+    // Daraja answers ResponseCode 0 even while the transaction is unresolved;
+    // a concluded outcome carries ResultCode/ResultDesc. Absence means UNKNOWN
+    // — reported as-is, never converted into FAILED.
+    const resultCode = typeof body.ResultCode === 'number' ? body.ResultCode
+      : typeof body.ResultCode === 'string' && body.ResultCode !== '' ? Number(body.ResultCode) : undefined;
+    return {
+      found: true,
+      resultCode: typeof resultCode === 'number' && Number.isFinite(resultCode) ? resultCode : undefined,
+      resultDesc: typeof body.ResultDesc === 'string' ? body.ResultDesc : undefined,
       rawResponse: body,
     };
   }
