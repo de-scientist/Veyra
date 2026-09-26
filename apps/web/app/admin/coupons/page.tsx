@@ -131,11 +131,17 @@ export default function AdminCouponsPage() {
             </label>
             <label>
               <span>Value *</span>
-              <input type="number" value={form.value} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, value: e.currentTarget.value }))} required min="0" step="0.01" />
+              <input type="number" value={form.value} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = e.currentTarget.value;
+                setForm((prev) => ({ ...prev, value }));
+              }} required min="0" step="0.01" />
             </label>
             <label>
               <span>Max uses (optional)</span>
-              <input type="number" value={form.maxUses} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, maxUses: e.currentTarget.value }))} min="1" step="1" />
+              <input type="number" value={form.maxUses} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = e.currentTarget.value;
+                setForm((prev) => ({ ...prev, maxUses: value }));
+              }} min="1" step="1" />
             </label>
           </div>
           <div className="form-actions">

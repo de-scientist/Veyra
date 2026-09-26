@@ -130,7 +130,10 @@ export default function AdminCustomerDetailPage({ params }: PageProps) {
             <div className="form-grid">
               <label>
                 <span>First name *</span>
-                <input type="text" value={profileForm.firstName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfileForm((prev) => ({ ...prev, firstName: e.currentTarget.value }))} required maxLength={120} />
+                <input type="text" value={profileForm.firstName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.currentTarget.value;
+                  setProfileForm((prev) => ({ ...prev, firstName: value }));
+                }} required maxLength={120} />
               </label>
               <label>
                 <span>Last name *</span>
