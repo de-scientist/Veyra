@@ -8,6 +8,7 @@ import { hashPassword, hashToken } from '../auth.js';
 import { env } from '../env.js';
 import { prisma } from '../prisma.js';
 import { handleMpesaCallback } from './service.js';
+import { resetMpesaTokenCacheForTests } from './mpesa.js';
 
 /**
  * Phase C payment matrix: initiation, M-Pesa provider behavior (mocked

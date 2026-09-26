@@ -7,6 +7,11 @@ const sandboxBaseUrl = 'https://sandbox.safaricom.co.ke';
 const productionBaseUrl = 'https://api.safaricom.co.ke';
 let accessToken: { value: string; expiresAt: number } | undefined;
 
+/** Test seam: drops the process-local OAuth token so auth paths can be exercised. */
+export function resetMpesaTokenCacheForTests() {
+  accessToken = undefined;
+}
+
 function configuration() {
   const consumerKey = env.MPESA_CONSUMER_KEY ?? env.M_PESA_CONSUMER_KEY;
   const consumerSecret = env.MPESA_CONSUMER_SECRET ?? env.M_PESA_CONSUMER_SECRET;
