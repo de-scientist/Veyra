@@ -23,7 +23,9 @@ const checkoutSchema = z.object({
   customerEmail: z.string().email().max(200),
   customerPhone: z.string().min(7).max(30),
   deliveryMethodId: z.string().uuid(),
-  shippingZoneCode: z.string().trim().max(50).optional(),
+  // Blank zone codes must fail validation explicitly instead of slipping
+  // through as `''` and surfacing later as a generic address error.
+  shippingZoneCode: z.string().trim().min(1).max(50).optional(),
   address: addressSchema.optional(),
   addressId: z.string().uuid().optional(),
   notes: z.string().trim().max(500).optional(),
