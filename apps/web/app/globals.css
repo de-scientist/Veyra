@@ -191,12 +191,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .hero__content { max-width: 640px; }
 .hero .eyebrow { color: rgba(255, 255, 255, 0.85); }
-.hero h1, .page-header h1, .product-summary h1 {
+.hero h1, .hero .hero__title, .page-header h1, .product-summary h1 {
   font-size: clamp(2.25rem, 6vw, 4rem);
   margin: 0.5rem 0 1rem;
   line-height: 1.05;
   letter-spacing: -0.03em;
 }
+/* Non-first carousel slides use a styled paragraph with heading role so the
+   page keeps exactly one <h1>; visual weight matches the hero heading. */
+.hero .hero__title { font-weight: 800; color: #fff; }
 .hero p { color: rgba(255, 255, 255, 0.92); line-height: 1.6; }
 .hero .button { background: #fff; color: var(--jb-primary); }
 .hero .button:hover { background: var(--jb-primary-soft); color: var(--jb-primary-active); }
@@ -1147,6 +1150,12 @@ a.visually-hidden:focus-visible {
 .hero--carousel { grid-template-columns: 1.05fr 0.95fr; gap: 2rem; text-align: left; }
 .hero__media--single { display: block; }
 .hero__media--single img { width: 100%; height: 100%; max-height: 380px; object-fit: cover; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.35); }
+/* Branded fallback when a slide image is missing or fails to load. */
+.hero__placeholder {
+  display: grid; place-items: center; min-height: 240px; max-height: 380px; height: 100%;
+  border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 800; letter-spacing: 0.02em;
+}
 .jb-hero-carousel__controls { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .jb-hero-carousel__arrow {
   display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;

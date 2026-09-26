@@ -22,6 +22,7 @@ export function HeroCarousel() {
 
   const goTo = useCallback(
     (next: number) => {
+      if (count === 0) return;
       setIndex(((next % count) + count) % count);
     },
     [count],
@@ -56,6 +57,7 @@ export function HeroCarousel() {
 
   // Keyboard navigation on the region.
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (count === 0) return;
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
       goPrev();
@@ -70,6 +72,27 @@ export function HeroCarousel() {
       goTo(count - 1);
     }
   };
+
+  // Defensive empty state: slide data is static and never empty in practice,
+  // but an empty config must not render "slide 1 of 0" or NaN indexes.
+  if (count === 0) {
+    return (
+      <section className="jb-hero-carousel" aria-label="Featured departments">
+        <div className="hero hero--carousel">
+          <div className="hero__content">
+            <p className="eyebrow">JB Mercantile</p>
+            <h1>Shop fashion, footwear and kitchen &amp; home essentials</h1>
+            <p>Browse the catalogue for something you love.</p>
+            <div className="cta-row">
+              <Link href={'/shop' as never} className="button">
+                Browse all
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -108,7 +131,13 @@ export function HeroCarousel() {
               <div className="hero hero--carousel">
                 <div className="hero__content">
                   <p className="eyebrow">{slide.eyebrow}</p>
-                  <h1 id={i === 0 ? 'jb-hero-heading' : undefined}>{slide.title}</h1>
+                  {i === 0 ? (
+                    <h1 id="jb-hero-heading">{slide.title}</h1>
+                  ) : (
+                    <p className="hero__title" role="heading" aria-level={2}>
+                      {slide.title}
+                    </p>
+                  )}
                   <p>{slide.description}</p>
                   <div className="cta-row">
                     <Link
@@ -128,13 +157,10 @@ export function HeroCarousel() {
                   </div>
                 </div>
                 <div className="hero__media hero__media--single" aria-hidden={i !== index}>
-                  <Image
+                  <HeroSlideImage
                     src={slide.image}
                     alt={i === index ? slide.imageAlt : ''}
-                    width={900}
-                    height={640}
-                    priority={i === 0}
-                    sizes="(max-width: 768px) 100vw, 45vw"
+                    eager={i === 0}
                   />
                 </div>
               </div>
@@ -177,5 +203,31 @@ export function HeroCarousel() {
         Showing slide {index + 1} of {count}
       </span>
     </section>
+  );
+}
+
+/**
+ * Slide image with branded fallback: an empty/missing slide image or a
+ * failed remote load renders a labelled placeholder — never a broken image.
+ */
+function HeroSlideImage({ src, alt, eager }: { src: string; alt: string; eager: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className="hero__placeholder" role="img" aria-label={`${alt || 'Featured department'} — image unavailable`}>
+        JB Mercantile
+      </div>
+    );
+  }
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={900}
+      height={640}
+      priority={eager}
+      sizes="(max-width: 768px) 100vw, 45vw"
+      onError={() => setFailed(true)}
+    />
   );
 }
