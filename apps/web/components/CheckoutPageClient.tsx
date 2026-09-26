@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { getCart, getCheckoutOptions, getSavedAddresses, placeCheckout, previewCheckout, type Cart, type CheckoutInput, type CheckoutOptions, type CheckoutPreview } from '../lib/shopping-api';
+import { buildCheckoutInput, getCart, getCheckoutOptions, getSavedAddresses, placeCheckout, previewCheckout, type Cart, type CheckoutInput, type CheckoutOptions, type CheckoutPreview } from '../lib/shopping-api';
 import { PriceDisplay } from './PriceDisplay';
 
 const emptyAddress = { line1: '', city: '', state: '', postalCode: '', country: 'KE' };
@@ -38,21 +38,18 @@ export function CheckoutPageClient() {
   }
 
   function input(): CheckoutInput {
-    return {
-      customerName: form.customerName,
-      customerEmail: form.customerEmail,
-      customerPhone: form.customerPhone,
-      deliveryMethodId: form.deliveryMethodId,
-      shippingZoneCode: form.shippingZoneCode,
-      address: needsAddress ? { line1: form.line1, city: form.city, state: form.state, postalCode: form.postalCode, country: form.country } : undefined,
-      addressId: form.addressId || undefined,
-      notes: form.notes || undefined,
+    return buildCheckoutInput(form, {
+      needsAddress,
       confirmPriceChanges: Boolean(preview?.requiresPriceConfirmation && form.confirmPriceChanges),
-    } as CheckoutInput & { confirmPriceChanges: boolean };
+    });
   }
 
   async function review(event: { preventDefault: () => void }) {
     event.preventDefault();
+    if (!form.deliveryMethodId || !form.shippingZoneCode) {
+      setError('Select a delivery method and delivery zone to calculate your totals.');
+      return;
+    }
     setBusy(true);
     setError('');
     try { setPreview(await previewCheckout(input())); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to calculate checkout totals.'); } finally { setBusy(false); }

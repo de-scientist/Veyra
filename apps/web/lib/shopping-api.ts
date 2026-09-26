@@ -359,6 +359,47 @@ export function getCheckoutOptions() {
   return request<CheckoutOptions>('/checkout/options');
 }
 
+export type CheckoutFormState = {
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  deliveryMethodId: string;
+  shippingZoneCode: string;
+  addressId: string;
+  line1: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  notes: string;
+};
+
+/**
+ * Builds the POST /checkout/preview (and POST /checkout) body from checkout
+ * form state. Blank optional selections are omitted — never sent as `''` —
+ * so the backend validation contract distinguishes "not selected"
+ * (`undefined` → controlled 400 "Select a delivery zone.") from a stale or
+ * unknown zone code (409 "delivery zone is unavailable").
+ */
+export function buildCheckoutInput(
+  form: CheckoutFormState,
+  opts: { needsAddress: boolean; confirmPriceChanges: boolean },
+): CheckoutInput {
+  return {
+    customerName: form.customerName,
+    customerEmail: form.customerEmail,
+    customerPhone: form.customerPhone,
+    deliveryMethodId: form.deliveryMethodId,
+    shippingZoneCode: form.shippingZoneCode || undefined,
+    address: opts.needsAddress
+      ? { line1: form.line1, city: form.city, state: form.state, postalCode: form.postalCode, country: form.country }
+      : undefined,
+    addressId: form.addressId || undefined,
+    notes: form.notes || undefined,
+    confirmPriceChanges: opts.confirmPriceChanges,
+  };
+}
+
 export function previewCheckout(input: CheckoutInput) {
   return request<CheckoutPreview>('/checkout/preview', { method: 'POST', body: JSON.stringify(input) });
 }
