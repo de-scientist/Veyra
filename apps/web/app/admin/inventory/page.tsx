@@ -108,7 +108,10 @@ export default function AdminInventoryPage() {
           <div className="form-grid">
             <label>
               <span>Variant (SKU)</span>
-              <select value={action.variantId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAction((prev) => ({ ...prev, variantId: e.currentTarget.value }))} required>
+              <select value={action.variantId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                const value = e.currentTarget.value;
+                setAction((prev) => ({ ...prev, variantId: value }));
+              }} required>
                 <option value="">Select…</option>
                 {rows.map((row) => (
                   <option key={row.variantId} value={row.variantId}>{row.variant.sku} — avail {row.availableQuantity}</option>
@@ -117,18 +120,27 @@ export default function AdminInventoryPage() {
             </label>
             <label>
               <span>Operation</span>
-              <select value={action.mode} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAction((prev) => ({ ...prev, mode: e.currentTarget.value as 'restock' | 'adjust' }))}>
+              <select value={action.mode} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                const value = e.currentTarget.value as 'restock' | 'adjust';
+                setAction((prev) => ({ ...prev, mode: value }));
+              }}>
                 <option value="restock">Restock (add stock)</option>
                 <option value="adjust">Adjust (positive or negative)</option>
               </select>
             </label>
             <label>
               <span>Quantity {action.mode === 'adjust' ? '(use negative to reduce)' : ''}</span>
-              <input type="number" step="1" value={action.quantity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction((prev) => ({ ...prev, quantity: e.currentTarget.value }))} required />
+              <input type="number" step="1" value={action.quantity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = e.currentTarget.value;
+                setAction((prev) => ({ ...prev, quantity: value }));
+              }} required />
             </label>
             <label>
               <span>Reason *</span>
-              <input type="text" value={action.reason} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction((prev) => ({ ...prev, reason: e.currentTarget.value }))} required minLength={3} placeholder="damaged, stock count correction…" />
+              <input type="text" value={action.reason} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = e.currentTarget.value;
+                setAction((prev) => ({ ...prev, reason: value }));
+              }} required minLength={3} placeholder="damaged, stock count correction…" />
             </label>
           </div>
           <div className="form-actions">

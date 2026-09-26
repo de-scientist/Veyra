@@ -137,11 +137,17 @@ export default function AdminCustomerDetailPage({ params }: PageProps) {
               </label>
               <label>
                 <span>Last name *</span>
-                <input type="text" value={profileForm.lastName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfileForm((prev) => ({ ...prev, lastName: e.currentTarget.value }))} required maxLength={120} />
+                <input type="text" value={profileForm.lastName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.currentTarget.value;
+                  setProfileForm((prev) => ({ ...prev, lastName: value }));
+                }} required maxLength={120} />
               </label>
               <label>
                 <span>Phone</span>
-                <input type="tel" value={profileForm.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfileForm((prev) => ({ ...prev, phone: e.currentTarget.value }))} maxLength={32} autoComplete="tel" />
+                <input type="tel" value={profileForm.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.currentTarget.value;
+                  setProfileForm((prev) => ({ ...prev, phone: value }));
+                }} maxLength={32} autoComplete="tel" />
               </label>
             </div>
             <div className="form-actions">

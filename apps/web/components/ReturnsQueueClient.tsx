@@ -119,7 +119,10 @@ export function ReturnsQueueClient() {
                       <input
                         type="text"
                         value={rejectReasons[item.id] ?? ''}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRejectReasons((prev) => ({ ...prev, [item.id]: e.currentTarget.value }))}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          const value = e.currentTarget.value;
+                          setRejectReasons((prev) => ({ ...prev, [item.id]: value }));
+                        }}
                         placeholder="At least 10 characters…"
                         minLength={10}
                         aria-label={`Rejection reason for ${item.returnNumber}`}
