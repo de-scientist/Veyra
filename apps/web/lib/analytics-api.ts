@@ -17,11 +17,26 @@ export type PresetKey = 'today' | 'yesterday' | 'last7' | 'last30' | 'thisWeek' 
 
 export type AnalyticsQuery = { preset?: PresetKey; from?: string; to?: string; compare?: boolean; limit?: number };
 
+/**
+ * Backend contract: analytics `from`/`to` must be full ISO datetimes with an
+ * offset (`z.string().datetime({ offset: true })`), interpreted in the
+ * Africa/Nairobi business timezone as a half-open [from, to) range. The
+ * filter bar uses `<input type="date">`, which yields calendar days
+ * (`YYYY-MM-DD`); those are normalized here — at the API-client boundary —
+ * to Nairobi midnight (`T00:00:00+03:00`, Nairobi has no DST) so reporting
+ * periods never shift into browser-local dates. Full datetimes pass through
+ * untouched; the backend schema stays strict.
+ */
+export function toAnalyticsDateTime(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T00:00:00+03:00`;
+  return value;
+}
+
 export function queryString(query: AnalyticsQuery): string {
   const params = new URLSearchParams();
   if (query.preset) params.set('preset', query.preset);
-  if (query.from) params.set('from', query.from);
-  if (query.to) params.set('to', query.to);
+  if (query.from) params.set('from', toAnalyticsDateTime(query.from));
+  if (query.to) params.set('to', toAnalyticsDateTime(query.to));
   if (query.compare) params.set('compare', 'true');
   if (query.limit) params.set('limit', String(query.limit));
   const text = params.toString();
@@ -79,8 +94,8 @@ export function getMetricDefinitions() {
 export async function exportReport(report: string, query: AnalyticsQuery & { exportLimit?: number }): Promise<{ filename: string; csv: string }> {
   const params = new URLSearchParams();
   if (query.preset) params.set('preset', query.preset);
-  if (query.from) params.set('from', query.from);
-  if (query.to) params.set('to', query.to);
+  if (query.from) params.set('from', toAnalyticsDateTime(query.from));
+  if (query.to) params.set('to', toAnalyticsDateTime(query.to));
   if (query.exportLimit) params.set('exportLimit', String(query.exportLimit));
   const response = await fetch(`${apiBaseUrl}/api/v1/admin/analytics/export/${report}?${params.toString()}`, { credentials: 'include' });
   if (!response.ok) {
