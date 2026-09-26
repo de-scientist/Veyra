@@ -273,6 +273,28 @@ describe('payments + M-Pesa (Phase C)', () => {
         oauthScript = { status: 200, body: { access_token: 'mock-token', expires_in: 3599 } };
       }
     });
+
+    it('rejects invalid OAuth responses without retrying blindly', async () => {
+      const { order, token } = await createOrder();
+      resetMpesaTokenCacheForTests();
+      oauthScript = { status: 401, body: { error: 'invalid_client' } };
+      try {
+        const denied = await initiate(order.orderNumber, `phase-c-oauth-${stamp}-123456`, token);
+        expect(denied.statusCode).toBe(400);
+        expect((denied.json() as { error: { code: string } }).error.code).toBe('MPESA_REQUEST_FAILED');
+      } finally {
+        oauthScript = { status: 200, body: { access_token: 'mock-token', expires_in: 3599 } };
+      }
+      resetMpesaTokenCacheForTests();
+      oauthScript = { status: 200, body: { access_token: null } };
+      try {
+        const missing = await initiate(order.orderNumber, `phase-c-oauth2-${stamp}-123456`, token);
+        expect(missing.statusCode).toBe(400);
+        expect((missing.json() as { error: { code: string } }).error.code).toBe('MPESA_AUTH_FAILED');
+      } finally {
+        oauthScript = { status: 200, body: { access_token: 'mock-token', expires_in: 3599 } };
+      }
+    });
   });
 
   describe('callbacks', () => {
