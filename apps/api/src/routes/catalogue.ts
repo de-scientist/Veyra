@@ -313,7 +313,13 @@ export async function catalogueRoutes(app: FastifyInstance) {
       }
     }
     const priceChanged = payload.price !== undefined && Number(existing.priceOverride ?? 0) !== payload.price;
-    let variant;
+    const barcodeData =
+      payload.barcode === null
+        ? { barcode: null as string | null }
+        : payload.barcode === undefined || payload.barcode.trim() === ''
+          ? {}
+          : { barcode: payload.barcode.trim() };
+    let variant: Prisma.ProductVariantGetPayload<Record<string, never>>;
     try {
       variant = await prisma.productVariant.update({
         where: { id: variantId },
@@ -322,7 +328,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
           status: payload.status,
           priceOverride: payload.price,
           compareAtPrice: payload.compareAtPrice === null ? null : payload.compareAtPrice,
-          barcode: payload.barcode === null ? null : payload.barcode === undefined || payload.barcode.trim() === '' ? undefined : payload.barcode.trim(),
+          ...barcodeData,
         },
       });
     } catch (error) {
@@ -454,9 +460,24 @@ export async function catalogueRoutes(app: FastifyInstance) {
       const parent = await prisma.category.findUnique({ where: { id: payload.parentId } });
       if (!parent) throw new HttpError(404, 'PARENT_CATEGORY_NOT_FOUND', 'Parent category not found.');
     }
+    if (payload.code) {
+      const codeCheck = validateDictionaryCode(payload.code, 'category');
+      if (!codeCheck.ok) throw new HttpError(400, 'INVALID_CATEGORY_CODE', codeCheck.errors.map((e) => e.message).join('; '));
+    }
+    if (payload.skuTemplate) {
+      const templateCheck = validateSkuTemplate(payload.skuTemplate);
+      if (!templateCheck.ok) throw new HttpError(400, 'INVALID_SKU_COMPONENT', templateCheck.errors.map((e) => e.message).join('; '));
+    }
     try {
       const category = await prisma.category.create({
-        data: { name: payload.name.trim(), slug: generateSlug(payload.slug ?? payload.name), description: payload.description?.trim(), parentId: payload.parentId ?? null },
+        data: {
+          name: payload.name.trim(),
+          slug: generateSlug(payload.slug ?? payload.name),
+          description: payload.description?.trim(),
+          parentId: payload.parentId ?? null,
+          code: payload.code ? normalizeSegment(payload.code) : null,
+          skuTemplate: payload.skuTemplate?.trim(),
+        },
       });
       await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'CATEGORY_CREATED', entity: 'Category', entityId: category.id, ...auditMeta(request) } });
       return { success: true, data: category };
@@ -475,8 +496,28 @@ export async function catalogueRoutes(app: FastifyInstance) {
       const parent = await prisma.category.findUnique({ where: { id: payload.parentId } });
       if (!parent) throw new HttpError(404, 'PARENT_CATEGORY_NOT_FOUND', 'Parent category not found.');
     }
+    if (payload.code) {
+      const codeCheck = validateDictionaryCode(payload.code, 'category');
+      if (!codeCheck.ok) throw new HttpError(400, 'INVALID_CATEGORY_CODE', codeCheck.errors.map((e) => e.message).join('; '));
+    }
+    if (payload.skuTemplate) {
+      const templateCheck = validateSkuTemplate(payload.skuTemplate);
+      if (!templateCheck.ok) throw new HttpError(400, 'INVALID_SKU_COMPONENT', templateCheck.errors.map((e) => e.message).join('; '));
+      // Template edits never rewrite existing variant SKUs (they froze
+      // skuTemplateVersion at creation). Version-bump automation is Phase 2.
+    }
     try {
-      const category = await prisma.category.update({ where: { id }, data: { name: payload.name?.trim(), slug: payload.slug ? generateSlug(payload.slug) : undefined, description: payload.description?.trim(), parentId: payload.parentId === null ? null : payload.parentId } });
+      const category = await prisma.category.update({
+        where: { id },
+        data: {
+          name: payload.name?.trim(),
+          slug: payload.slug ? generateSlug(payload.slug) : undefined,
+          description: payload.description?.trim(),
+          parentId: payload.parentId === null ? null : payload.parentId,
+          code: payload.code ? normalizeSegment(payload.code) : undefined,
+          skuTemplate: payload.skuTemplate?.trim(),
+        },
+      });
       await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'CATEGORY_UPDATED', entity: 'Category', entityId: id, ...auditMeta(request) } });
       return { success: true, data: category };
     } catch (error) {
@@ -537,8 +578,14 @@ export async function catalogueRoutes(app: FastifyInstance) {
     const payload = attributeValueSchema.parse(request.body);
     const attribute = await prisma.attribute.findUnique({ where: { id } });
     if (!attribute) throw new HttpError(404, 'ATTRIBUTE_NOT_FOUND', 'Attribute not found.');
+    if (payload.code) {
+      const codeCheck = validateDictionaryCode(payload.code, 'generic');
+      if (!codeCheck.ok) throw new HttpError(400, 'INVALID_SKU_COMPONENT', codeCheck.errors.map((e) => e.message).join('; '));
+    }
     try {
-      const value = await prisma.attributeValue.create({ data: { attributeId: id, value: payload.value.trim() } });
+      const value = await prisma.attributeValue.create({
+        data: { attributeId: id, value: payload.value.trim(), code: payload.code ? normalizeSegment(payload.code) : null },
+      });
       await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'ATTRIBUTE_CREATED', entity: 'Attribute', entityId: value.id, ...auditMeta(request) } });
       return { success: true, data: value };
     } catch (error) {
