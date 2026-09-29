@@ -251,7 +251,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
       description: product.description ?? '',
       variants: [
         {
-          sku: payload.sku,
+          sku: normalizedSku,
           price: payload.price,
           status: payload.status,
           attributeValues: payload.attributeValues,
@@ -271,16 +271,21 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
 
     try {
+      // Transaction safety: variant + zeroed inventory persist atomically.
+      // Concurrent duplicate SKUs are rejected by the DB unique constraint
+      // (P2002 -> 409 SKU_ALREADY_EXISTS); the whole transaction rolls back.
       const variant = await prisma.$transaction(async (client) => {
         const created = await client.productVariant.create({
           data: {
             productId,
-            sku: payload.sku.trim(),
-            name: payload.name?.trim() ?? payload.sku.trim(),
+            sku: normalizedSku,
+            name: payload.name?.trim() ?? normalizedSku,
             status: payload.status,
             priceOverride: payload.price,
             compareAtPrice: payload.compareAtPrice ?? null,
             isDefault: false,
+            barcode: normalizedBarcode,
+            skuTemplateVersion: product.category?.skuTemplateVersion ?? 1,
           },
         });
         await client.inventory.create({ data: { variantId: created.id, quantityOnHand: 0, quantityReserved: 0, lowStockThreshold: 5 } });
@@ -298,11 +303,31 @@ export async function catalogueRoutes(app: FastifyInstance) {
     const payload = variantUpdateSchema.parse(request.body);
     const existing = await prisma.productVariant.findFirst({ where: { id: variantId, productId } });
     if (!existing) throw new HttpError(404, 'VARIANT_NOT_FOUND', 'Product variant not found.');
+    // SKU immutability: sku is not accepted by variantUpdateSchema, so even a
+    // locked variant (orders/movements exist) keeps its SKU here. Only name,
+    // status, pricing and barcode may change explicitly.
+    if (payload.barcode !== undefined && payload.barcode !== null && payload.barcode.trim() !== '') {
+      const barcodeCheck = validateBarcode(payload.barcode);
+      if (!barcodeCheck.ok) {
+        throw new HttpError(400, 'INVALID_SKU_COMPONENT', barcodeCheck.errors.map((e) => e.message).join('; '));
+      }
+    }
     const priceChanged = payload.price !== undefined && Number(existing.priceOverride ?? 0) !== payload.price;
-    const variant = await prisma.productVariant.update({
-      where: { id: variantId },
-      data: { name: payload.name?.trim(), status: payload.status, priceOverride: payload.price, compareAtPrice: payload.compareAtPrice === null ? null : payload.compareAtPrice },
-    });
+    let variant;
+    try {
+      variant = await prisma.productVariant.update({
+        where: { id: variantId },
+        data: {
+          name: payload.name?.trim(),
+          status: payload.status,
+          priceOverride: payload.price,
+          compareAtPrice: payload.compareAtPrice === null ? null : payload.compareAtPrice,
+          barcode: payload.barcode === null ? null : payload.barcode === undefined || payload.barcode.trim() === '' ? undefined : payload.barcode.trim(),
+        },
+      });
+    } catch (error) {
+      conflict(error);
+    }
     await prisma.auditLog.create({
       data: {
         actorId: actorId(request),
