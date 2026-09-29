@@ -245,6 +245,14 @@ enum AuditAction {
   CUSTOMER_UPDATED
   ORDER_CANCELLED
   VARIANT_UPDATED
+  VARIANT_CREATED
+  VARIANT_ARCHIVED
+  SKU_GENERATED
+  SKU_OVERRIDDEN
+  SKU_VALIDATION_FAILED
+  SKU_DUPLICATE
+  SKU_REGENERATED
+  SKU_ARCHIVED
   REPORT_EXPORTED
   CUSTOMER_REPORT_EXPORTED
   PRODUCT_IMAGE_CREATED
@@ -391,13 +399,24 @@ model Category {
   description String?
   parentId    String?
   status      String    @default("ACTIVE")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  // SKU foundation (Phase 1): stable short code + category-specific SKU template.
+  // code is nullable during backfill, then curated NOT NULL by admins.
+  // Template tokens: {BRAND} {CATEGORY} {STYLE} + attribute-segment keys
+  // (e.g. {COLOR} {SIZE} {CAPACITY} {POWER} {MATERIAL} {PACK}).
+  // skuTemplateVersion is bumped when the template changes; variants freeze
+  // the version they were created with so history never rewrites.
+  code               String? @unique
+  skuTemplate        String?
+  skuTemplateVersion Int     @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  deletedAt          DateTime?
 
   parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children Category[] @relation("CategoryHierarchy")
   products Product[]
+
+  @@index([code])
 }
 
 model Collection {
@@ -433,9 +452,16 @@ model Product {
   status      ProductStatus @default(DRAFT)
   basePrice   Decimal?      @db.Decimal(10, 2)
   categoryId  String?
+  // SKU foundation (Phase 1): stable style/model identifier used as the
+  // {STYLE} segment when generating variant SKUs (e.g. "Air Max 90" -> AM90).
+  // Display name is never used directly as a SKU segment. Nullable: legacy
+  // rows and products without a manufacturer style use slug-derived fallback.
+  styleCode   String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   deletedAt   DateTime?
+
+  @@index([styleCode])
 
   category    Category?           @relation(fields: [categoryId], references: [id])
   variants    ProductVariant[]
@@ -482,10 +508,18 @@ model ProductVariant {
   priceOverride  Decimal?             @db.Decimal(10, 2)
   compareAtPrice Decimal?             @db.Decimal(10, 2)
   isDefault      Boolean              @default(false)
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-  archivedAt     DateTime?
-  deletedAt      DateTime?
+  // SKU foundation (Phase 1): barcode is a separate nullable concept from SKU
+  // (never SKU = barcode). Nullable unique: PG allows many NULLs, one per value.
+  // Generation drivers are out of scope for Phase 1 — column only.
+  barcode String? @unique
+  // Template version frozen at creation; category template edits never rewrite history.
+  skuTemplateVersion Int? @default(1)
+  // Set on first order/reservation/movement beyond creation; SKU edits rejected after lock.
+  skuLockedAt DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  archivedAt  DateTime?
+  deletedAt   DateTime?
 
   product                Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
   inventory              Inventory?
@@ -498,6 +532,10 @@ model ProductVariant {
   replacementExchanges   Exchange[] @relation("ReplacementExchangeVariant")
   images                 ProductImage[]
   variantAttributeValues VariantAttributeValue[]
+
+  @@index([sku])
+  @@index([barcode])
+  @@index([productId])
 }
 
 model Attribute {
@@ -515,12 +553,19 @@ model AttributeValue {
   id          String   @id @default(uuid())
   attributeId String
   value       String
+  // SKU foundation (Phase 1): stable short code for SKU segments
+  // (e.g. Color "Black" -> BLK, Brand "Nike" -> NKE, Size "42" -> 42).
+  // Nullable during backfill; unique per attribute so Blue->BLU and
+  // Black->BLK never collide across attributes, and Blush forces an
+  // explicit distinct code within Color. PG allows many NULLs.
+  code        String?
   createdAt   DateTime @default(now())
 
   attribute     Attribute               @relation(fields: [attributeId], references: [id], onDelete: Cascade)
   variantValues VariantAttributeValue[]
 
   @@unique([attributeId, value])
+  @@unique([attributeId, code])
 }
 
 model VariantAttributeValue {

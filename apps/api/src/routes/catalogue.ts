@@ -7,6 +7,16 @@ import { validateAuditReason, validateInventoryAdjustment, validateRestockQuanti
 import { HttpError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import { requireOperationsAccess } from '../middleware/operations.js';
+import {
+  normalizeSegment,
+  skuConflictFromPrismaTarget,
+  validateBarcode,
+  validateDictionaryCode,
+  validateManualSku,
+  validateSkuTemplate,
+} from '../lib/sku.js';
+
+const styleCodeField = z.string().min(2).max(10).regex(/^[A-Za-z0-9]+$/, 'Style code may only contain A-Z and 0-9.').optional();
 
 const productSchema = z.object({
   name: z.string().min(2).max(200),
@@ -14,6 +24,7 @@ const productSchema = z.object({
   categoryId: z.string().optional(),
   slug: z.string().min(2).max(220).optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).default('DRAFT'),
+  styleCode: styleCodeField,
 });
 
 const productUpdateSchema = z.object({
@@ -21,6 +32,7 @@ const productUpdateSchema = z.object({
   description: z.string().min(12).max(10000).optional(),
   categoryId: z.string().nullable().optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional(),
+  styleCode: z.string().min(2).max(10).regex(/^[A-Za-z0-9]+$/, 'Style code may only contain A-Z and 0-9.').nullable().optional(),
 });
 
 const variantSchema = z.object({
@@ -42,6 +54,9 @@ const variantUpdateSchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional(),
   price: z.number().min(0).optional(),
   compareAtPrice: z.number().min(0).nullable().optional(),
+  // SKU itself is immutable here (see PATCH handler). Barcode may be
+  // attached/cleared explicitly; null clears it.
+  barcode: z.string().max(64).nullable().optional(),
 });
 
 const restockSchema = z.object({
@@ -60,6 +75,9 @@ const categorySchema = z.object({
   slug: z.string().min(2).max(140).optional(),
   description: z.string().max(2000).optional(),
   parentId: z.string().nullable().optional(),
+  // SKU foundation: stable short code + category-specific template (admin-managed).
+  code: z.string().min(2).max(5).regex(/^[A-Za-z0-9]+$/, 'Category code may only contain A-Z and 0-9.').optional(),
+  skuTemplate: z.string().min(1).max(120).optional(),
 });
 
 const collectionSchema = z.object({
@@ -76,6 +94,8 @@ const attributeSchema = z.object({
 
 const attributeValueSchema = z.object({
   value: z.string().min(1).max(120),
+  // SKU foundation: stable short code for SKU segments (admin-managed).
+  code: z.string().min(1).max(6).regex(/^[A-Za-z0-9]+$/, 'Code may only contain A-Z and 0-9.').optional(),
 });
 
 const paginationSchema = z.object({
@@ -98,6 +118,10 @@ function auditMeta(request: FastifyRequest) {
 
 function conflict(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    // Deterministic SKU/barcode/code conflicts surface actionable codes so
+    // admins can correct the colliding component (never silent `-01` suffixes).
+    const mapped = skuConflictFromPrismaTarget(error.meta?.target);
+    if (mapped) throw new HttpError(409, mapped.code, mapped.message);
     throw new HttpError(409, 'ALREADY_EXISTS', 'A record with these unique details already exists.');
   }
   throw error;
@@ -142,6 +166,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
           description: payload.description.trim(),
           categoryId: payload.categoryId,
           status: payload.status,
+          styleCode: payload.styleCode ? normalizeSegment(payload.styleCode) : null,
         },
       });
       await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'PRODUCT_CREATED', entity: 'Product', entityId: product.id, ...auditMeta(request) } });
@@ -157,6 +182,10 @@ export async function catalogueRoutes(app: FastifyInstance) {
     const existing = await prisma.product.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
     try {
+      // SKU immutability: editing name/description/category/styleCode never
+      // rewrites existing variant SKUs. Variants keep the SKU (and template
+      // version) they were created with; only explicit variant operations
+      // may archive/replace them.
       const product = await prisma.product.update({
         where: { id },
         data: {
@@ -164,6 +193,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
           description: payload.description?.trim(),
           categoryId: payload.categoryId === null ? null : payload.categoryId,
           status: payload.status,
+          styleCode: payload.styleCode === null ? null : payload.styleCode ? normalizeSegment(payload.styleCode) : undefined,
         },
       });
       await prisma.auditLog.create({
@@ -187,7 +217,23 @@ export async function catalogueRoutes(app: FastifyInstance) {
     const { productId } = request.params as { productId: string };
     const payload = variantSchema.parse(request.body);
 
-    const product = await prisma.product.findUnique({ where: { id: productId } });
+    // Manual SKU foundation: normalize + validate format/uniqueness-shape here;
+    // the DB unique constraint remains the final authority (see conflict()).
+    const skuCheck = validateManualSku(payload.sku);
+    if (!skuCheck.ok) {
+      throw new HttpError(400, 'INVALID_SKU', skuCheck.errors.map((e) => e.message).join('; '));
+    }
+    const normalizedSku = skuCheck.value;
+    let normalizedBarcode: string | null = null;
+    if (payload.barcode !== undefined && payload.barcode.trim() !== '') {
+      const barcodeCheck = validateBarcode(payload.barcode);
+      if (!barcodeCheck.ok) {
+        throw new HttpError(400, 'INVALID_SKU_COMPONENT', barcodeCheck.errors.map((e) => e.message).join('; '));
+      }
+      normalizedBarcode = barcodeCheck.value;
+    }
+
+    const product = await prisma.product.findUnique({ where: { id: productId }, include: { category: { select: { skuTemplateVersion: true } } } });
     if (!product) {
       throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
     }
