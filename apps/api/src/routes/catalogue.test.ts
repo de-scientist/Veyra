@@ -120,6 +120,11 @@ describe('catalogue admin CRUD', () => {
     const product = await prisma.product.create({
       data: { name: `Sku ${stamp}`, slug: `crud-${stamp}-sku`, description: 'SKU foundation fixture product.', status: 'DRAFT', categoryId: category.id, styleCode: 'SK1' },
     });
+    // Variant creation gates on publish readiness incl. media (pre-existing
+    // route behavior): attach a fixture image first.
+    await prisma.productImage.create({
+      data: { productId: product.id, url: 'https://images.unsplash.com/fixture', altText: 'Fixture', isPrimary: true, sortOrder: 0 },
+    });
     const sku = `P1-${stamp}-BLK-M`;
     const attrs = [{ attributeId: attribute.id, value: 'Black' }];
     try {

@@ -1,6 +1,6 @@
 # Database
 
-PostgreSQL via Prisma. Authoritative source: `prisma/schema.prisma` (50 models, 25 enums). Migrations in `prisma/migrations/` are forward-only, additive SQL applied with `psql` — never `prisma migrate reset` (see [DEPLOYMENT](../DEPLOYMENT.md)).
+PostgreSQL via Prisma. Authoritative source: `prisma/schema.prisma` (50 models, 25 enums). Migrations in `prisma/migrations/` are forward-only, additive SQL applied with `psql` — never `prisma migrate reset` (see [DEPLOYMENT](../DEPLOYMENT.md)). Phase 17 (`20260929_phase17_sku_foundation`) added the SKU foundation columns/indexes/audit actions — all nullable/defaulted, existing SKUs preserved verbatim.
 
 ## Conventions
 
@@ -8,6 +8,7 @@ PostgreSQL via Prisma. Authoritative source: `prisma/schema.prisma` (50 models, 
 - Money as `NUMERIC(10,2)` (Prisma Decimal) — no float arithmetic on financial paths.
 - Soft deletion where customer-visible (`deletedAt` on products/variants).
 - Historical snapshots: `OrderItem` freezes name/variant/price at purchase; status changes append to `OrderStatusHistory` / `ReturnStatusHistory` / `DeliveryStatusHistory`.
+- SKU identity: `ProductVariant.sku` is the unique sellable-unit identifier (DB unique constraint is the final authority); `Category.code` / `AttributeValue.code` (unique per attribute) / `Product.styleCode` form the dictionary layer; `ProductVariant.barcode` is a separate nullable unique; `skuTemplateVersion` freezes history against template edits; `OrderItem.sku` is never backfilled. See [CATALOGUE.md](CATALOGUE.md#sku-architecture-phase-1-foundation).
 - Numbering: `ORD-YYYYMMDD-<8HEX>`, `RET-…`, `RFD-…`, delivery tracking `VYR-YYYYMMDD-<8HEX>`.
 
 ## Major Entities
