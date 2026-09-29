@@ -31,21 +31,32 @@ type ProductSeed = {
   collections?: string[];
   images: string[];
   variants: VariantSeed[];
+  // SKU foundation (Phase 1): stable style identifier, matching the legacy
+  // SKU prefix so prefix-search stays consistent with preserved history.
+  styleCode: string;
 };
 
-const CATEGORIES: Array<{ slug: string; name: string; description: string; parent?: string }> = [
-  { slug: 'fashion', name: 'Fashion', description: 'Everyday clothing — men, women and accessory staples.' },
-  { slug: 'footwear', name: 'Footwear', description: 'Sneakers, casual and formal footwear for men and women.' },
-  { slug: 'kitchen-home', name: 'Kitchen & Home', description: 'Kitchen appliances, cookware and home essentials for modern Kenyan homes.' },
-  { slug: 'men', name: 'Men', description: 'Structured essentials and elevated staples for everyday wear.', parent: 'fashion' },
-  { slug: 'women', name: 'Women', description: 'Soft layers, tailored silhouettes, and statement pieces.', parent: 'fashion' },
-  { slug: 'accessories', name: 'Accessories', description: 'Finishing touches for complete looks.', parent: 'fashion' },
-  { slug: 'footwear-men', name: "Men's Footwear", description: 'Casual and formal shoes for men.', parent: 'footwear' },
-  { slug: 'footwear-women', name: "Women's Footwear", description: 'Casual and formal shoes for women.', parent: 'footwear' },
-  { slug: 'sneakers', name: 'Sneakers', description: 'Everyday runners and street-ready trainers.', parent: 'footwear-men' },
-  { slug: 'kitchen-appliances', name: 'Kitchen Appliances', description: 'Small appliances that make daily cooking faster and easier.', parent: 'kitchen-home' },
-  { slug: 'cookware', name: 'Cookware', description: 'Pots, pans and cooking essentials built for daily use.', parent: 'kitchen-home' },
-  { slug: 'home-essentials', name: 'Home Essentials', description: 'Bedding, storage and comfort basics for the home.', parent: 'kitchen-home' },
+// SKU foundation (Phase 1): stable category codes + per-category templates.
+// Codes are admin-curated (never blind first-3-letters); templates freeze per
+// variant at creation so later edits never rewrite history.
+const CLOTHING_TEMPLATE = '{BRAND}-{CATEGORY}-{STYLE}-{COLOR}-{SIZE}';
+const FOOTWEAR_TEMPLATE = '{BRAND}-{CATEGORY}-{STYLE}-{COLOR}-{SIZE}';
+const APPLIANCE_TEMPLATE = '{BRAND}-{CATEGORY}-{STYLE}-{POWER}-{COLOR}';
+const UTENSIL_TEMPLATE = '{BRAND}-{CATEGORY}-{STYLE}-{MATERIAL}-{PACK}';
+
+const CATEGORIES: Array<{ slug: string; name: string; description: string; parent?: string; code: string; skuTemplate: string }> = [
+  { slug: 'fashion', name: 'Fashion', description: 'Everyday clothing — men, women and accessory staples.', code: 'FSH', skuTemplate: CLOTHING_TEMPLATE },
+  { slug: 'footwear', name: 'Footwear', description: 'Sneakers, casual and formal footwear for men and women.', code: 'FTW', skuTemplate: FOOTWEAR_TEMPLATE },
+  { slug: 'kitchen-home', name: 'Kitchen & Home', description: 'Kitchen appliances, cookware and home essentials for modern Kenyan homes.', code: 'KTH', skuTemplate: CLOTHING_TEMPLATE },
+  { slug: 'men', name: 'Men', description: 'Structured essentials and elevated staples for everyday wear.', parent: 'fashion', code: 'MEN', skuTemplate: CLOTHING_TEMPLATE },
+  { slug: 'women', name: 'Women', description: 'Soft layers, tailored silhouettes, and statement pieces.', parent: 'fashion', code: 'WMN', skuTemplate: CLOTHING_TEMPLATE },
+  { slug: 'accessories', name: 'Accessories', description: 'Finishing touches for complete looks.', parent: 'fashion', code: 'ACC', skuTemplate: CLOTHING_TEMPLATE },
+  { slug: 'footwear-men', name: "Men's Footwear", description: 'Casual and formal shoes for men.', parent: 'footwear', code: 'MFW', skuTemplate: FOOTWEAR_TEMPLATE },
+  { slug: 'footwear-women', name: "Women's Footwear", description: 'Casual and formal shoes for women.', parent: 'footwear', code: 'WFW', skuTemplate: FOOTWEAR_TEMPLATE },
+  { slug: 'sneakers', name: 'Sneakers', description: 'Everyday runners and street-ready trainers.', parent: 'footwear-men', code: 'SNK', skuTemplate: FOOTWEAR_TEMPLATE },
+  { slug: 'kitchen-appliances', name: 'Kitchen Appliances', description: 'Small appliances that make daily cooking faster and easier.', parent: 'kitchen-home', code: 'KAP', skuTemplate: APPLIANCE_TEMPLATE },
+  { slug: 'cookware', name: 'Cookware', description: 'Pots, pans and cooking essentials built for daily use.', parent: 'kitchen-home', code: 'CKW', skuTemplate: UTENSIL_TEMPLATE },
+  { slug: 'home-essentials', name: 'Home Essentials', description: 'Bedding, storage and comfort basics for the home.', parent: 'kitchen-home', code: 'HES', skuTemplate: CLOTHING_TEMPLATE },
 ];
 
 const COLLECTIONS: Array<{ slug: string; name: string; description: string }> = [
@@ -57,20 +68,43 @@ const COLLECTIONS: Array<{ slug: string; name: string; description: string }> = 
   { slug: 'step-forward', name: 'Step Forward', description: 'Footwear picks for work, weekends and everything between.' },
 ];
 
-const ATTRIBUTE_VALUES: Record<string, string[]> = {
-  Color: ['Black', 'White', 'Stone', 'Olive', 'Brown', 'Beige', 'Blue', 'Red', 'Silver', 'Nude', 'Grey', 'Green', 'Navy'],
-  Size: ['S', 'M', 'L', 'XL', '6', '8', 'Double'],
-  'Shoe Size': ['38', '39', '42', '43', '44'],
-  Capacity: ['1.5L', '1.8L', '2L'],
-  Power: ['500W', '1500W'],
-  Material: ['Canvas', 'Leather', 'Non-stick aluminium', 'Cotton', 'Stainless steel'],
-  Style: ['Lace-up', 'Slip-on', 'Block heel'],
-  Brand: ['JB'],
+// SKU foundation (Phase 1): curated dictionary codes. Unique per attribute so
+// Blue->BLU never collides with Black->BLK, and Navy takes NVY explicitly.
+const ATTRIBUTE_VALUES: Record<string, Array<{ value: string; code: string }>> = {
+  Color: [
+    { value: 'Black', code: 'BLK' }, { value: 'White', code: 'WHT' }, { value: 'Stone', code: 'STN' },
+    { value: 'Olive', code: 'OLV' }, { value: 'Brown', code: 'BRN' }, { value: 'Beige', code: 'BEI' },
+    { value: 'Blue', code: 'BLU' }, { value: 'Red', code: 'RED' }, { value: 'Silver', code: 'SLV' },
+    { value: 'Nude', code: 'NDE' }, { value: 'Grey', code: 'GRY' }, { value: 'Green', code: 'GRN' },
+    { value: 'Navy', code: 'NVY' },
+  ],
+  Size: [
+    { value: 'S', code: 'S' }, { value: 'M', code: 'M' }, { value: 'L', code: 'L' },
+    { value: 'XL', code: 'XL' }, { value: '6', code: '6' }, { value: '8', code: '8' },
+    { value: 'Double', code: 'DBL' },
+  ],
+  'Shoe Size': [
+    { value: '38', code: '38' }, { value: '39', code: '39' }, { value: '42', code: '42' },
+    { value: '43', code: '43' }, { value: '44', code: '44' },
+  ],
+  Capacity: [
+    { value: '1.5L', code: '15L' }, { value: '1.8L', code: '18L' }, { value: '2L', code: '2L' },
+  ],
+  Power: [{ value: '500W', code: '500W' }, { value: '1500W', code: '1500W' }],
+  Material: [
+    { value: 'Canvas', code: 'CNV' }, { value: 'Leather', code: 'LEA' },
+    { value: 'Non-stick aluminium', code: 'NSA' }, { value: 'Cotton', code: 'CTN' },
+    { value: 'Stainless steel', code: 'SST' },
+  ],
+  Style: [
+    { value: 'Lace-up', code: 'LCU' }, { value: 'Slip-on', code: 'SLO' }, { value: 'Block heel', code: 'BLH' },
+  ],
+  Brand: [{ value: 'JB', code: 'JB' }],
 };
 
 const PRODUCTS: ProductSeed[] = [
   {
-    slug: 'classic-black-hoodie', name: 'Classic Black Hoodie',
+    slug: 'classic-black-hoodie', styleCode: 'HOD', name: 'Classic Black Hoodie',
     description: 'The Classic Black Hoodie pairs a premium brushed cotton feel with a confident silhouette and all-day comfort. Designed for cool evenings and polished everyday looks, it layers beautifully from commute to weekend plans.',
     category: 'men', basePrice: 2500, featured: true, createdAt: '2026-08-28T09:00:00+03:00',
     collections: ['featured', 'city-light', 'weekend-edit'],
@@ -82,7 +116,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'mila-tapered-trouser', name: 'Mila Tapered Trouser',
+    slug: 'mila-tapered-trouser', styleCode: 'TRO', name: 'Mila Tapered Trouser',
     description: 'The Mila Tapered Trouser blends a tailored profile with comfort-first fabric. It moves from office-ready to after-hours without losing ease, giving the wardrobe an instant premium finish.',
     category: 'women', basePrice: 3800, featured: true, createdAt: '2026-07-14T09:00:00+03:00',
     collections: ['featured', 'city-light'],
@@ -93,7 +127,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'atlas-utility-shirt', name: 'Atlas Utility Shirt',
+    slug: 'atlas-utility-shirt', styleCode: 'SHR', name: 'Atlas Utility Shirt',
     description: 'The Atlas Utility Shirt delivers a structured silhouette without feeling rigid. Its refined finish works with denim, tailored trousers, and layered fits for a versatile wardrobe base.',
     category: 'men', basePrice: 2950, createdAt: '2026-08-30T09:00:00+03:00',
     collections: ['weekend-edit', 'heritage-essentials'],
@@ -104,7 +138,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'solace-knit-set', name: 'Solace Knit Set',
+    slug: 'solace-knit-set', styleCode: 'KNT', name: 'Solace Knit Set',
     description: 'The Solace Knit Set is designed for polished, low-effort styling. The soft knit structure keeps it comfortable while the lean silhouette delivers a clean, intentional finish.',
     category: 'women', basePrice: 5200, featured: true, createdAt: '2026-09-02T09:00:00+03:00',
     collections: ['featured'],
@@ -115,7 +149,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'nairobi-utility-bag', name: 'Nairobi Utility Bag',
+    slug: 'nairobi-utility-bag', styleCode: 'BAG', name: 'Nairobi Utility Bag',
     description: 'The Nairobi Utility Bag brings function and refinement together with durable finishes, practical storage, and a clean silhouette that pairs well with everyday essentials.',
     category: 'accessories', basePrice: 4200, createdAt: '2026-09-05T09:00:00+03:00',
     collections: ['weekend-edit'],
@@ -125,7 +159,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'marina-overshirt', name: 'Marina Overshirt',
+    slug: 'marina-overshirt', styleCode: 'OVR', name: 'Marina Overshirt',
     description: 'The Marina Overshirt brings an elevated layer to the wardrobe with a structured fit and soft hand feel. Built for layering and day-to-night ease, it plays across relaxed and tailored looks.',
     category: 'women', basePrice: 4600, createdAt: '2026-09-08T09:00:00+03:00',
     collections: [],
@@ -136,7 +170,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'mombasa-road-runner', name: 'Mombasa Road Runner',
+    slug: 'mombasa-road-runner', styleCode: 'SNK', name: 'Mombasa Road Runner',
     description: 'The Mombasa Road Runner pairs breathable mesh with responsive cushioning and grippy outsoles. A versatile trainer for commutes, workouts and off-duty days.',
     category: 'sneakers', basePrice: 6500, featured: true, createdAt: '2026-09-10T09:00:00+03:00',
     collections: ['featured', 'step-forward', 'weekend-edit'],
@@ -149,7 +183,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'savanna-leather-loafer', name: 'Savanna Leather Loafer',
+    slug: 'savanna-leather-loafer', styleCode: 'LOF', name: 'Savanna Leather Loafer',
     description: 'The Savanna Leather Loafer is cut from smooth leather with a cushioned insole and durable sole. Dresses up tailoring and sharpens off-duty looks alike.',
     category: 'footwear-men', basePrice: 7200, createdAt: '2026-09-11T09:00:00+03:00',
     collections: ['step-forward', 'city-light'],
@@ -161,7 +195,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'amina-block-heel', name: 'Amina Block Heel',
+    slug: 'amina-block-heel', styleCode: 'HEEL', name: 'Amina Block Heel',
     description: 'The Amina Block Heel balances elegance with all-day comfort — a stable block heel, padded footbed and clean straps that pair with dresses and tailoring.',
     category: 'footwear-women', basePrice: 5800, featured: true, createdAt: '2026-09-12T09:00:00+03:00',
     collections: ['featured', 'step-forward'],
@@ -173,7 +207,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'jikoni-electric-kettle', name: 'Jikoni Electric Kettle 1.8L',
+    slug: 'jikoni-electric-kettle', styleCode: 'KET', name: 'Jikoni Electric Kettle 1.8L',
     description: 'The Jikoni Electric Kettle boils a full 1.8 litres quickly and safely, with cordless pouring, auto shut-off and boil-dry protection. A daily essential for tea, coffee and cooking.',
     category: 'kitchen-appliances', basePrice: 3400, featured: true, createdAt: '2026-09-13T09:00:00+03:00',
     collections: ['featured', 'kitchen-starter'],
@@ -184,7 +218,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'savanna-blender-pro', name: 'Savanna Blender Pro 1.5L',
+    slug: 'savanna-blender-pro', styleCode: 'BLD', name: 'Savanna Blender Pro 1.5L',
     description: 'The Savanna Blender Pro powers through fruit, vegetables and ice with a 1.5L jar, stainless blades and simple speed controls. Built for daily family use.',
     category: 'kitchen-appliances', basePrice: 5600, createdAt: '2026-09-14T09:00:00+03:00',
     collections: ['kitchen-starter'],
@@ -195,7 +229,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'karibu-cookware-set', name: 'Karibu 5-Piece Cookware Set',
+    slug: 'karibu-cookware-set', styleCode: 'COK', name: 'Karibu 5-Piece Cookware Set',
     description: 'The Karibu 5-Piece Cookware Set covers daily cooking — saucepans, a frying pan and lids in durable non-stick aluminium that heats evenly and cleans easily. Suitable for gas and electric hobs.',
     category: 'cookware', basePrice: 8900, featured: true, createdAt: '2026-07-20T09:00:00+03:00',
     collections: ['featured', 'kitchen-starter'],
@@ -205,7 +239,7 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    slug: 'cloud-cotton-duvet-set', name: 'Cloud Cotton Duvet Set',
+    slug: 'cloud-cotton-duvet-set', styleCode: 'DVD', name: 'Cloud Cotton Duvet Set',
     description: 'The Cloud Cotton Duvet Set includes a duvet cover and pillowcases in breathable long-staple cotton. Cool in warm months, cosy when nights turn chilly.',
     category: 'home-essentials', basePrice: 4800, createdAt: '2026-09-15T09:00:00+03:00',
     collections: ['city-light'],
@@ -223,8 +257,8 @@ async function main() {
   for (const category of CATEGORIES) {
     const record = await prisma.category.upsert({
       where: { slug: category.slug },
-      update: { name: category.name, description: category.description, status: 'ACTIVE', deletedAt: null },
-      create: { name: category.name, slug: category.slug, description: category.description, status: 'ACTIVE' },
+      update: { name: category.name, description: category.description, status: 'ACTIVE', deletedAt: null, code: category.code, skuTemplate: category.skuTemplate },
+      create: { name: category.name, slug: category.slug, description: category.description, status: 'ACTIVE', code: category.code, skuTemplate: category.skuTemplate },
     });
     categoryIds.set(category.slug, record.id);
   }
@@ -254,11 +288,11 @@ async function main() {
       create: { name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), type: 'STRING' },
     });
     attributeIds.set(name, attribute.id);
-    for (const value of values) {
+    for (const { value, code } of values) {
       const record = await prisma.attributeValue.upsert({
         where: { attributeId_value: { attributeId: attribute.id, value } },
-        update: {},
-        create: { attributeId: attribute.id, value },
+        update: { code },
+        create: { attributeId: attribute.id, value, code },
       });
       valueIds.set(`${name}:${value}`, record.id);
     }
@@ -275,6 +309,7 @@ async function main() {
         basePrice: product.basePrice,
         categoryId: categoryIds.get(product.category) ?? null,
         createdAt: new Date(product.createdAt),
+        styleCode: product.styleCode,
       },
       create: {
         name: product.name,
@@ -284,6 +319,7 @@ async function main() {
         basePrice: product.basePrice,
         categoryId: categoryIds.get(product.category) ?? null,
         createdAt: new Date(product.createdAt),
+        styleCode: product.styleCode,
       },
     });
 
