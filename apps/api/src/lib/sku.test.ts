@@ -62,8 +62,10 @@ describe('code dictionaries', () => {
     expect(deriveCode('Nike')).toBe('NIK');
     expect(deriveCode('Black')).toBe('BLA');
     // Collision within scope extends deterministically, never random.
-    expect(deriveCode('Blush', ['BLA'])).toBe('BLUS');
-    expect(deriveCode('Blush', ['BLA'])).toBe(deriveCode('Blush', ['BLA']));
+    // Blue claims BLU first; Blush then resolves to BLUS.
+    expect(deriveCode('Blue')).toBe('BLU');
+    expect(deriveCode('Blush', ['BLU'])).toBe('BLUS');
+    expect(deriveCode('Blush', ['BLU'])).toBe(deriveCode('Blush', ['BLU']));
     expect(deriveCode('42')).toBe('42');
     expect(deriveCode('One Size')).toBe('ONE');
   });
@@ -98,6 +100,8 @@ describe('sku templates', () => {
 
 describe('sku generation', () => {
   it('generates the canonical shoe SKU deterministically', () => {
+    // NOTE: generateSku consumes resolved *codes* (NKE, BLK). Name -> code
+    // resolution (Nike -> NKE, Black -> BLK) lives in the dictionary layer.
     const first = generateSku({
       brandCode: 'NKE',
       categoryCode: 'SHO',
@@ -105,10 +109,10 @@ describe('sku generation', () => {
       attributeSegments: { COLOR: 'BLK', SIZE: '42' },
     });
     const second = generateSku({
-      brandCode: ' nike ',
+      brandCode: ' nke ',
       categoryCode: 'sho',
       styleCode: 'am90',
-      attributeSegments: { COLOR: ' black ', SIZE: '42' },
+      attributeSegments: { color: ' blk ', size: '42' },
     });
     expect(first).toEqual({ ok: true, value: 'NKE-SHO-AM90-BLK-42' });
     expect(second).toEqual(first);
