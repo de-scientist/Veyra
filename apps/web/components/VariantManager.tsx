@@ -17,7 +17,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   adjustVariant,
   batchUpdateVariants,
+  generateMissingBarcodes,
   generateProductVariants,
+  generateVariantBarcode,
   restockVariantsBatch,
   updateAdminVariant,
   type AdminAttribute,
@@ -135,6 +137,7 @@ export function VariantManager({
       existingVariants.map((v) => ({
         id: v.id,
         sku: v.sku,
+        barcode: v.barcode ?? null,
         status: v.status,
         priceOverride: v.priceOverride === null ? null : Number(v.priceOverride),
         quantityOnHand: v.inventory ? v.inventory.quantityOnHand : null,
@@ -168,6 +171,7 @@ export function VariantManager({
         existingVariants.map((v) => ({
           id: v.id,
           sku: v.sku,
+          barcode: v.barcode ?? null,
           status: v.status,
           priceOverride: v.priceOverride === null ? null : Number(v.priceOverride),
           quantityOnHand: v.inventory ? v.inventory.quantityOnHand : null,
@@ -203,6 +207,7 @@ export function VariantManager({
         existingVariants.map((v) => ({
           id: v.id,
           sku: v.sku,
+          barcode: v.barcode ?? null,
           status: v.status,
           priceOverride: v.priceOverride === null ? null : Number(v.priceOverride),
           quantityOnHand: v.inventory ? v.inventory.quantityOnHand : null,
@@ -261,6 +266,7 @@ export function VariantManager({
         existingDetails: existingVariants.map((v) => ({
           id: v.id,
           status: v.status,
+          barcode: v.barcode ?? null,
           priceOverride: v.priceOverride === null ? null : Number(v.priceOverride),
           quantityOnHand: v.inventory ? v.inventory.quantityOnHand : null,
           quantityReserved: v.inventory ? v.inventory.quantityReserved : 0,
@@ -479,6 +485,45 @@ export function VariantManager({
     }
   };
 
+  const handleGenerateBarcode = async (row: MatrixRow) => {
+    if (!row.variantId || row.barcode) return;
+    setSaving(true);
+    try {
+      const result = await generateVariantBarcode(productId, row.variantId);
+      notify('success', `Barcode ${result.barcode} assigned to ${row.sku}.`);
+      await onChanged();
+    } catch (e) {
+      notify('error', e instanceof Error ? e.message : 'Barcode generation failed.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleGenerateMissing = async () => {
+    const proceed = await confirm({
+      title: 'Generate missing barcodes',
+      description: 'Internal barcodes will be generated for variants that have none. Existing barcodes are never changed.',
+      confirmLabel: 'Generate missing',
+      onConfirm: () => undefined,
+    });
+    if (!proceed) return;
+    setSaving(true);
+    try {
+      const result = await generateMissingBarcodes(productId);
+      notify(
+        'success',
+        result.generated.length > 0
+          ? `Generated ${result.generated.length} barcode(s)${result.errors.length > 0 ? `, ${result.errors.length} failed` : ''}.`
+          : 'Every variant already has a barcode.',
+      );
+      await onChanged();
+    } catch (e) {
+      notify('error', e instanceof Error ? e.message : 'Bulk barcode generation failed.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const newCount = rows.filter((r) => r.status === 'new' && editOf(r.key).included).length;
   const existingCount = rows.filter((r) => r.status === 'existing').length;
   const skippedCount = rows.filter((r) => !editOf(r.key).included || r.status === 'skipped').length;
@@ -634,6 +679,9 @@ export function VariantManager({
             <button type="button" className="button button--secondary button--small" onClick={() => void handleSavePrices()} disabled={saving}>
               Save price changes
             </button>
+            <button type="button" className="button button--secondary button--small" onClick={() => void handleGenerateMissing()} disabled={saving}>
+              Generate missing barcodes
+            </button>
           </div>
 
           <div className="admin-table-wrapper variant-matrix-wrapper">
@@ -644,6 +692,7 @@ export function VariantManager({
                   <th scope="col"><span className="visually-hidden">Select</span></th>
                   <th scope="col">Variant</th>
                   <th scope="col">SKU</th>
+                  <th scope="col">Barcode</th>
                   <th scope="col">Price (KES)</th>
                   <th scope="col">Stock</th>
                   <th scope="col">Status</th>
@@ -685,6 +734,17 @@ export function VariantManager({
                         {row.status === 'skipped' && <span className="status-badge">Skipped</span>}
                       </td>
                       <td data-label="SKU"><code>{row.sku}</code></td>
+                      <td data-label="Barcode">
+                        {row.barcode ? (
+                          <code>{row.barcode}</code>
+                        ) : row.status === 'existing' && row.variantId ? (
+                          <button type="button" className="text-button" onClick={() => void handleGenerateBarcode(row)} disabled={saving}>
+                            Generate
+                          </button>
+                        ) : (
+                          <span className="muted-copy">—</span>
+                        )}
+                      </td>
                       <td data-label="Price (KES)">
                         {row.status === 'existing' ? (
                           <span>{formatKES(row.priceOverride)}</span>

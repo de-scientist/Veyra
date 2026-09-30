@@ -130,6 +130,7 @@ export type MatrixPair = { attributeId: string; attributeName: string; valueId: 
 export type MatrixRow = {
   key: string;
   sku: string;
+  barcode: string | null;
   label: string;
   pairs: MatrixPair[];
   /** existing: persisted variant · new: from preview, not yet saved · skipped: excluded via allow-list */
@@ -161,6 +162,7 @@ export function mergePreviewRows(options: {
   existingDetails: Array<{
     id: string;
     status: string;
+    barcode: string | null;
     priceOverride: number | null;
     quantityOnHand: number | null;
     quantityReserved: number;
@@ -186,6 +188,7 @@ export function mergePreviewRows(options: {
     rows.push({
       key: `existing:${item.id ?? item.sku}`,
       sku: item.sku,
+      barcode: detail?.barcode ?? null,
       label: labelOf(pairs),
       pairs,
       status: 'existing',
@@ -202,6 +205,7 @@ export function mergePreviewRows(options: {
     rows.push({
       key: `new:${item.sku}`,
       sku: item.sku,
+      barcode: null,
       label: labelOf(pairs),
       pairs,
       status: 'new',
@@ -218,6 +222,7 @@ export function mergePreviewRows(options: {
     rows.push({
       key: `skipped:${item.sku}`,
       sku: item.sku,
+      barcode: null,
       label: labelOf(pairs),
       pairs,
       status: 'skipped',
@@ -239,6 +244,7 @@ export function existingVariantRows(
   variants: Array<{
     id: string;
     sku: string;
+    barcode: string | null;
     status: string;
     priceOverride: number | null;
     quantityOnHand: number | null;
@@ -249,6 +255,7 @@ export function existingVariantRows(
   return variants.map((variant) => ({
     key: `existing:${variant.id}`,
     sku: variant.sku,
+    barcode: variant.barcode,
     label: labelOf(variant.pairs),
     pairs: variant.pairs,
     status: 'existing' as const,

@@ -4,6 +4,13 @@ import { Prisma } from '@prisma/client';
 
 import { generateSlug, validateCatalogProduct } from '../lib/catalog.js';
 import { validateAuditReason, validateInventoryAdjustment, validateRestockQuantity } from '../lib/admin.js';
+import {
+  assignVariantBarcode,
+  generateMissingBarcodes,
+  generateVariantBarcode,
+  isBarcodeIssues,
+  lookupVariantByBarcode,
+} from '../lib/barcode.js';
 import { HttpError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import { generateProductVariants, previewVariantGeneration } from '../lib/variant-generation-service.js';
@@ -92,6 +99,16 @@ const variantBatchSchema = z.object({
     )
     .min(1)
     .max(300),
+});
+
+const barcodeAssignSchema = z.object({
+  barcode: z.string().min(1).max(48),
+  // Explicit standard; omitted => detected (EAN-13 → UPC-A → CODE128).
+  type: z.enum(['EAN13', 'UPC_A', 'CODE128', 'CODE39']).optional(),
+  source: z.enum(['INTERNAL', 'MANUFACTURER', 'SUPPLIER', 'IMPORTED', 'MANUAL']).default('MANUAL'),
+  // Replacement is never silent: explicit flag + audit reason required.
+  replace: z.boolean().default(false),
+  reason: z.string().min(3).max(200).optional(),
 });
 
 const restockSchema = z.object({
@@ -448,7 +465,52 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
+  // ---- Barcode operations (Phase 5, operations staff only) ----
+  // SKU stays the business identifier; barcode is the machine-readable
+  // operational key on the same ProductVariant. Generation is
+  // server-authoritative; the database unique constraint wins races.
+
+  app.post('/admin/products/:productId/variants/:variantId/barcode/generate', { preHandler: requireOperationsAccess }, async (request) => {
+    const { productId, variantId } = request.params as { productId: string; variantId: string };
+    const result = await generateVariantBarcode(productId, variantId, actorId(request));
+    return { success: true, data: result };
+  });
+
+  app.post('/admin/products/:productId/variants/:variantId/barcode/assign', { preHandler: requireOperationsAccess }, async (request) => {
+    const { productId, variantId } = request.params as { productId: string; variantId: string };
+    const payload = barcodeAssignSchema.parse(request.body);
+    const result = await assignVariantBarcode(productId, variantId, payload.barcode, payload.source, actorId(request), {
+      type: payload.type,
+      replace: payload.replace,
+      reason: payload.reason,
+    });
+    return { success: true, data: result };
+  });
+
+  app.post('/admin/products/:productId/variants/barcodes/generate-missing', { preHandler: requireOperationsAccess }, async (request) => {
+    const { productId } = request.params as { productId: string };
+    const payload = z.object({ limit: z.number().int().min(1).max(100).default(100) }).parse(request.body ?? {});
+    // Bulk generation never overwrites: only barcode-less variants qualify.
+    const result = await generateMissingBarcodes(productId, actorId(request), payload.limit);
+    return { success: true, data: result };
+  });
+
   // ---- Admin inventory operations (operations staff only) ----
+
+  app.get('/admin/inventory/lookup', { preHandler: requireOperationsAccess }, async (request) => {
+    // Scanner/keyboard lookup: barcode (grouping tolerant) → variant + SKU +
+    // inventory. Unknown codes 404 with safe next steps (never auto-create).
+    const query = z.object({ barcode: z.string().min(1).max(64) }).parse(request.query);
+    try {
+      return { success: true, data: await lookupVariantByBarcode(query.barcode) };
+    } catch (error) {
+      if (isBarcodeIssues(error)) {
+        const code = error.issues[0]?.code ?? 'BARCODE_NOT_FOUND';
+        throw new HttpError(code === 'BARCODE_NOT_FOUND' ? 404 : 400, code, error.issues.map((issue) => issue.message).join(' '));
+      }
+      throw error;
+    }
+  });
 
   app.get('/admin/inventory', { preHandler: requireOperationsAccess }, async (request) => {
     const query = paginationSchema.extend({
@@ -456,7 +518,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
       outOfStock: z.coerce.boolean().optional(),
     }).parse(request.query);
     const where: Prisma.InventoryWhereInput = {};
-    if (query.search) where.variant = { OR: [{ sku: { contains: query.search, mode: 'insensitive' } }, { product: { name: { contains: query.search, mode: 'insensitive' } } }] };
+    if (query.search) where.variant = { OR: [{ sku: { contains: query.search, mode: 'insensitive' } }, { barcode: { contains: query.search, mode: 'insensitive' } }, { product: { name: { contains: query.search, mode: 'insensitive' } } }] };
     const rows = await prisma.inventory.findMany({
       where,
       include: { variant: { include: { product: { select: { id: true, name: true, slug: true, status: true } } } } },

@@ -262,6 +262,7 @@ export type AdminProductDetailVariant = {
   sku: string;
   name: string | null;
   status: string;
+  barcode: string | null;
   priceOverride: number | null;
   compareAtPrice: number | null;
   inventory: { quantityOnHand: number; quantityReserved: number; lowStockThreshold: number } | null;
@@ -333,6 +334,38 @@ export function restockVariant(variantId: string, input: { quantity: number; low
 /** Bulk restock for the variant matrix — one transaction, not N requests. */
 export function restockVariantsBatch(input: { reason?: string; items: Array<{ variantId: string; quantity: number; lowStockThreshold?: number }> }) {
   return request<Array<{ variantId: string; quantityOnHand: number }>>('/admin/inventory/restock-batch', { method: 'POST', body: JSON.stringify(input) });
+}
+
+// ---- Barcodes (Phase 5; operations staff only; backend is authoritative) ----
+
+export type BarcodeLookupResult = {
+  variant: { id: string; sku: string; name: string | null; status: string; barcode: string | null; price: number | null };
+  product: { id: string; name: string; slug: string; status: string };
+  attributes: Record<string, string>;
+  inventory: { quantityOnHand: number; quantityReserved: number; availableQuantity: number; lowStockThreshold: number } | null;
+};
+
+/** Server-generated internal barcode (EAN-13, restricted-circulation 29 prefix). */
+export function generateVariantBarcode(productId: string, variantId: string) {
+  return request<{ barcode: string; type: string }>(`/admin/products/${productId}/variants/${variantId}/barcode/generate`, { method: 'POST' });
+}
+
+/** Manual assignment (manufacturer/supplier/imported/manual codes, strictly validated). */
+export function assignVariantBarcode(productId: string, variantId: string, input: { barcode: string; type?: string; source?: string; replace?: boolean; reason?: string }) {
+  return request<{ barcode: string; type: string; source: string }>(`/admin/products/${productId}/variants/${variantId}/barcode/assign`, { method: 'POST', body: JSON.stringify(input) });
+}
+
+/** Bulk generation for barcode-less variants only — existing codes never touched. */
+export function generateMissingBarcodes(productId: string, input?: { limit?: number }) {
+  return request<{ generated: Array<{ variantId: string; sku: string; barcode: string }>; skipped: number; errors: Array<{ variantId: string; code: string; message: string }> }>(
+    `/admin/products/${productId}/variants/barcodes/generate-missing`,
+    { method: 'POST', body: JSON.stringify(input ?? {}) },
+  );
+}
+
+/** Scanner/keyboard lookup: barcode → variant + SKU + inventory. */
+export function lookupVariantByBarcode(barcode: string) {
+  return request<BarcodeLookupResult>(`/admin/inventory/lookup?barcode=${encodeURIComponent(barcode)}`);
 }
 
 export function adjustVariant(variantId: string, input: { delta: number; reason: string }) {

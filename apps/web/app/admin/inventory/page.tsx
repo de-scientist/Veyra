@@ -117,6 +117,7 @@ export default function AdminInventoryPage() {
           <p className="muted-copy">Controlled stock operations — every change writes a movement record</p>
         </div>
         <Link href="/admin/inventory/movements" className="button button--secondary">Movement History</Link>
+        <Link href="/admin/inventory/scan" className="button button--secondary">Scan Station</Link>
       </header>
 
       {error && <div className="inline-message" role="alert">{error}</div>}

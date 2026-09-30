@@ -111,7 +111,7 @@ describe('matrix row merging', () => {
       created: [{ id: null, sku: 'NKE-TSH-AM01-WHT-M', attributes: { Color: 'White', Size: 'M' } }],
       existing: [{ id: 'v1', sku: 'NKE-TSH-AM01-BLK-M', attributes: { Color: 'Black', Size: 'M' } }],
       skipped: [{ id: null, sku: 'NKE-TSH-AM01-WHT-L', attributes: { Color: 'White', Size: 'L' } }],
-      existingDetails: [{ id: 'v1', status: 'ACTIVE', priceOverride: 2500, quantityOnHand: 8, quantityReserved: 2, pairs: [] }],
+      existingDetails: [{ id: 'v1', status: 'ACTIVE', barcode: '5901234123457', priceOverride: 2500, quantityOnHand: 8, quantityReserved: 2, pairs: [] }],
       resolvePair,
     });
     expect(rows.map((row) => [row.sku, row.status, row.variantId, row.included])).toEqual([
@@ -121,12 +121,14 @@ describe('matrix row merging', () => {
     ]);
     expect(rows[0]?.priceOverride).toBe(2500);
     expect(rows[0]?.quantityOnHand).toBe(8);
+    expect(rows[0]?.barcode).toBe('5901234123457');
+    expect(rows[1]?.barcode).toBeNull();
     expect(rows[1]?.label).toBe('White / M');
   });
 
   it('lists persisted variants in edit mode', () => {
     const rows = existingVariantRows([
-      { id: 'v1', sku: 'SNK-RED-42', status: 'ACTIVE', priceOverride: 6500, quantityOnHand: 14, quantityReserved: 0, pairs: [{ attributeId: 'c', attributeName: 'Color', valueId: 'r', value: 'Red' }] },
+      { id: 'v1', sku: 'SNK-RED-42', barcode: null, status: 'ACTIVE', priceOverride: 6500, quantityOnHand: 14, quantityReserved: 0, pairs: [{ attributeId: 'c', attributeName: 'Color', valueId: 'r', value: 'Red' }] },
     ]);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe('existing');
@@ -137,7 +139,7 @@ describe('matrix row merging', () => {
 describe('allow-list building', () => {
   it('omits the allow-list when every new row is included', () => {
     const rows = existingVariantRows([
-      { id: 'v1', sku: 'A', status: 'ACTIVE', priceOverride: 1, quantityOnHand: 1, quantityReserved: 0, pairs: [] },
+      { id: 'v1', sku: 'A', barcode: '2900000000162', status: 'ACTIVE', priceOverride: 1, quantityOnHand: 1, quantityReserved: 0, pairs: [] },
     ]);
     expect(buildAllowList(rows)).toBeUndefined();
   });
