@@ -120,6 +120,42 @@ export function updateAdminVariant(productId: string, variantId: string, input: 
   return request<{ id: string }>(`/admin/products/${productId}/variants/${variantId}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+export type VariantGenerationSummary = { id: string | null; sku: string; attributes: Record<string, string> };
+
+export type VariantGenerationResult = {
+  created: VariantGenerationSummary[];
+  existing: VariantGenerationSummary[];
+  skipped: VariantGenerationSummary[];
+  errors: Array<{ code: string; message: string }>;
+  summary: { created: number; existing: number; skipped: number; errors: number };
+};
+
+export type VariantGenerationInput = {
+  attributes: Record<string, string[]>;
+  allowList?: Array<Record<string, string>>;
+  price?: number;
+  compareAtPrice?: number;
+  brandCode?: string;
+  brandValueId?: string;
+  categoryCode?: string;
+  styleCode?: string;
+  dryRun?: boolean;
+};
+
+/**
+ * Phase 2 variant-generation engine. dryRun previews authoritative SKUs
+ * without persisting; live calls create missing variants atomically and
+ * report existing ones (idempotent — never duplicates).
+ */
+export function generateProductVariants(productId: string, input: VariantGenerationInput) {
+  return request<VariantGenerationResult>(`/admin/products/${productId}/variants/generate`, { method: 'POST', body: JSON.stringify(input) });
+}
+
+/** Bulk price/status update for the variant matrix — one transaction, not N requests. */
+export function batchUpdateVariants(productId: string, input: { variants: Array<{ id: string; name?: string; status?: string; price?: number; compareAtPrice?: number | null }> }) {
+  return request<Array<{ id: string }>>(`/admin/products/${productId}/variants`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 // ---- Product images (Phase D) ----
 
 export type AdminProductImage = {
@@ -185,7 +221,7 @@ export function deleteAdminProductImage(productId: string, imageId: string) {
 
 // ---- Categories / collections / attributes ----
 
-export type AdminCategory = { id: string; name: string; slug: string; description: string | null; parentId: string | null; status: string; _count: { products: number } };
+export type AdminCategory = { id: string; name: string; slug: string; description: string | null; parentId: string | null; status: string; code: string | null; skuTemplate: string | null; _count: { products: number } };
 export type AdminCollection = { id: string; name: string; slug: string; description: string | null; status: string; _count: { products: number } };
 export type AdminAttribute = { id: string; name: string; slug: string; type: string; values: Array<{ id: string; value: string }> };
 
@@ -221,13 +257,26 @@ export function deleteAdminCollection(id: string) {
   return request<{ deleted: boolean }>(`/admin/collections/${id}`, { method: 'DELETE' });
 }
 
+export type AdminProductDetailVariant = {
+  id: string;
+  sku: string;
+  name: string | null;
+  status: string;
+  priceOverride: number | null;
+  compareAtPrice: number | null;
+  inventory: { quantityOnHand: number; quantityReserved: number; lowStockThreshold: number } | null;
+  variantAttributeValues: Array<{ attributeId: string; attributeValueId: string; attribute: { id: string; name: string; slug: string }; attributeValue: { id: string; value: string } }>;
+};
+
+export type AdminProductDetail = {
+  id: string; name: string; slug: string; description: string | null; status: string; categoryId: string | null;
+  category: { id: string; name: string; slug: string; code: string | null; skuTemplate: string | null } | null;
+  variants: AdminProductDetailVariant[];
+  images: Array<{ id: string; url: string; altText: string | null }>;
+};
+
 export function getAdminProduct(id: string) {
-  return request<{
-    id: string; name: string; slug: string; description: string | null; status: string; categoryId: string | null;
-    category: { id: string; name: string; slug: string } | null;
-    variants: Array<{ id: string; sku: string; name: string | null; status: string; priceOverride: number | null; compareAtPrice: number | null }>;
-    images: Array<{ id: string; url: string; altText: string | null }>;
-  }>(`/admin/products/${id}`);
+  return request<AdminProductDetail>(`/admin/products/${id}`);
 }
 
 export function getAdminAttributes() {
@@ -278,6 +327,11 @@ export function getAdminInventory(params?: { page?: number; pageSize?: number; s
 
 export function restockVariant(variantId: string, input: { quantity: number; lowStockThreshold?: number; reason?: string }) {
   return request<AdminInventoryRow>(`/admin/inventory/${variantId}/restock`, { method: 'POST', body: JSON.stringify(input) });
+}
+
+/** Bulk restock for the variant matrix — one transaction, not N requests. */
+export function restockVariantsBatch(input: { reason?: string; items: Array<{ variantId: string; quantity: number; lowStockThreshold?: number }> }) {
+  return request<Array<{ variantId: string; quantityOnHand: number }>>('/admin/inventory/restock-batch', { method: 'POST', body: JSON.stringify(input) });
 }
 
 export function adjustVariant(variantId: string, input: { delta: number; reason: string }) {

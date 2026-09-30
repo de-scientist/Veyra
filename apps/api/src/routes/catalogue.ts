@@ -77,6 +77,23 @@ const generateVariantsSchema = z.object({
   dryRun: z.boolean().default(false),
 });
 
+const variantBatchSchema = z.object({
+  // Bulk price/status update for the variant matrix (Phase 3): one request
+  // instead of N per-variant PATCH calls. Every id must belong to the product.
+  variants: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string().max(200).optional(),
+        status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional(),
+        price: z.number().min(0).optional(),
+        compareAtPrice: z.number().min(0).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(300),
+});
+
 const restockSchema = z.object({
   quantity: z.number().int().min(1).max(100000),
   lowStockThreshold: z.number().int().min(0).max(100000).optional(),
@@ -379,6 +396,58 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: variant };
   });
 
+  app.patch('/admin/products/:productId/variants', { preHandler: requireOperationsAccess }, async (request) => {
+    const { productId } = request.params as { productId: string };
+    const payload = variantBatchSchema.parse(request.body);
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product || product.deletedAt) throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
+    const ids = [...new Set(payload.variants.map((item) => item.id))];
+    if (ids.length !== payload.variants.length) {
+      throw new HttpError(400, 'DUPLICATE_VARIANT', 'Each variant may appear only once in a batch update.');
+    }
+    const existing = await prisma.productVariant.findMany({ where: { id: { in: ids }, productId } });
+    if (existing.length !== ids.length) {
+      throw new HttpError(404, 'VARIANT_NOT_FOUND', 'One or more variants were not found for this product.');
+    }
+    const beforeById = new Map(existing.map((row) => [row.id, row]));
+    try {
+      // One transaction: all rows update together or none do. SKU and barcode
+      // stay immutable here (same boundary as the single-variant PATCH).
+      const updated = await prisma.$transaction(async (client) => {
+        const rows: Prisma.ProductVariantGetPayload<Record<string, never>>[] = [];
+        for (const item of payload.variants) {
+          const row = await client.productVariant.update({
+            where: { id: item.id },
+            data: {
+              name: item.name?.trim(),
+              status: item.status,
+              priceOverride: item.price,
+              compareAtPrice: item.compareAtPrice === null ? null : item.compareAtPrice,
+            },
+          });
+          const before = beforeById.get(item.id);
+          const priceChanged = item.price !== undefined && Number(before?.priceOverride ?? 0) !== item.price;
+          await client.auditLog.create({
+            data: {
+              actorId: actorId(request),
+              action: priceChanged ? 'PRICE_CHANGED' : 'VARIANT_UPDATED',
+              entity: 'ProductVariant',
+              entityId: item.id,
+              before: { price: Number(before?.priceOverride ?? 0), status: before?.status } as Prisma.InputJsonValue,
+              after: { price: Number(row.priceOverride ?? 0), status: row.status } as Prisma.InputJsonValue,
+              ...auditMeta(request),
+            },
+          });
+          rows.push(row);
+        }
+        return rows;
+      });
+      return { success: true, data: updated };
+    } catch (error) {
+      conflict(error);
+    }
+  });
+
   // ---- Admin inventory operations (operations staff only) ----
 
   app.get('/admin/inventory', { preHandler: requireOperationsAccess }, async (request) => {
@@ -456,6 +525,63 @@ export async function catalogueRoutes(app: FastifyInstance) {
       return result;
     });
     await prisma.auditLog.create({ data: { actorId: actor, action: 'INVENTORY_ADJUSTED', entity: 'Inventory', entityId: variantId, after: { operation: 'RESTOCK', quantity: payload.quantity } as Prisma.InputJsonValue, ...auditMeta(request) } });
+    return { success: true, data: updated };
+  });
+
+  app.post('/admin/inventory/restock-batch', { preHandler: requireOperationsAccess }, async (request) => {
+    // Bulk restock for the variant matrix (Phase 3): one transactional request
+    // instead of N per-variant restocks. Same validation as single restock.
+    const payload = z
+      .object({
+        reason: z.string().min(3).max(200).default('RESTOCK'),
+        items: z
+          .array(
+            z.object({
+              variantId: z.string(),
+              quantity: z.number().int().min(1).max(100000),
+              lowStockThreshold: z.number().int().min(0).max(100000).optional(),
+            }),
+          )
+          .min(1)
+          .max(100),
+      })
+      .parse(request.body);
+    validateRestockQuantity(Math.max(...payload.items.map((item) => item.quantity)));
+    const reason = validateAuditReason(payload.reason);
+    const actor = actorId(request);
+    const ids = payload.items.map((item) => item.variantId);
+    if (new Set(ids).size !== ids.length) {
+      throw new HttpError(400, 'DUPLICATE_VARIANT', 'Each variant may appear only once in a batch restock.');
+    }
+    const updated = await prisma.$transaction(async (client) => {
+      const rows = [];
+      for (const item of payload.items) {
+        const inventory = await client.inventory.findUnique({ where: { variantId: item.variantId } });
+        if (!inventory) throw new HttpError(404, 'INVENTORY_NOT_FOUND', `Inventory record not found for variant ${item.variantId}.`);
+        const result = await client.inventory.update({
+          where: { variantId: item.variantId },
+          data: {
+            quantityOnHand: { increment: item.quantity },
+            lowStockThreshold: item.lowStockThreshold ?? inventory.lowStockThreshold,
+          },
+        });
+        await client.inventoryMovement.create({
+          data: { variantId: item.variantId, movementType: 'IN', quantity: item.quantity, reason: reason.slice(0, 120), note: 'Restocked via batch variant-matrix action.', actorId: actor },
+        });
+        rows.push(result);
+      }
+      return rows;
+    });
+    await prisma.auditLog.create({
+      data: {
+        actorId: actor,
+        action: 'INVENTORY_ADJUSTED',
+        entity: 'Inventory',
+        entityId: `batch:${updated.length}`,
+        after: { operation: 'RESTOCK_BATCH', count: updated.length, reason } as Prisma.InputJsonValue,
+        ...auditMeta(request),
+      },
+    });
     return { success: true, data: updated };
   });
 

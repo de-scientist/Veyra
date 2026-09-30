@@ -89,7 +89,7 @@ export async function storefrontRoutes(app: FastifyInstance) {
     const product = await prisma.product.findUnique({
       where: { id },
       include: {
-        category: { select: { id: true, name: true, slug: true } },
+        category: { select: { id: true, name: true, slug: true, code: true, skuTemplate: true } },
         variants: {
           include: {
             inventory: true,
