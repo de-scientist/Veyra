@@ -6,6 +6,7 @@ import { generateSlug, validateCatalogProduct } from '../lib/catalog.js';
 import { validateAuditReason, validateInventoryAdjustment, validateRestockQuantity } from '../lib/admin.js';
 import { HttpError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
+import { generateProductVariants, previewVariantGeneration } from '../lib/variant-generation-service.js';
 import { requireOperationsAccess } from '../middleware/operations.js';
 import {
   normalizeSegment,
@@ -57,6 +58,23 @@ const variantUpdateSchema = z.object({
   // SKU itself is immutable here (see PATCH handler). Barcode may be
   // attached/cleared explicitly; null clears it.
   barcode: z.string().max(64).nullable().optional(),
+});
+
+const generateVariantsSchema = z.object({
+  // Attribute key = attribute id or slug; values = attribute-value ids or
+  // exact value strings. Empty object => single default variant.
+  attributes: z.record(z.string().min(1).max(120), z.array(z.string().min(1).max(120)).max(50)).default({}),
+  // Explicit commercially-valid subset; combinations outside it are skipped.
+  allowList: z.array(z.record(z.string().min(1).max(120), z.string().min(1).max(120))).max(300).optional(),
+  // Null priceOverride inherits the product basePrice at display time.
+  price: z.number().min(0).optional(),
+  compareAtPrice: z.number().min(0).optional(),
+  brandCode: z.string().min(2).max(6).regex(/^[A-Za-z0-9]+$/, 'Brand code may only contain A-Z and 0-9.').optional(),
+  brandValueId: z.string().optional(),
+  categoryCode: z.string().min(2).max(5).regex(/^[A-Za-z0-9]+$/, 'Category code may only contain A-Z and 0-9.').optional(),
+  styleCode: styleCodeField,
+  // Dry run validates + previews SKUs without persisting (Phase 3 UI seam).
+  dryRun: z.boolean().default(false),
 });
 
 const restockSchema = z.object({
@@ -296,6 +314,19 @@ export async function catalogueRoutes(app: FastifyInstance) {
     } catch (error) {
       conflict(error);
     }
+  });
+
+  app.post('/admin/products/:productId/variants/generate', { preHandler: requireOperationsAccess }, async (request) => {
+    const { productId } = request.params as { productId: string };
+    const payload = generateVariantsSchema.parse(request.body);
+    // Bulk domain operation: one request generates N variants atomically
+    // (all-or-nothing transaction) instead of N independent HTTP calls.
+    // Existing combinations are reported, never duplicated; foreign SKU
+    // collisions abort with 409 SKU_ALREADY_EXISTS (never silent suffixes).
+    const result = payload.dryRun
+      ? await previewVariantGeneration(productId, { productId, ...payload })
+      : await generateProductVariants(productId, { productId, ...payload }, actorId(request));
+    return { success: true, data: result };
   });
 
   app.patch('/admin/products/:productId/variants/:variantId', { preHandler: requireOperationsAccess }, async (request) => {
