@@ -54,7 +54,7 @@ function fail(message: string, code = 'INVALID_BARCODE'): BarcodeResult<never> {
 
 /** Strip spaces/dots/dashes used for human grouping of numeric barcodes. */
 export function normalizeBarcode(value: string): string {
-  return value.trim().replace(/[\s.\-]+/g, '');
+  return value.trim().replace(/[\s.-]+/g, '');
 }
 
 /** Canonical form for Code 128 (dashes/spaces are significant — trim only). */
