@@ -270,6 +270,7 @@ export type AdminProductDetailVariant = {
 
 export type AdminProductDetail = {
   id: string; name: string; slug: string; description: string | null; status: string; categoryId: string | null;
+  basePrice: number | null; styleCode: string | null;
   category: { id: string; name: string; slug: string; code: string | null; skuTemplate: string | null } | null;
   variants: AdminProductDetailVariant[];
   images: Array<{ id: string; url: string; altText: string | null }>;

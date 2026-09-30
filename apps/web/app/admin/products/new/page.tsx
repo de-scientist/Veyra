@@ -7,18 +7,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { ProductMediaManager } from '../../../../components/ProductMediaManager';
 import { JBIcon } from '../../../../components/JBIcons';
 import { useToast } from '../../../../components/Toast';
+import { VariantManager } from '../../../../components/VariantManager';
 import {
   createAdminProduct,
-  createAdminVariant,
   getAdminAttributes,
   getAdminCategories,
   getAdminCollections,
+  getAdminProduct,
   getAdminProductImages,
   updateAdminProduct,
   type AdminAttribute,
+  type AdminCategory,
 } from '../../../../lib/admin-api';
 import {
-  firstVariantSchema,
   productDraftSchema,
   publishChecklist,
   slugify,
@@ -40,7 +41,7 @@ export default function NewAdminProductPage() {
   const router = useRouter();
   const { notify } = useToast();
   const [phase, setPhase] = useState<Phase>('draft');
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [collections, setCollections] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [attributes, setAttributes] = useState<AdminAttribute[]>([]);
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -52,8 +53,6 @@ export default function NewAdminProductPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [form, setForm] = useState({ name: '', slug: '', description: '', categoryId: '', status: 'DRAFT' });
-  const [variant, setVariant] = useState({ sku: '', name: '', price: '', compareAtPrice: '', attributeId: '', attributeValue: '' });
-  const [variantErrors, setVariantErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     getAdminCategories().then(setCategories).catch(() => undefined);
@@ -85,10 +84,6 @@ export default function NewAdminProductPage() {
 
   const set = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-    setDirty(true);
-  };
-  const setV = (key: string, value: string) => {
-    setVariant((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
 
@@ -140,32 +135,12 @@ export default function NewAdminProductPage() {
     }
   };
 
-  const addFirstVariant = async () => {
-    if (!createdId) return;
-    const parsed = firstVariantSchema.safeParse(variant);
-    if (!parsed.success) {
-      const next: Record<string, string> = {};
-      for (const issue of parsed.error.issues) next[String(issue.path[0] ?? 'form')] = issue.message;
-      setVariantErrors(next);
-      return;
-    }
-    setVariantErrors({});
-    setSaving(true);
+  const refreshVariantCount = async (productId: string) => {
     try {
-      await createAdminVariant(createdId, {
-        sku: parsed.data.sku,
-        name: parsed.data.name || undefined,
-        price: parsed.data.price,
-        compareAtPrice: parsed.data.compareAtPrice,
-        attributeValues: [{ attributeId: parsed.data.attributeId, value: parsed.data.attributeValue }],
-      });
-      setVariantCount((c) => c + 1);
-      setVariant({ sku: '', name: '', price: '', compareAtPrice: '', attributeId: '', attributeValue: '' });
-      notify('success', 'Variant created with a zeroed inventory record.');
-    } catch (e) {
-      notify('error', e instanceof Error ? e.message : 'Variant creation failed');
-    } finally {
-      setSaving(false);
+      const detail = await getAdminProduct(productId);
+      setVariantCount(detail.variants.length);
+    } catch {
+      // Checklist stays conservative; the matrix shows its own errors.
     }
   };
 
@@ -303,54 +278,24 @@ export default function NewAdminProductPage() {
           </section>
 
           <section className="workspace-card" aria-labelledby="ws-variant">
-            <h2 id="ws-variant">3 · Variants &amp; pricing</h2>
+            <h2 id="ws-variant">3 · Variants, SKUs &amp; pricing</h2>
             <p className="muted-copy workspace-card__hint">
-              The backend requires every variant to carry at least one attribute value, a SKU (min 3 chars) and a
-              non-negative price. The first variant unlocks after the draft is created.
+              Select variant options (e.g. Color × Size) to preview server-generated SKUs, then set per-variant prices
+              and stock. Existing combinations are never duplicated.
             </p>
             {phase === 'complete' && createdId ? (
-              <div className="form-grid">
-                <label>
-                  <span>SKU *</span>
-                  <input type="text" value={variant.sku} minLength={3} maxLength={64} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV('sku', e.currentTarget.value)} />
-                  {variantErrors.sku && <span className="field-error" role="alert">{variantErrors.sku}</span>}
-                </label>
-                <label>
-                  <span>Variant name</span>
-                  <input type="text" value={variant.name} maxLength={200} placeholder="Defaults to SKU" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV('name', e.currentTarget.value)} />
-                </label>
-                <label>
-                  <span>Price (KES) *</span>
-                  <input type="number" value={variant.price} min="0" step="0.01" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV('price', e.currentTarget.value)} />
-                  {variantErrors.price && <span className="field-error" role="alert">{variantErrors.price}</span>}
-                </label>
-                <label>
-                  <span>Compare-at price (KES)</span>
-                  <input type="number" value={variant.compareAtPrice} min="0" step="0.01" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV('compareAtPrice', e.currentTarget.value)} />
-                </label>
-                <label>
-                  <span>Attribute *</span>
-                  <select value={variant.attributeId} onChange={(e) => setV('attributeId', e.currentTarget.value)}>
-                    <option value="">Select attribute</option>
-                    {attributes.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
-                  {variantErrors.attributeId && <span className="field-error" role="alert">{variantErrors.attributeId}</span>}
-                </label>
-                <label>
-                  <span>Attribute value *</span>
-                  <input type="text" value={variant.attributeValue} maxLength={120} placeholder="e.g. Large" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV('attributeValue', e.currentTarget.value)} />
-                  {variantErrors.attributeValue && <span className="field-error" role="alert">{variantErrors.attributeValue}</span>}
-                </label>
-                <div className="form-actions">
-                  <button type="button" className="button button--secondary" disabled={saving} onClick={addFirstVariant}>
-                    <JBIcon name="plus" size={16} /> Add variant
-                  </button>
-                </div>
-              </div>
+              <VariantManager
+                productId={createdId}
+                productName={form.name || 'New product'}
+                categoryId={form.categoryId || null}
+                basePrice={null}
+                categories={categories}
+                attributes={attributes}
+                existingVariants={[]}
+                onChanged={() => refreshVariantCount(createdId)}
+              />
             ) : (
-              <p className="muted-copy" role="note">Create the draft above to add the first purchasable variant.</p>
+              <p className="muted-copy" role="note">Create the draft above to configure variants with live SKU preview.</p>
             )}
           </section>
 

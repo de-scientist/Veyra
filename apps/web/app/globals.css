@@ -1198,3 +1198,43 @@ a.visually-hidden:focus-visible {
 @media (max-width: 1020px) {
   .product-workspace__layout { grid-template-columns: 1fr; }
 }
+
+/* ---------- Variant manager (Phase 3) ---------- */
+.variant-manager { display: grid; gap: 1rem; min-width: 0; }
+.variant-manager__dimensions { border: 1px solid var(--jb-border); border-radius: var(--jb-radius-md); padding: 1rem; display: grid; gap: 0.9rem; margin: 0; }
+.variant-manager__dimensions legend { font-weight: 700; padding: 0 0.4rem; }
+.variant-manager__add-row { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; }
+.variant-manager__dimension { border-top: 1px solid var(--jb-border); padding-top: 0.8rem; display: grid; gap: 0.6rem; }
+.variant-manager__dimension-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.variant-manager__dimension-head strong { font-size: 0.95rem; }
+.variant-manager__values { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.variant-manager__value { display: inline-flex; align-items: center; gap: 0.45rem; border: 1px solid var(--jb-border); border-radius: var(--jb-radius-pill); padding: 0.45rem 0.8rem; cursor: pointer; font-size: 0.88rem; background: var(--jb-surface); min-height: 44px; }
+.variant-manager__value input { width: 1rem; height: 1rem; accent-color: var(--jb-primary); }
+.variant-manager__value.is-checked { border-color: var(--jb-primary); background: var(--jb-primary-soft); font-weight: 600; }
+.variant-manager__summary { display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; border: 1px dashed var(--jb-border-strong); border-radius: var(--jb-radius-md); padding: 0.7rem 0.9rem; background: var(--jb-surface-muted); }
+.variant-manager__bulk { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; }
+.variant-manager__bulk input { max-width: 11rem; }
+.variant-matrix-wrapper { margin-bottom: 0; }
+.variant-matrix { min-width: 880px; }
+.variant-matrix code { font-size: 0.82rem; overflow-wrap: anywhere; }
+.variant-matrix td:first-child, .variant-matrix th:first-child { position: sticky; left: 0; background: var(--jb-surface); z-index: 1; }
+.variant-matrix thead th:first-child { background: var(--jb-surface-muted); }
+.variant-matrix input[type="number"] { width: 100%; max-width: 9rem; min-height: 44px; }
+.variant-matrix input[type="checkbox"] { width: 1.1rem; height: 1.1rem; accent-color: var(--jb-primary); }
+.variant-matrix tr.is-excluded td { opacity: 0.55; }
+.variant-matrix__row-actions { display: inline-flex; gap: 0.4rem; align-items: center; margin-left: 0.5rem; flex-wrap: wrap; }
+.variant-matrix__row-actions input { max-width: 6.5rem; }
+.status-badge--new { background: var(--jb-primary-soft); color: var(--jb-primary); border-radius: var(--jb-radius-pill); padding: 0.15rem 0.6rem; font-size: 0.75rem; font-weight: 700; margin-left: 0.5rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+@media (max-width: 640px) {
+  .variant-matrix { min-width: 0; }
+  .variant-matrix thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .variant-matrix, .variant-matrix tbody, .variant-matrix tr, .variant-matrix td { display: block; width: 100%; }
+  .variant-matrix tbody tr { border: 1px solid var(--jb-border); border-radius: var(--jb-radius-md); margin-bottom: 0.75rem; background: var(--jb-surface); }
+  .variant-matrix td { border-bottom: 1px solid var(--jb-border); padding: 0.6rem 0.9rem 0.6rem 45%; position: relative; text-align: left; }
+  .variant-matrix td:last-child { border-bottom: none; }
+  .variant-matrix td::before { content: attr(data-label); position: absolute; left: 0.9rem; top: 0.6rem; width: 38%; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--jb-text-muted); }
+  .variant-matrix td:first-child { position: static; }
+  .variant-matrix input[type="number"] { max-width: none; }
+}

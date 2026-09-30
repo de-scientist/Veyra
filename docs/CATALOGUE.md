@@ -35,6 +35,17 @@ One domain engine turns a product's selected variant attributes into sellable va
 - **Identity**: canonical `productId + sorted (attributeId, attributeValueId)` key from `VariantAttributeValue` rows — SKU text is output, never identity. Repeats return `existing` (idempotent); incremental adds create only new combinations.
 - **Safety**: single `prisma.$transaction` (variant + mappings + zeroed inventory `{0,0,5}` + `VARIANT_CREATED` audit) — all-or-nothing; foreign SKU collisions abort with `409 SKU_ALREADY_EXISTS` (never silent suffixes); variants are never deleted by the engine (de-selection preserves; archival stays on variant PATCH). New variants inherit pricing (`priceOverride` null → `basePrice`) unless the request sets `price`; images are untouched. Empty selection yields one default variant with base-identity SKU (`{BRAND}-{CATEGORY}-{STYLE}`).
 - **Result**: `{ created, existing, skipped, errors, summary }`; `dryRun: true` previews SKUs without persisting (Phase 3 admin-UI seam).
+- **Matrix writes** (Phase 3): `PATCH /admin/products/:productId/variants` (bulk price/status, ≤300 rows, one transaction, per-row `PRICE_CHANGED`/`VARIANT_UPDATED` audits) and `POST /admin/inventory/restock-batch` (≤100 items, one transaction, per-item `IN` movements, single summary audit). Per-row stock corrections on persisted variants reuse the single `adjust` endpoint (delta computed client-side from loaded on-hand).
+
+## Admin Variant Management UI (Phase 3)
+
+`apps/web/components/VariantManager.tsx` (shared by product create `admin/products/new` and edit `admin/products/[id]`) + pure helpers in `apps/web/lib/variant-matrix.ts`:
+
+- **Attribute selection**: dimensions picked from backend-loaded attributes (identity `BRAND` excluded); category `skuTemplate` tokens shown as required-dimension hints. Changing category resets dimensions (they are category-scoped).
+- **SKU preview**: debounced (500ms) `dryRun` generation — the only SKU source; SKUs render read-only and are never editable. No SKU logic in the frontend (only display-only `{TOKEN}` parsing for hints).
+- **Matrix**: existing/new/skipped rows with sticky first column on desktop, horizontally scrollable wrapper on tablet, card transformation (`data-label`) on mobile. Out-of-stock renders as text (never color-only). Single-variant products show one default row.
+- **Pricing/stock**: per-row inputs with KES/whole-unit validation; bulk stage-to-selected + save; creation flow writes via generate → batch price PATCH → batch restock (3 requests max regardless of variant count). Existing-variant stock edits compute adjust deltas from loaded on-hand.
+- **Safety**: existing variants preserved (idempotent backend); de-selected combos excluded via `allowList` (never deleted); archive/restore through `JBConfirmDialog` (`ConfirmAction`); SKUs immutable in UI; unsaved-draft `beforeunload` guard retained on the create page.
 
 ## Flexible Attributes
 

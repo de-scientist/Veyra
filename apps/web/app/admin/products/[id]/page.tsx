@@ -3,24 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 
-import { createAdminVariant, getAdminAttributes, getAdminCategories, getAdminProduct, updateAdminProduct, updateAdminVariant, type AdminAttribute } from '../../../../lib/admin-api';
-import { AdminStatusBadge, ConfirmAction } from '../../../../components/admin';
+import { getAdminAttributes, getAdminCategories, getAdminProduct, updateAdminProduct, type AdminAttribute, type AdminCategory, type AdminProductDetail } from '../../../../lib/admin-api';
+import { AdminStatusBadge } from '../../../../components/admin';
 import { JBIcon } from '../../../../components/JBIcons';
 import { ProductMediaManager } from '../../../../components/ProductMediaManager';
+import { VariantManager } from '../../../../components/VariantManager';
 
-type ProductDetail = {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  status: string;
-  categoryId: string | null;
-  category: { id: string; name: string } | null;
-  variants: Array<{ id: string; sku: string; name: string | null; status: string; priceOverride: number | null; compareAtPrice: number | null }>;
-  images: Array<{ id: string; url: string; altText: string | null }>;
-};
-
-async function fetchProduct(id: string): Promise<ProductDetail> {
+async function fetchProduct(id: string): Promise<AdminProductDetail> {
   // Operations endpoint: works for DRAFT/ARCHIVED products the public
   // catalogue route no longer exposes.
   return getAdminProduct(id);
@@ -34,23 +23,19 @@ interface PageProps {
 export default function AdminProductDetailPage({ params }: PageProps) {
   const routeId = params.id;
   const [productId, setProductId] = useState<string | null>(null);
-  const [product, setProduct] = useState<ProductDetail | null>(null);
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [product, setProduct] = useState<AdminProductDetail | null>(null);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [attributes, setAttributes] = useState<AdminAttribute[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', description: '', categoryId: '', status: 'DRAFT' });
-  const [variantForm, setVariantForm] = useState({ sku: '', name: '', price: '', attributeId: '', attributeValue: '' });
 
   // Event values must be captured synchronously: React clears `currentTarget`
   // once the handler returns, so a functional updater that dereferences the
   // event would read `null.value` (same pattern as `new/page.tsx`).
   const set = (key: 'name' | 'description' | 'categoryId' | 'status', value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-  };
-  const setVariant = (key: 'sku' | 'name' | 'price' | 'attributeId' | 'attributeValue', value: string) => {
-    setVariantForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const load = useCallback(async (id: string) => {
@@ -90,58 +75,10 @@ export default function AdminProductDetailPage({ params }: PageProps) {
     }
   };
 
-  const handleVariantStatus = async (variantId: string, status: string) => {
+  const reloadVariants = useCallback(async () => {
     if (!productId) return;
-    try {
-      await updateAdminVariant(productId, variantId, { status });
-      await load(productId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Variant update failed');
-    }
-  };
-
-  const handleVariantPrice = async (variantId: string, price: string) => {
-    if (!productId) return;
-    const value = Number(price);
-    if (!Number.isFinite(value) || value < 0) {
-      setError('Enter a valid non-negative price.');
-      return;
-    }
-    try {
-      await updateAdminVariant(productId, variantId, { price: value });
-      setMessage('Price updated and audited');
-      await load(productId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Price update failed');
-    }
-  };
-
-  const handleCreateVariant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!productId) return;
-    const price = Number(variantForm.price);
-    if (!variantForm.sku.trim() || !Number.isFinite(price) || price < 0) {
-      setError('SKU and a valid non-negative price are required.');
-      return;
-    }
-    if (!variantForm.attributeId || !variantForm.attributeValue.trim()) {
-      setError('Each variant needs an attribute and value (e.g. Size / Large) — required by the catalogue model.');
-      return;
-    }
-    try {
-      await createAdminVariant(productId, {
-        sku: variantForm.sku.trim(),
-        name: variantForm.name.trim() || undefined,
-        price,
-        attributeValues: variantForm.attributeId && variantForm.attributeValue ? [{ attributeId: variantForm.attributeId, value: variantForm.attributeValue }] : [],
-      });
-      setVariantForm({ sku: '', name: '', price: '', attributeId: '', attributeValue: '' });
-      setMessage('Variant created with zeroed inventory record');
-      await load(productId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Variant creation failed');
-    }
-  };
+    await load(productId);
+  }, [productId, load]);
 
   if (loading) return <div className="empty-state"><p>Loading product…</p></div>;
   if (error && !product) return <div className="empty-state"><h1>Product not found</h1><p>{error}</p><Link href="/admin/products" className="button">Back to Products</Link></div>;
@@ -209,76 +146,19 @@ export default function AdminProductDetailPage({ params }: PageProps) {
           </section>
 
       <section className="workspace-card" aria-labelledby="edit-variants-heading">
-        <h2 id="edit-variants-heading">Variants ({product.variants.length})</h2>
-        {product.variants.map((variant) => (
-          <div key={variant.id} className="account-summary-card">
-            <p><strong>{variant.sku}</strong> {variant.name ? `• ${variant.name}` : ''} • <AdminStatusBadge status={variant.status} /></p>
-            <p className="muted-copy">Price: {variant.priceOverride ?? '—'}{variant.compareAtPrice ? ` (was ${variant.compareAtPrice})` : ''}</p>
-            <div className="account-actions">
-              <form
-                onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
-                  e.preventDefault();
-                  const value = new FormData(e.currentTarget).get('price');
-                  handleVariantPrice(variant.id, String(value ?? ''));
-                }}
-              >
-                <input type="number" name="price" min="0" step="0.01" placeholder="New price" aria-label={`New price for ${variant.sku}`} />
-                <button type="submit" className="button button--secondary">Update Price</button>
-              </form>
-              {variant.status !== 'ARCHIVED' ? (
-                <ConfirmAction
-                  label="Archive"
-                  confirmMessage={`Archive variant ${variant.sku}? It will stop being purchasable. Stock history is preserved.`}
-                  onConfirm={() => handleVariantStatus(variant.id, 'ARCHIVED')}
-                  danger
-                />
-              ) : (
-                <ConfirmAction
-                  label="Restore"
-                  confirmMessage={`Restore variant ${variant.sku} to ACTIVE?`}
-                  onConfirm={() => handleVariantStatus(variant.id, 'ACTIVE')}
-                />
-              )}
-            </div>
-          </div>
-        ))}
-
-        <h3>Add Variant</h3>
-        <form onSubmit={handleCreateVariant} className="account-form">
-          <div className="form-grid">
-            <label>
-              <span>SKU *</span>
-              <input type="text" value={variantForm.sku} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariant('sku', e.currentTarget.value)} required minLength={3} />
-            </label>
-            <label>
-              <span>Name</span>
-              <input type="text" value={variantForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariant('name', e.currentTarget.value)} />
-            </label>
-            <label>
-              <span>Price (KES) *</span>
-              <input type="number" value={variantForm.price} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariant('price', e.currentTarget.value)} required min="0" step="0.01" />
-            </label>
-            <label>
-              <span>Attribute *</span>
-              <select value={variantForm.attributeId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setVariant('attributeId', e.currentTarget.value)} required>
-                <option value="">Select attribute</option>
-                {attributes.map((attribute) => (
-                  <option key={attribute.id} value={attribute.id}>{attribute.name}</option>
-                ))}
-              </select>
-              {attributes.length === 0 ? (
-                <span className="muted-copy">No attributes are available yet — create one from the Attributes section first.</span>
-              ) : null}
-            </label>
-            <label>
-              <span>Attribute value *</span>
-              <input type="text" value={variantForm.attributeValue} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVariant('attributeValue', e.currentTarget.value)} placeholder="e.g. Large" required maxLength={120} />
-            </label>
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="button button--secondary"><JBIcon name="plus" size={16} /> Add Variant</button>
-          </div>
-        </form>
+        <h2 id="edit-variants-heading">Variants &amp; pricing ({product.variants.length})</h2>
+        {productId ? (
+          <VariantManager
+            productId={productId}
+            productName={product.name}
+            categoryId={form.categoryId || product.categoryId}
+            basePrice={product.basePrice === null || product.basePrice === undefined ? null : Number(product.basePrice)}
+            categories={categories}
+            attributes={attributes}
+            existingVariants={product.variants}
+            onChanged={reloadVariants}
+          />
+        ) : null}
       </section>
         </div>
 
