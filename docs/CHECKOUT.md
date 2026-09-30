@@ -25,4 +25,4 @@ flowchart LR
 
 ## Orders
 
-Separate state dimensions on `Order`: `status` (order lifecycle), `paymentStatus` (money), `fulfillmentStatus` (goods) — see [DATABASE.md](DATABASE.md). `OrderItem` freezes product/variant/price at purchase. Guest access via `?token=` + `x-confirmation-token`. Customers can claim guest orders, reorder, and track delivery from `/account/orders`. No order-cancel endpoint found — cancellation paths UNKNOWN.
+Separate state dimensions on `Order`: `status` (order lifecycle), `paymentStatus` (money), `fulfillmentStatus` (goods) — see [DATABASE.md](DATABASE.md). `OrderItem` freezes product/variant/price at purchase. Guest access via `?token=` + `x-confirmation-token`. Customers can claim guest orders, reorder, and track delivery from `/account/orders`. Cancellation: `POST /admin/orders/:orderNumber/cancel` (operations; unpaid + unfulfilled only, idempotent reservation release; paid/fulfilled refused with actionable codes).

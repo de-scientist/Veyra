@@ -212,12 +212,21 @@ export async function inspectReturn(returnId: string, actorId: string, items: Ar
     if (request.items.some((item) => !inputById.has(item.id))) throw new HttpError(400, 'INSPECTION_REQUIRED', 'Inspect every returned item before resolution.');
     for (const item of request.items) {
       const decision = inputById.get(item.id)!;
-      await client.returnItem.update({ where: { id: item.id }, data: { condition: decision.condition, disposition: decision.disposition, inspectionNote: decision.note?.trim().slice(0, 500) || null } });
-      if (decision.disposition === ReturnDisposition.RESTOCK && !item.restockApplied) {
+      if (decision.disposition === ReturnDisposition.RESTOCK) {
+        // Atomic claim: exactly one inspector converts an item to restocked.
+        // Concurrent inspects collapse here instead of double-adding stock.
         if (!item.variantId) throw new HttpError(409, 'ITEM_NOT_RESTOCKABLE', 'This item has no inventory variant.');
+        const claimed = await client.returnItem.updateMany({
+          where: { id: item.id, restockApplied: false },
+          data: { condition: decision.condition, disposition: decision.disposition, inspectionNote: decision.note?.trim().slice(0, 500) || null, restockApplied: true },
+        });
+        if (claimed.count !== 1) {
+          throw new HttpError(409, 'RETURN_RESTOCK_CONFLICT', 'This item was already restocked by another inspection. No additional stock was added.');
+        }
         await client.inventory.update({ where: { variantId: item.variantId }, data: { quantityOnHand: { increment: item.quantity } } });
         await client.inventoryMovement.create({ data: { variantId: item.variantId, movementType: 'RETURN', quantity: item.quantity, reason: 'RETURN_RESTOCKED', referenceType: 'RETURN', referenceId: request.id, actorId } });
-        await client.returnItem.update({ where: { id: item.id }, data: { restockApplied: true } });
+      } else {
+        await client.returnItem.update({ where: { id: item.id }, data: { condition: decision.condition, disposition: decision.disposition, inspectionNote: decision.note?.trim().slice(0, 500) || null } });
       }
     }
     await client.returnRequest.update({ where: { id: returnId }, data: { status: ReturnStatus.APPROVED_FOR_RESOLUTION, actorId, history: { createMany: { data: [{ fromStatus: request.status, toStatus: ReturnStatus.INSPECTING, actorId, note: 'Return inspection started.' }, { fromStatus: ReturnStatus.INSPECTING, toStatus: ReturnStatus.APPROVED_FOR_RESOLUTION, actorId, note: 'Return inspection completed.' }] } } } });

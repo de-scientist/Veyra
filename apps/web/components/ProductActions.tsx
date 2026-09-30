@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { addToCart, notifyCartUpdated } from '../lib/shopping-api';
 import { attributeDef, type ProductVariant } from '../lib/catalog';
 import { OptionButton, Swatch } from './AttributeControls';
+import { PriceDisplay } from './PriceDisplay';
 import { useToast } from './Toast';
 import { WishlistButton } from './WishlistButton';
 
@@ -115,10 +116,13 @@ export function ProductActions({ productId, productName, variants }: ProductActi
       })}
 
       {selectedVariant ? (
-        <p className="muted-copy" role="status">
-          SKU {selectedVariant.sku} · {selectedVariant.inStock ? 'In stock' : 'Out of stock'}
-          {selectedVariant.inventoryLabel ? ` · ${selectedVariant.inventoryLabel}` : null}
-        </p>
+        <div className="product-actions__selection" role="status">
+          <PriceDisplay price={selectedVariant.price} compareAtPrice={selectedVariant.compareAtPrice} />
+          <p className="muted-copy">
+            SKU {selectedVariant.sku} · {selectedVariant.inStock ? 'In stock' : 'Out of stock'}
+            {selectedVariant.inventoryLabel ? ` · ${selectedVariant.inventoryLabel}` : null}
+          </p>
+        </div>
       ) : null}
 
       <div className="quantity-row">

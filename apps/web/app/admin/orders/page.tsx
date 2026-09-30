@@ -75,7 +75,7 @@ export default function AdminOrdersPage() {
         >
           <label>
             <span className="muted-copy">Order number, customer name, email, or phone</span>
-            <input type="search" name="search" defaultValue={params.search} placeholder="ORD-…, name, email, phone" />
+            <input type="search" name="search" defaultValue={params.search} placeholder="ORD-…, name, email, phone, SKU" />
           </label>
         </form>
         <div className="account-status-filters" role="group" aria-label="Order status">

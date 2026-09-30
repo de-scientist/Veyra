@@ -6,9 +6,11 @@ import { useSearchParams } from 'next/navigation';
 
 import { adjustVariant, getAdminInventory, getInventoryReservations, restockVariant, type AdminInventoryRow, type Pagination } from '../../../lib/admin-api';
 import { AdminEmptyState, AdminPagination, AdminStatusBadge, formatAdminDate } from '../../../components/admin';
+import { useConfirm } from '../../../components/ConfirmDialog';
 
 export default function AdminInventoryPage() {
   const searchParams = useSearchParams();
+  const { confirm, dialog } = useConfirm();
   const [rows, setRows] = useState<AdminInventoryRow[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,9 +73,26 @@ export default function AdminInventoryPage() {
       setError('A reason of at least 3 characters is required for every stock change.');
       return;
     }
+    if (action.mode === 'restock' && quantity < 1) {
+      setError('Restock quantity must be positive.');
+      return;
+    }
+    // Consequential stock mutation: confirm the exact before → after first.
+    const row = rows.find((entry) => entry.variantId === action.variantId);
+    const nextOnHand = (row?.quantityOnHand ?? 0) + quantity;
+    if (nextOnHand < 0) {
+      setError(`This change would leave ${row?.variant.sku ?? 'the variant'} at ${nextOnHand} on hand. Stock cannot go negative.`);
+      return;
+    }
+    const confirmed = await confirm({
+      title: 'Apply stock change?',
+      description: `${row?.variant.sku ?? 'Variant'}: ${row?.quantityOnHand ?? 0} → ${nextOnHand} on hand. Reason: ${action.reason.trim()}. A movement record will be written.`,
+      confirmLabel: 'Apply change',
+      onConfirm: () => undefined,
+    });
+    if (!confirmed) return;
     try {
       if (action.mode === 'restock') {
-        if (quantity < 1) throw new Error('Restock quantity must be positive.');
         await restockVariant(action.variantId, { quantity, reason: action.reason.trim() });
         setMessage('Restocked and recorded as an IN movement.');
       } else {
@@ -91,6 +110,7 @@ export default function AdminInventoryPage() {
 
   return (
     <div className="account-page">
+      {dialog}
       <header className="account-page__header">
         <div>
           <h1>Inventory</h1>
@@ -114,7 +134,7 @@ export default function AdminInventoryPage() {
               }} required>
                 <option value="">Select…</option>
                 {rows.map((row) => (
-                  <option key={row.variantId} value={row.variantId}>{row.variant.sku} — avail {row.availableQuantity}</option>
+                  <option key={row.variantId} value={row.variantId}>{row.variant.sku}{row.variant.name ? ` (${row.variant.name})` : ''} — avail {row.availableQuantity}</option>
                 ))}
               </select>
             </label>
@@ -176,10 +196,12 @@ export default function AdminInventoryPage() {
               <thead>
                 <tr>
                   <th>SKU</th>
+                  <th>Variant</th>
                   <th>Product</th>
                   <th>On Hand</th>
                   <th>Reserved</th>
                   <th>Available</th>
+                  <th>Low Threshold</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -187,10 +209,12 @@ export default function AdminInventoryPage() {
                 {rows.map((row) => (
                   <tr key={row.id}>
                     <td><strong>{row.variant.sku}</strong></td>
+                    <td>{row.variant.name ?? '—'}</td>
                     <td>{row.variant.product.name}</td>
                     <td>{row.quantityOnHand}</td>
                     <td>{row.quantityReserved}</td>
                     <td>{row.availableQuantity}</td>
+                    <td>{row.lowStockThreshold}</td>
                     <td><AdminStatusBadge status={row.availableQuantity <= 0 ? 'OUT_OF_STOCK' : row.availableQuantity <= row.lowStockThreshold ? 'LOW_STOCK' : row.variant.status} /></td>
                   </tr>
                 ))}

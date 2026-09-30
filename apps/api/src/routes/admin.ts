@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 
 import { HttpError } from '../lib/errors.js';
+import { cancelOrder } from '../lib/orders.js';
 import { prisma } from '../lib/prisma.js';
 import { releaseStaleReservations } from '../lib/reservations.js';
 import {
@@ -200,6 +201,7 @@ export async function adminRoutes(app: FastifyInstance) {
         { customerEmail: { contains: query.search, mode: 'insensitive' } },
         { customerPhone: { contains: query.search } },
         { customerName: { contains: query.search, mode: 'insensitive' } },
+        { items: { some: { sku: { contains: query.search, mode: 'insensitive' } } } },
       ];
     }
     const [orders, total] = await Promise.all([
@@ -220,6 +222,17 @@ export async function adminRoutes(app: FastifyInstance) {
     const order = await prisma.order.findUnique({ where: { orderNumber }, include: orderInclude });
     if (!order) throw new HttpError(404, 'ORDER_NOT_FOUND', 'Order not found.');
     return { success: true, data: serializeAdminOrder(order) };
+  });
+
+  // Order cancellation (Phase 4): unpaid orders only. Releases ACTIVE
+  // reservations idempotently (RELEASED movement, ORDER reference); paid or
+  // fulfilled orders are directed to returns/refunds. Re-cancelling is a
+  // no-op success — stock is never released twice.
+  app.post('/admin/orders/:orderNumber/cancel', { preHandler: requireOperationsAccess }, async (request) => {
+    const { orderNumber } = request.params as { orderNumber: string };
+    const payload = z.object({ reason: z.string().min(3).max(200) }).parse(request.body);
+    const result = await cancelOrder(orderNumber, actorId(request), payload.reason);
+    return { success: true, data: result };
   });
 
   // ---- Payment visibility (read-only; mutations stay in Phase 7/9 services) ----

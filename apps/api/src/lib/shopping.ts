@@ -182,14 +182,18 @@ async function mergeCarts(userCart: CartWithItems, guestCart: CartWithItems) {
 
       if (quantity < 1) continue;
 
+      // Refresh the snapshot to the authoritative current price: a guest
+      // cart may predate a price change, and checkout rejects stale
+      // snapshots unless the customer confirms them.
+      const authoritativePrice = Number(guestItem.variant.priceOverride ?? guestItem.variant.product.basePrice ?? 0);
       await transaction.cartItem.upsert({
         where: { cartId_variantId: { cartId: userCart.id, variantId: guestItem.variantId } },
-        update: { quantity, unitPriceSnapshot: guestItem.unitPriceSnapshot },
+        update: { quantity, unitPriceSnapshot: authoritativePrice },
         create: {
           cartId: userCart.id,
           variantId: guestItem.variantId,
           quantity,
-          unitPriceSnapshot: guestItem.unitPriceSnapshot,
+          unitPriceSnapshot: authoritativePrice,
         },
       });
     }
@@ -270,7 +274,11 @@ export async function addCartItem(cartId: string, variantId: string, quantity: n
       const existing = await transaction.cartItem.findUnique({ where: { cartId_variantId: { cartId, variantId } } });
       const nextQuantity = (existing?.quantity ?? 0) + quantity;
       if (nextQuantity > MAX_CART_ITEM_QUANTITY) throw new HttpError(400, 'QUANTITY_LIMIT_EXCEEDED', `A maximum of ${MAX_CART_ITEM_QUANTITY} units is allowed.`);
-      if (nextQuantity > available) throw new HttpError(409, 'INSUFFICIENT_STOCK', `Only ${available} item(s) are currently available.`);
+      // Re-read availability inside the transaction: the outer check is
+      // advisory and may be stale under concurrent purchases.
+      const fresh = await transaction.inventory.findUnique({ where: { variantId } });
+      const currentAvailable = availableQuantity(fresh);
+      if (nextQuantity > currentAvailable) throw new HttpError(409, 'INSUFFICIENT_STOCK', `Only ${currentAvailable} item(s) are currently available.`);
 
       await transaction.cartItem.upsert({
         where: { cartId_variantId: { cartId, variantId } },

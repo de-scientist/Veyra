@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-import { getAdminOrderDetail } from '../../../../lib/admin-api';
-import { AdminStatusBadge, formatAdminDate, formatMoney } from '../../../../components/admin';
+import { cancelAdminOrder, getAdminOrderDetail } from '../../../../lib/admin-api';
+import { AdminStatusBadge, ConfirmAction, formatAdminDate, formatMoney } from '../../../../components/admin';
 import { AdminOrderFulfillmentPanel } from '../../../../components/AdminOrderFulfillmentPanel';
+import { useToast } from '../../../../components/Toast';
 
 type Detail = {
   orderNumber: string;
@@ -22,7 +23,22 @@ type Detail = {
   refunds: Array<{ id: string; refundNumber: string; amount: number; currency: string; status: string; providerReference: string | null; reason: string; requestedAt: string; processedAt: string | null }>;
   notes: string | null;
   createdAt: string;
+  cancelledAt: string | null;
 };
+
+function describeVariant(item: { variantDescription: string | null }): string | null {
+  if (!item.variantDescription) return null;
+  try {
+    const parsed: unknown = JSON.parse(item.variantDescription);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const values = Object.values(parsed as Record<string, unknown>).filter((v): v is string => typeof v === 'string' && v.length > 0);
+      if (values.length > 0) return values.join(' / ');
+    }
+  } catch {
+    // Stored as a plain label already — fall through.
+  }
+  return item.variantDescription;
+}
 
 interface PageProps {
   // Next.js 14 (installed: 14.2.15): route params are synchronous.
@@ -31,9 +47,11 @@ interface PageProps {
 
 export default function AdminOrderDetailPage({ params }: PageProps) {
   const routeOrderNumber = params.orderNumber;
+  const { notify } = useToast();
   const [order, setOrder] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [cancelReason, setCancelReason] = useState('');
 
   function refresh() {
     setLoading(true);
@@ -71,18 +89,70 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
   if (error) return <div className="empty-state"><h1>Order not found</h1><p>{error}</p><Link href="/admin/orders" className="button">Back to Orders</Link></div>;
   if (!order) return <div className="empty-state"><h1>Order not found</h1></div>;
 
+  const cancellable =
+    order.status !== 'CANCELLED' &&
+    order.paymentStatus !== 'PAID' &&
+    !['SHIPPED', 'DELIVERED', 'RETURNED'].includes(order.fulfillmentStatus);
+
+  const handleCancel = async () => {
+    if (cancelReason.trim().length < 3) {
+      notify('error', 'Enter a cancellation reason (min 3 characters).');
+      return;
+    }
+    try {
+      const result = await cancelAdminOrder(order.orderNumber, { reason: cancelReason.trim() });
+      notify('success', result.alreadyCancelled ? 'Order was already cancelled.' : `Order cancelled — ${result.releasedReservations} reservation(s) released.`);
+      setCancelReason('');
+      refresh();
+    } catch (e) {
+      notify('error', e instanceof Error ? e.message : 'Cancellation failed.');
+    }
+  };
+
   return (
     <div className="account-page">
       <header className="account-page__header">
         <div>
           <Link href="/admin/orders" className="text-button">← Back to Orders</Link>
           <h1 style={{ marginTop: '0.5rem' }}>Order {order.orderNumber}</h1>
-          <p className="muted-copy">Placed {formatAdminDate(order.createdAt)}{order.customer.guest ? ' • Guest checkout' : ''}</p>
+          <p className="muted-copy">Placed {formatAdminDate(order.createdAt)}{order.customer.guest ? ' • Guest checkout' : ''}{order.cancelledAt ? ` • Cancelled ${formatAdminDate(order.cancelledAt)}` : ''}</p>
         </div>
         <div className="account-page__actions">
           <Link href="/admin/fulfillment" className="button button--secondary">Fulfillment Queue</Link>
         </div>
       </header>
+
+      {cancellable && (
+        <section className="account-section" aria-labelledby="cancel-order-heading">
+          <h2 id="cancel-order-heading">Cancel order</h2>
+          <p className="muted-copy">
+            Cancels this unpaid order and releases its stock reservations. Paid or fulfilled orders cannot be cancelled here — use returns and refunds.
+          </p>
+          <div className="form-grid">
+            <label>
+              <span>Cancellation reason *</span>
+              <input
+                type="text"
+                value={cancelReason}
+                maxLength={200}
+                placeholder="Customer request, duplicate order…"
+                onChange={(e) => setCancelReason(e.currentTarget.value)}
+              />
+            </label>
+          </div>
+          <div className="form-actions">
+            <ConfirmAction
+              label="Cancel order"
+              title="Cancel this order?"
+              confirmMessage={`Cancel order ${order.orderNumber}? Reserved stock returns to available. This cannot be undone — use reason: ${cancelReason.trim() || '(enter a reason above)'}.`}
+              confirmLabel="Cancel order"
+              danger
+              disabled={cancelReason.trim().length < 3}
+              onConfirm={handleCancel}
+            />
+          </div>
+        </section>
+      )}
 
       <section className="account-section">
         <h2>Status</h2>
@@ -121,9 +191,14 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
       <section className="account-section">
         <h2>Items &amp; Totals ({order.totals.currency} {Number(order.totals.grandTotal).toLocaleString('en-KE')})</h2>
         <ul>
-          {order.items.map((item) => (
-            <li key={item.id}>{item.productName} ({item.sku}) × {item.quantity} — {formatMoney(item.total, order.totals.currency)}</li>
-          ))}
+          {order.items.map((item) => {
+            const variant = describeVariant(item);
+            return (
+              <li key={item.id}>
+                {item.productName}{variant ? ` — ${variant}` : ''} (SKU {item.sku}) × {item.quantity} — {formatMoney(item.total, order.totals.currency)}
+              </li>
+            );
+          })}
         </ul>
         <p className="muted-copy">Subtotal {formatMoney(order.totals.subtotal, order.totals.currency)} • Shipping {formatMoney(order.totals.shippingTotal, order.totals.currency)} • Discount {formatMoney(order.totals.discountTotal, order.totals.currency)}</p>
       </section>

@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import { hashToken } from '../auth.js';
 import { HttpError } from '../errors.js';
+import { logger } from '../logger.js';
 import { afterCommitNotify, deterministicEventId, enqueueEvent } from '../notifications/events.js';
 import { prisma } from '../prisma.js';
 import { MpesaPaymentProvider, buildPaymentCorrelationKey } from './mpesa.js';
@@ -186,6 +187,7 @@ async function applyProviderResult(result: ProviderResult) {
     return { acknowledged: true, processed: false, reconciliationRequired: true };
   }
 
+  let txReconciliationRequired = false;
   try {
     await prisma.$transaction(async (client) => {
       if (!successful) {
@@ -264,9 +266,19 @@ async function applyProviderResult(result: ProviderResult) {
       await auditPayment(client, transaction.paymentId, previousPaymentStatus, 'PAID', { receipt: result.receipt ?? null });
 
       const reservations = await client.inventoryReservation.findMany({ where: { orderId: order.id, status: 'ACTIVE' }, orderBy: { variantId: 'asc' } });
+      // Conversion failures must never roll back a confirmed payment (money
+      // already moved). A mismatched reservation stays ACTIVE for explicit
+      // staff reconciliation; fulfillment eligibility blocks until then.
       for (const reservation of reservations) {
         const updated = await client.inventory.updateMany({ where: { variantId: reservation.variantId, quantityReserved: { gte: reservation.quantity }, quantityOnHand: { gte: reservation.quantity } }, data: { quantityReserved: { decrement: reservation.quantity }, quantityOnHand: { decrement: reservation.quantity } } });
-        if (updated.count !== 1) throw new HttpError(409, 'PAYMENT_INVENTORY_SYNC_FAILED', 'Payment was confirmed but inventory conversion requires reconciliation.');
+        if (updated.count !== 1) {
+          logger.error(
+            { orderId: order.id, orderNumber: order.orderNumber, reservationId: reservation.id, variantId: reservation.variantId, quantity: reservation.quantity },
+            'payments.inventory_reconciliation_required',
+          );
+          txReconciliationRequired = true;
+          continue;
+        }
         await client.inventoryReservation.update({ where: { id: reservation.id }, data: { status: 'CONVERTED', convertedAt: new Date() } });
         await client.inventoryMovement.create({ data: { variantId: reservation.variantId, movementType: 'OUT', quantity: reservation.quantity, reason: 'PAYMENT_CONFIRMED', referenceType: 'ORDER', referenceId: order.id } });
       }
@@ -294,7 +306,7 @@ async function applyProviderResult(result: ProviderResult) {
 
   afterCommitNotify();
 
-  return { acknowledged: true, processed: true, successful };
+  return { acknowledged: true, processed: true, successful, reconciliationRequired: txReconciliationRequired || undefined };
 }
 
 export async function handleMpesaCallback(body: unknown) {

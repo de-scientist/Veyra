@@ -34,7 +34,7 @@ export type CheckoutOptions = {
 };
 
 export type CheckoutPreview = {
-  items: Array<{ id: string; productName: string; variant: string; quantity: number; unitPrice: number; subtotal: number }>;
+  items: Array<{ id: string; productName: string; variant: string; sku: string; variantId: string; quantity: number; unitPrice: number; subtotal: number }>;
   subtotal: number;
   discountTotal: number;
   shippingTotal: number;

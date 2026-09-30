@@ -396,6 +396,17 @@ export function getAdminOrderDetail(orderNumber: string) {
   return request<Record<string, unknown>>(`/admin/orders/${encodeURIComponent(orderNumber)}`);
 }
 
+/**
+ * Cancel an unpaid order (Phase 4): releases ACTIVE reservations
+ * idempotently. Paid/fulfilled orders are refused — use returns/refunds.
+ */
+export function cancelAdminOrder(orderNumber: string, input: { reason: string }) {
+  return request<{ orderNumber: string; status: string; releasedReservations: number; alreadyCancelled: boolean }>(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/cancel`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+}
+
 // ---- Payments ----
 
 export function getAdminPayments(params?: { page?: number; pageSize?: number; search?: string; status?: string }) {

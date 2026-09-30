@@ -203,7 +203,7 @@ export async function previewCheckout(cartId: string, input: CheckoutInput) {
   const context = await getCheckoutContext(cartId, input, true);
   const priceChangedItems = context.cart.items.filter((item) => Number(item.unitPriceSnapshot) !== currentPrice(item).toNumber()).map((item) => item.id);
   return {
-    items: context.cart.items.map((item) => ({ id: item.id, productName: item.variant.product.name, variant: item.variant.name ?? item.variant.sku, quantity: item.quantity, unitPrice: currentPrice(item).toNumber(), subtotal: currentPrice(item).mul(item.quantity).toNumber() })),
+    items: context.cart.items.map((item) => ({ id: item.id, productName: item.variant.product.name, variant: item.variant.name ?? item.variant.sku, sku: item.variant.sku, variantId: item.variantId, quantity: item.quantity, unitPrice: currentPrice(item).toNumber(), subtotal: currentPrice(item).mul(item.quantity).toNumber() })),
     subtotal: context.totals.subtotal.toNumber(),
     discountTotal: 0,
     shippingTotal: context.totals.shippingTotal.toNumber(),

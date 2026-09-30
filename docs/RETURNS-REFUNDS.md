@@ -8,7 +8,7 @@ Authenticated owner, order `PAID` and delivered, within `RETURN_WINDOW_DAYS` (if
 
 ## Return Lifecycle
 
-`REQUESTED → UNDER_REVIEW → APPROVED → RETURN_INITIATED → RECEIVED → INSPECTING → APPROVED_FOR_RESOLUTION → RESOLVED`, with `REJECTED` / `CANCELLED` exits. Admin queue actions: review, approve, reject, receive, inspect (per-item condition + disposition required; `RESTOCK` increments stock once with `RETURN` movement).
+`REQUESTED → UNDER_REVIEW → APPROVED → RETURN_INITIATED → RECEIVED → INSPECTING → APPROVED_FOR_RESOLUTION → RESOLVED`, with `REJECTED` / `CANCELLED` exits. Admin queue actions: review, approve, reject, receive, inspect (per-item condition + disposition required; `RESTOCK` increments stock through an atomic `restockApplied=false` claim — concurrent inspects collapse to one winner with `409 RETURN_RESTOCK_CONFLICT` — plus `RETURN` movement).
 
 ## Exchanges
 

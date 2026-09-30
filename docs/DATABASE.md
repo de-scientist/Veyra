@@ -28,7 +28,7 @@ PostgreSQL via Prisma. Authoritative source: `prisma/schema.prisma` (50 models, 
 
 ## State Dimensions (separate axes, not one status)
 
-- `OrderStatus`: `PENDING → CONFIRMED → PROCESSING → COMPLETED`, plus `CANCELLED`. No order-cancel endpoint found — cancellation paths UNKNOWN.
+- `OrderStatus`: `PENDING → CONFIRMED → PROCESSING → COMPLETED`, plus `CANCELLED` (via `POST /admin/orders/:orderNumber/cancel`: unpaid + unfulfilled only, releases `ACTIVE` reservations idempotently; paid/fulfilled refused).
 - `PaymentStatus`: `UNPAID → PENDING → PAID`, plus `FAILED`, `REFUNDED`, `PARTIALLY_REFUNDED`.
 - `FulfillmentStatus`: `UNFULFILLED → PROCESSING → PACKED → SHIPPED → DELIVERED`, plus `RETURNED`.
 - `DeliveryStatus`: `PENDING → PREPARING → PICKED → PACKED → READY_FOR_PICKUP / ASSIGNED → IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED / PICKED_UP`, plus `DELIVERY_ATTEMPTED`, `FAILED`.
