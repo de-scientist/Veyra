@@ -14,7 +14,7 @@ Multi-category catalogue across three departments: **fashion**, **footwear**, **
 
 ## Products & Variants
 
-`Product`: slug, name, descriptions, department, category, brand, status (`DRAFT → ACTIVE → ARCHIVED`), base price + `compareAtPrice`, images, `specs` (free-form facts), plus `styleCode` (Phase 1: stable style/model identifier used as the `{STYLE}` SKU segment — the display name is never a SKU segment). `ProductVariant`: SKU (unique), name, price/override, status (`ACTIVE/INACTIVE/ARCHIVED`), attribute map (`VariantAttributeValue`), per-variant stock, plus `barcode` (nullable unique, separate concept from SKU — generation drivers out of scope), `skuTemplateVersion` (frozen at creation) and `skuLockedAt` (set once transactional history exists; SKU edits rejected after lock).
+`Product`: slug, name, descriptions, department, category, brand, status (`DRAFT → ACTIVE → ARCHIVED`), base price + `compareAtPrice`, images, `specs` (free-form facts), plus `styleCode` (Phase 1: stable style/model identifier used as the `{STYLE}` SKU segment — the display name is never a SKU segment). `ProductVariant`: SKU (unique), name, price/override, status (`ACTIVE/INACTIVE/ARCHIVED`), attribute map (`VariantAttributeValue`), per-variant stock, plus `barcode` (nullable unique machine-readable operational key — see Barcode below), `skuTemplateVersion` (frozen at creation) and `skuLockedAt` (set once transactional history exists; SKU edits rejected after lock).
 
 ## SKU Architecture (Phase 1 foundation)
 
@@ -72,3 +72,12 @@ Derived display rules (documented, not stored): `featured` = member of the `feat
 ## Publishing Rules
 
 Products render publicly only when `ACTIVE` and not soft-deleted; variants likewise. Price snapshots are authoritative at checkout, not at display.
+
+## Barcode & Product Identification (Phase 5)
+
+SKU stays the internal/business identifier; barcode is the machine-readable operational key for the same `ProductVariant` (`barcode` nullable unique — NULL allowed until assignment; DB constraint is the final authority; never `barcode = SKU`).
+
+- **Standards**: assigned codes may be EAN-13, UPC-A, CODE128 or CODE39, validated per standard (EAN-13/UPC-A check digits verified, never length-only; type-aware normalization preserves significant Code 128/39 characters). Internal auto-generation produces EAN-13 in the GS1 restricted-circulation range (prefix `29`, store-use only) via crypto-random payload + valid check digit — explicitly NOT official GTINs. QR deferred.
+- **Service** (`apps/api/src/lib/barcode.ts`, pure validation + Prisma-backed claims): server-authoritative generate (atomic `barcode: null` claim + bounded retry on collisions), manual assign with source (`INTERNAL/MANUFACTURER/SUPPLIER/IMPORTED/MANUAL`), explicit `replace: true` + reason for overwrites (audited before/after via `VARIANT_UPDATED` — no second log), bulk generate-missing (never touches existing codes), grouping-tolerant lookup → variant + SKU + inventory.
+- **Endpoints** (operations staff): `POST …/variants/:variantId/barcode/generate|/assign`, `POST …/variants/barcodes/generate-missing` (≤100), `GET /admin/inventory/lookup?barcode=`; inventory search also matches barcodes.
+- **Admin UI**: barcode column + per-row/bulk generate in the variant matrix; Scan Station (`/admin/inventory/scan`) for keyboard-wedge scanners (result card, replace-with-reason, unknown-code handling, label queue with quantities and optional price, print stylesheet); EAN-13/UPC-A labels render as exact-module SVG with human-readable digits. Camera scanning deferred (no library installed; keyboard baseline per project principles). Barcodes are never shown on the customer storefront.

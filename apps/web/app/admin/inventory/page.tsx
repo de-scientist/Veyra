@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import type { Route } from 'next';
 import { useSearchParams } from 'next/navigation';
 
 import { adjustVariant, getAdminInventory, getInventoryReservations, restockVariant, type AdminInventoryRow, type Pagination } from '../../../lib/admin-api';
@@ -117,7 +118,8 @@ export default function AdminInventoryPage() {
           <p className="muted-copy">Controlled stock operations — every change writes a movement record</p>
         </div>
         <Link href="/admin/inventory/movements" className="button button--secondary">Movement History</Link>
-        <Link href="/admin/inventory/scan" className="button button--secondary">Scan Station</Link>
+        {/* Route added in Phase 5; cast matches the repo's dynamic-route pattern until Next regenerates route types. */}
+        <Link href={'/admin/inventory/scan' as Route} className="button button--secondary">Scan Station</Link>
       </header>
 
       {error && <div className="inline-message" role="alert">{error}</div>}
