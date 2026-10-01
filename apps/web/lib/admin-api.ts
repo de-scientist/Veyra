@@ -6,14 +6,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'include',
     headers: { 'content-type': 'application/json', ...init?.headers },
   });
-  const body = (await response.json().catch(() => null)) as { data?: T; error?: { message?: string; code?: string } } | null;
+  const body = (await response.json().catch(() => null)) as { data?: T; error?: { message?: string; code?: string; details?: unknown } } | null;
   if (!response.ok) {
     const error = new Error(body?.error?.message ?? 'Something went wrong. Please try again.');
     (error as Error & { code?: string }).code = body?.error?.code;
+    // Structured backend failures (e.g. PRODUCT_NOT_READY_FOR_PUBLISH issues,
+    // DRAFT_CONFLICT canonical state) travel on `details` per the API error
+    // contract — preserved here so callers can render actionable UI.
+    (error as Error & { details?: unknown }).details = body?.error?.details;
     throw error;
   }
   return body?.data as T;
 }
+
+export type ApiErrorDetails = { issues?: Array<{ field: string; code: string; message: string }>; product?: { updatedAt?: string } & Record<string, unknown> };
 
 export type Pagination = { page: number; pageSize: number; total: number; totalPages: number };
 
@@ -110,6 +116,34 @@ export function createAdminProduct(input: { name: string; description: string; c
 
 export function updateAdminProduct(id: string, input: { name?: string; description?: string; categoryId?: string | null; status?: string }) {
   return request<AdminProduct>(`/admin/products/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export type ProductCollectionEntry = { id: string; name: string; slug: string };
+
+/** Canonical collection membership (server-authoritative replace semantics). */
+export function getProductCollections(productId: string) {
+  return request<{ collections: ProductCollectionEntry[] }>(`/admin/products/${productId}/collections`);
+}
+
+export function setProductCollections(productId: string, collectionIds: string[]) {
+  return request<{ collections: ProductCollectionEntry[] }>(`/admin/products/${productId}/collections`, {
+    method: 'PUT',
+    body: JSON.stringify({ collectionIds }),
+  });
+}
+
+export type DraftSaveResult = AdminProduct & { updatedAt: string };
+
+/**
+ * Server-backed draft save. The endpoint accepts basic fields only — it can
+ * never transition status — and supports `expectedUpdatedAt` optimistic
+ * concurrency (stale writes get 409 DRAFT_CONFLICT + canonical state).
+ */
+export function saveProductDraft(
+  id: string,
+  input: { name?: string; description?: string; categoryId?: string | null; expectedUpdatedAt?: string },
+) {
+  return request<DraftSaveResult>(`/admin/products/${id}/draft`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
 export function createAdminVariant(productId: string, input: { sku: string; name?: string; status?: string; price: number; compareAtPrice?: number; attributeValues?: Array<{ attributeId: string; value: string }> }) {
