@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 
-import { generateSlug, validateCatalogProduct } from '../lib/catalog.js';
+import { checkPublishReadiness, generateSlug, validateCatalogProduct, type PublishReadinessIssue } from '../lib/catalog.js';
 import { validateAuditReason, validateInventoryAdjustment, validateRestockQuantity } from '../lib/admin.js';
 import {
   assignVariantBarcode,
@@ -210,6 +210,21 @@ export async function catalogueRoutes(app: FastifyInstance) {
   app.post('/admin/products', { preHandler: requireOperationsAccess }, async (request) => {
     const payload = productSchema.parse(request.body);
     const safeSlug = payload.slug ? generateSlug(payload.slug) : generateSlug(payload.name);
+    // Creating directly ACTIVE is a publish transition: no variants or media
+    // can exist yet, so readiness can never hold — reject with structured
+    // issues instead of persisting a publishable-in-name-only product.
+    if (payload.status === 'ACTIVE') {
+      const issues = checkPublishReadiness({
+        name: payload.name,
+        slug: safeSlug,
+        categoryId: payload.categoryId,
+        description: payload.description,
+        variants: [],
+        imageCount: 0,
+        hasPrimaryImage: false,
+      });
+      throw new HttpError(400, 'PRODUCT_NOT_READY_FOR_PUBLISH', 'Product is not ready for publishing.', { issues });
+    }
     try {
       const product = await prisma.product.create({
         data: {
@@ -233,20 +248,62 @@ export async function catalogueRoutes(app: FastifyInstance) {
     const payload = productUpdateSchema.parse(request.body);
     const existing = await prisma.product.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
+    // Publish transitions (any non-ACTIVE → ACTIVE) are readiness-gated
+    // server-side: the UI checklist is advisory only and must not be
+    // bypassable by a modified client. The check and the status flip run in
+    // one transaction, so a failed check changes nothing.
+    const isPublishTransition = payload.status === 'ACTIVE' && existing.status !== 'ACTIVE';
     try {
       // SKU immutability: editing name/description/category/styleCode never
       // rewrites existing variant SKUs. Variants keep the SKU (and template
       // version) they were created with; only explicit variant operations
       // may archive/replace them.
-      const product = await prisma.product.update({
-        where: { id },
-        data: {
-          name: payload.name?.trim(),
-          description: payload.description?.trim(),
-          categoryId: payload.categoryId === null ? null : payload.categoryId,
-          status: payload.status,
-          styleCode: payload.styleCode === null ? null : payload.styleCode ? normalizeSegment(payload.styleCode) : undefined,
-        },
+      const product = await prisma.$transaction(async (client) => {
+        if (isPublishTransition) {
+          const state = await client.product.findUnique({
+            where: { id },
+            include: {
+              variants: {
+                where: { status: 'ACTIVE' },
+                include: { variantAttributeValues: { include: { attributeValue: true } } },
+              },
+              images: { select: { id: true, isPrimary: true } },
+            },
+          });
+          if (!state) throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
+          const issues: PublishReadinessIssue[] = checkPublishReadiness({
+            name: payload.name ?? state.name,
+            slug: state.slug,
+            categoryId: (payload.categoryId === null ? null : (payload.categoryId ?? state.categoryId)) ?? undefined,
+            description: payload.description ?? state.description ?? '',
+            variants: state.variants.map((variant) => ({
+              sku: variant.sku,
+              price: Number(variant.priceOverride ?? 0),
+              status: 'ACTIVE' as const,
+              attributeValues: variant.variantAttributeValues.map((mapping) => ({
+                attributeId: mapping.attributeId,
+                value: mapping.attributeValue.value,
+              })),
+            })),
+            imageCount: state.images.length,
+            hasPrimaryImage: state.images.some((image) => image.isPrimary),
+          });
+          if (issues.length > 0) {
+            // Audited outside the transaction (this throw rolls the txn back,
+            // so a failed check provably changes nothing).
+            throw new HttpError(400, 'PRODUCT_NOT_READY_FOR_PUBLISH', 'Product is not ready for publishing.', { issues });
+          }
+        }
+        return client.product.update({
+          where: { id },
+          data: {
+            name: payload.name?.trim(),
+            description: payload.description?.trim(),
+            categoryId: payload.categoryId === null ? null : payload.categoryId,
+            status: payload.status,
+            styleCode: payload.styleCode === null ? null : payload.styleCode ? normalizeSegment(payload.styleCode) : undefined,
+          },
+        });
       });
       await prisma.auditLog.create({
         data: {
@@ -261,6 +318,11 @@ export async function catalogueRoutes(app: FastifyInstance) {
       });
       return { success: true, data: product };
     } catch (error) {
+      if (error instanceof HttpError && error.code === 'PRODUCT_NOT_READY_FOR_PUBLISH') {
+        await prisma.auditLog.create({
+          data: { actorId: actorId(request), action: 'PRODUCT_UPDATED', entity: 'Product', entityId: id, after: { status: existing.status, publishRejected: true, issues: (error.details as { issues?: unknown } | undefined)?.issues ?? [] } as Prisma.InputJsonValue, ...auditMeta(request) },
+        });
+      }
       conflict(error);
     }
   });
