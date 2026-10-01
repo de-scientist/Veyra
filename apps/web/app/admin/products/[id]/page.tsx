@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 
-import { getAdminAttributes, getAdminCategories, getAdminProduct, updateAdminProduct, type AdminAttribute, type AdminCategory, type AdminProductDetail } from '../../../../lib/admin-api';
+import { getAdminAttributes, getAdminCategories, getAdminCollections, getAdminProduct, getProductCollections, setProductCollections, updateAdminProduct, type AdminAttribute, type AdminCategory, type AdminProductDetail } from '../../../../lib/admin-api';
 import { AdminStatusBadge } from '../../../../components/admin';
 import { JBIcon } from '../../../../components/JBIcons';
 import { ProductMediaManager } from '../../../../components/ProductMediaManager';
+import { useToast } from '../../../../components/Toast';
 import { VariantManager } from '../../../../components/VariantManager';
 
 async function fetchProduct(id: string): Promise<AdminProductDetail> {
@@ -22,10 +23,16 @@ interface PageProps {
 
 export default function AdminProductDetailPage({ params }: PageProps) {
   const routeId = params.id;
+  const { notify } = useToast();
   const [productId, setProductId] = useState<string | null>(null);
   const [product, setProduct] = useState<AdminProductDetail | null>(null);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [attributes, setAttributes] = useState<AdminAttribute[]>([]);
+  const [collections, setCollections] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+  const [assignedCollections, setAssignedCollections] = useState<string[]>([]);
+  const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
+  const [collectionsSaving, setCollectionsSaving] = useState(false);
+  const [collectionsError, setCollectionsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,10 +47,15 @@ export default function AdminProductDetailPage({ params }: PageProps) {
 
   const load = useCallback(async (id: string) => {
     try {
-      const [detail, cats, attrs] = await Promise.all([fetchProduct(id), getAdminCategories(), getAdminAttributes()]);
+      const [detail, cats, attrs, colls, assigned] = await Promise.all([fetchProduct(id), getAdminCategories(), getAdminAttributes(), getAdminCollections(), getProductCollections(id)]);
       setProduct(detail);
       setCategories(cats);
       setAttributes(attrs);
+      setCollections(colls);
+      const ids = assigned.collections.map((c) => c.id);
+      setAssignedCollections(ids);
+      setSelectedCollections(ids);
+      setCollectionsError(null);
       setForm({ name: detail.name, description: detail.description ?? '', categoryId: detail.categoryId ?? '', status: detail.status });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load product');
@@ -79,6 +91,35 @@ export default function AdminProductDetailPage({ params }: PageProps) {
     if (!productId) return;
     await load(productId);
   }, [productId, load]);
+
+  const toggleCollection = (collectionId: string) => {
+    setSelectedCollections((prev) =>
+      prev.includes(collectionId) ? prev.filter((id) => id !== collectionId) : [...prev, collectionId],
+    );
+  };
+
+  const saveCollections = async () => {
+    if (!productId) return;
+    setCollectionsError(null);
+    setCollectionsSaving(true);
+    try {
+      const result = await setProductCollections(productId, selectedCollections);
+      const ids = result.collections.map((c) => c.id);
+      setAssignedCollections(ids);
+      setSelectedCollections(ids);
+      setMessage('Collection assignments saved.');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not save collections.';
+      setCollectionsError(message);
+      notify('error', message);
+    } finally {
+      setCollectionsSaving(false);
+    }
+  };
+
+  const collectionsDirty =
+    assignedCollections.length !== selectedCollections.length ||
+    assignedCollections.some((id) => !selectedCollections.includes(id));
 
   if (loading) return <div className="empty-state"><p>Loading product…</p></div>;
   if (error && !product) return <div className="empty-state"><h1>Product not found</h1><p>{error}</p><Link href="/admin/products" className="button">Back to Products</Link></div>;
@@ -176,10 +217,32 @@ export default function AdminProductDetailPage({ params }: PageProps) {
             <dl className="media-meta">
               <dt>Category</dt>
               <dd>{product.category?.name ?? 'None'}</dd>
-              <dt>Collections</dt>
-              <dd>Managed from the Collections admin area.</dd>
             </dl>
-            <Link href="/admin/collections" className="button button--secondary">Open Collections</Link>
+            {collections.length === 0 ? (
+              <p className="muted-copy" role="note">No collections available yet.</p>
+            ) : (
+              <fieldset className="workspace-fieldset">
+                <legend>Collections</legend>
+                {collections.slice(0, 20).map((c) => (
+                  <label key={c.id} className="facet-option" htmlFor={`edit-collection-${c.id}`}>
+                    <input
+                      id={`edit-collection-${c.id}`}
+                      type="checkbox"
+                      checked={selectedCollections.includes(c.id)}
+                      onChange={() => toggleCollection(c.id)}
+                    />
+                    <span>{c.name}</span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {collectionsError ? <p className="error-message" role="alert">{collectionsError}</p> : null}
+            <div className="form-actions">
+              <button type="button" className="button button--secondary" disabled={collectionsSaving || !collectionsDirty} onClick={saveCollections} title={!collectionsDirty ? 'No collection changes' : 'Save collection assignments'}>
+                {collectionsSaving ? 'Saving…' : 'Save collections'}
+              </button>
+              <Link href="/admin/collections" className="button button--secondary">Open Collections</Link>
+            </div>
           </section>
 
           <section className="workspace-card" aria-labelledby="edit-attrs-heading">

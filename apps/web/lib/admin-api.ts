@@ -309,6 +309,7 @@ export type AdminProductDetail = {
   category: { id: string; name: string; slug: string; code: string | null; skuTemplate: string | null } | null;
   variants: AdminProductDetailVariant[];
   images: Array<{ id: string; url: string; altText: string | null }>;
+  collections?: Array<{ collection: { id: string; name: string; slug: string } }>;
 };
 
 export function getAdminProduct(id: string) {
