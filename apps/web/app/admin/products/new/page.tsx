@@ -16,6 +16,9 @@ import {
   getAdminCategories,
   getAdminCollections,
   getAdminProduct,
+  getProductCollections,
+  saveProductDraft,
+  setProductCollections,
   updateAdminProduct,
   type AdminAttribute,
   type AdminCategory,
@@ -33,6 +36,7 @@ import {
   type BasicSnapshot,
 } from '../../../../lib/product-publish';
 import { formatKES } from '../../../../lib/variant-matrix';
+import type { ApiErrorDetails } from '../../../../lib/admin-api';
 
 type Phase = 'draft' | 'complete';
 
@@ -74,6 +78,15 @@ export default function NewAdminProductPage() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [publishIssues, setPublishIssues] = useState<Array<{ field: string; code: string; message: string }>>([]);
+  // Server-backed draft state (Objective C): canonical timestamp + save status.
+  const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
+  const [autosaveState, setAutosaveState] = useState<{ status: 'idle' | 'saving' | 'saved' | 'error'; at: string | null; message: string | null }>({ status: 'idle', at: null, message: null });
+  // Collection assignment (Objective B): local selection, explicit server save.
+  const [assignedCollections, setAssignedCollections] = useState<string[]>([]);
+  const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
+  const [collectionsSaving, setCollectionsSaving] = useState(false);
+  const [collectionsError, setCollectionsError] = useState<string | null>(null);
 
   const [form, setForm] = useState({ name: '', slug: '', description: '', categoryId: '', status: 'DRAFT' });
 
@@ -147,6 +160,7 @@ export default function NewAdminProductPage() {
 
   const createDraft = async (): Promise<string | null> => {
     setFormError(null);
+    setPublishIssues([]);
     const parsed = productDraftSchema.safeParse({
       ...form,
       slug: form.slug.trim() ? slugify(form.slug) : undefined,
@@ -168,9 +182,10 @@ export default function NewAdminProductPage() {
         slug: parsed.data.slug || undefined,
         status: parsed.data.status,
       });
-      const created = product as { id: string; slug: string };
+      const created = product as { id: string; slug: string; updatedAt: string };
       setCreatedId(created.id);
       setCreatedSlug(created.slug);
+      setServerUpdatedAt(created.updatedAt);
       setSnapshot({
         name: parsed.data.name,
         slug: parsed.data.slug ?? '',
@@ -180,6 +195,13 @@ export default function NewAdminProductPage() {
       });
       setPhase('complete');
       setDirty(false);
+      try {
+        const assigned = await getProductCollections(created.id);
+        setAssignedCollections(assigned.collections.map((c) => c.id));
+        setSelectedCollections(assigned.collections.map((c) => c.id));
+      } catch {
+        // Collection panel shows its own error state; draft creation stands.
+      }
       notify('success', 'Draft created. Add images and the first variant below.');
       return created.id;
     } catch (e) {
