@@ -161,9 +161,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return <main className="account-main admin-main"><div className="container page-shell">{children}</div></main>;
   }
 
+  // Auth gate: protected children render only after the session is
+  // confirmed (same as the previous shell). Rendering children while
+  // loading would (a) flash unauthenticated API errors and (b) force
+  // static prerendering of pages that use `useSearchParams` without a
+  // Suspense boundary (e.g. /admin/orders, /admin/inventory), which
+  // breaks `next build`. The skeleton keeps layout stable meanwhile.
   if (status === 'loading' || !session) {
     return (
-      <div className="admin-layout" data-collapsed="false">
+      <div className="admin-layout jb-admin" data-collapsed="false">
         <div className="jb-sidebar__skeleton" role="status" aria-label="Checking admin access">
           <span className="skeleton" style={{ height: '2.5rem', width: '70%' }} />
           <span className="skeleton" style={{ height: '1rem' }} />
@@ -172,7 +178,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <p className="muted-copy">Checking admin access…</p>
         </div>
         <main className="account-main admin-main">
-          <div className="container page-shell">{children}</div>
+          <div className="container page-shell" aria-hidden="true" />
         </main>
       </div>
     );
