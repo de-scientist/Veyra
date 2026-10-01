@@ -1245,6 +1245,25 @@ a.visually-hidden:focus-visible {
 .validation-list li.is-ok { color: var(--jb-success); }
 .validation-list li.is-missing { color: var(--jb-text-muted); }
 .sticky-actions { position: sticky; bottom: 0; z-index: 5; background: var(--jb-surface); border: 1px solid var(--jb-border); border-radius: var(--jb-radius-md); padding: 0.75rem; }
+/* Full-width field inside .form-grid (was unstyled: description spanned one column). */
+.form-field-full { grid-column: 1 / -1; }
+.form-field-full textarea { min-height: 120px; }
+/* Clickable error summary: each item focuses its field. */
+.error-summary-list { margin: 0.5rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.25rem; }
+.error-summary-link { min-height: 0; padding: 0; text-align: left; }
+/* Setup-progress checklist with section anchors. */
+.workspace-progress { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.45rem; }
+.workspace-progress li { display: flex; gap: 0.5rem; align-items: baseline; font-size: 0.92rem; }
+.workspace-progress li.is-ok { color: var(--jb-success); }
+.workspace-progress li.is-missing { color: var(--jb-text-muted); }
+.workspace-progress a { color: inherit; font-weight: 600; }
+.workspace-progress a:hover { color: var(--jb-primary); }
+/* Live storefront preview (real gallery image, name, category, variant prices). */
+.workspace-preview { display: grid; gap: 0.3rem; }
+.workspace-preview__image { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--jb-radius-sm); border: 1px solid var(--jb-border); background: var(--jb-surface-muted); }
+.workspace-preview__placeholder { aspect-ratio: 4 / 3; display: grid; place-items: center; border-radius: var(--jb-radius-sm); border: 1px dashed var(--jb-border-strong); color: var(--jb-text-muted); font-size: 0.88rem; }
+.workspace-preview__name { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.workspace-preview__price { margin: 0; font-weight: 700; color: var(--jb-text); }
 @media (max-width: 1020px) {
   .product-workspace__layout { grid-template-columns: 1fr; }
 }
