@@ -40,6 +40,43 @@ export function slugify(value: string): string {
 
 export type PublishChecklistItem = { key: string; label: string; ok: boolean; hint?: string };
 
+/** Client-side publish gate (mirrors the checklist UX, not the backend:
+ *  PATCH status→ACTIVE is not readiness-validated server-side, so the UI
+ *  refuses to publish incomplete products on the staff's behalf). */
+export function canPublishNow(variantCount: number, imageCount: number): boolean {
+  return variantCount > 0 && imageCount > 0;
+}
+
+/** `done of total` progress over real checklist state (optional SEO excluded). */
+export function checklistProgress(checklist: PublishChecklistItem[]): { done: number; total: number } {
+  return { done: checklist.filter((c) => c.ok).length, total: checklist.length };
+}
+
+export type BasicSnapshot = { name: string; slug: string; description: string; categoryId: string; status: string };
+
+/** Post-draft edits must be explicitly saved — detects drift from the
+ *  last persisted snapshot so "Save changes" appears only when needed. */
+export function basicFieldsDirty(
+  snapshot: BasicSnapshot | null,
+  form: { name: string; slug: string; description: string; categoryId: string; status: string },
+): boolean {
+  if (!snapshot) return false;
+  return (
+    snapshot.name !== form.name.trim() ||
+    snapshot.slug !== form.slug.trim() ||
+    snapshot.description !== form.description.trim() ||
+    snapshot.categoryId !== form.categoryId ||
+    snapshot.status !== form.status
+  );
+}
+
+/** Min–max over real variant prices (nulls ignored); null when no prices. */
+export function priceRange(prices: Array<number | null | undefined>): { min: number; max: number } | null {
+  const valid = prices.filter((p): p is number => typeof p === 'number' && Number.isFinite(p) && p >= 0);
+  if (valid.length === 0) return null;
+  return { min: Math.min(...valid), max: Math.max(...valid) };
+}
+
 export function publishChecklist(input: {
   name: string;
   slug: string;

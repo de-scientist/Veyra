@@ -45,7 +45,7 @@ function describeDimensions(image: AdminProductImage): string {
  * Reordering uses explicit buttons (keyboard/touch friendly) — no
  * drag-and-drop-only interactions.
  */
-export function ProductMediaManager({ productId, editable }: { productId: string; editable: boolean }) {
+export function ProductMediaManager({ productId, editable, onChanged }: { productId: string; editable: boolean; onChanged?: (images: AdminProductImage[]) => void }) {
   const { notify } = useToast();
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [images, setImages] = useState<AdminProductImage[]>([]);
@@ -62,9 +62,20 @@ export function ProductMediaManager({ productId, editable }: { productId: string
   const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
   const activeUploads = useRef(0);
 
+  // Latest onChanged without re-subscribing the load effect when the
+  // caller's inline closure identity changes.
+  const onChangedRef = useRef(onChanged);
+  useEffect(() => {
+    onChangedRef.current = onChanged;
+  });
+
   const refresh = useCallback(async () => {
     try {
-      setImages(await getAdminProductImages(productId));
+      const images = await getAdminProductImages(productId);
+      setImages(images);
+      // Lets parents (e.g. the creation checklist/preview) track gallery
+      // state without polling; count-only consumers stay consistent.
+      onChangedRef.current?.(images);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Could not load product images.');
     } finally {

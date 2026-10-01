@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { firstVariantSchema, productDraftSchema, publishChecklist, slugify } from './product-publish';
+import { basicFieldsDirty, canPublishNow, checklistProgress, firstVariantSchema, priceRange, productDraftSchema, publishChecklist, slugify } from './product-publish';
 
 describe('product creation validation (frontend mirror of backend rules)', () => {
   it('slugifies like the backend generator', () => {
@@ -36,5 +36,36 @@ describe('product creation validation (frontend mirror of backend rules)', () =>
     const base = { name: 'Blue Denim Jacket', slug: 'blue-denim-jacket', categoryId: 'cat-1', description: 'A sturdy everyday denim jacket.' };
     expect(publishChecklist({ ...base, variantCount: 0, imageCount: 0 }).filter((c) => !c.ok).length).toBeGreaterThan(0);
     expect(publishChecklist({ ...base, variantCount: 1, imageCount: 1 }).every((c) => c.ok)).toBe(true);
+  });
+
+  it('gates publishing on real variant and image counts', () => {
+    expect(canPublishNow(0, 0)).toBe(false);
+    expect(canPublishNow(1, 0)).toBe(false);
+    expect(canPublishNow(0, 2)).toBe(false);
+    expect(canPublishNow(2, 3)).toBe(true);
+  });
+
+  it('reports honest checklist progress', () => {
+    const base = { name: 'Blue Denim Jacket', slug: 'blue-denim-jacket', categoryId: 'cat-1', description: 'A sturdy everyday denim jacket.' };
+    const partial = publishChecklist({ ...base, variantCount: 0, imageCount: 0 });
+    expect(checklistProgress(partial)).toEqual({ done: 4, total: 6 });
+    const full = publishChecklist({ ...base, variantCount: 1, imageCount: 1 });
+    expect(checklistProgress(full)).toEqual({ done: 6, total: 6 });
+  });
+
+  it('detects post-draft drift, ignoring surrounding whitespace', () => {
+    const snapshot = { name: 'Jacket', slug: '', description: 'A sturdy everyday denim jacket.', categoryId: 'c1', status: 'DRAFT' };
+    expect(basicFieldsDirty(null, { ...snapshot })).toBe(false);
+    expect(basicFieldsDirty(snapshot, { ...snapshot })).toBe(false);
+    expect(basicFieldsDirty(snapshot, { ...snapshot, name: '  Jacket  ' })).toBe(false);
+    expect(basicFieldsDirty(snapshot, { ...snapshot, name: 'Coat' })).toBe(true);
+    expect(basicFieldsDirty(snapshot, { ...snapshot, status: 'ACTIVE' })).toBe(true);
+  });
+
+  it('summarizes variant price ranges, ignoring invalid entries', () => {
+    expect(priceRange([])).toBeNull();
+    expect(priceRange([null, undefined, -5])).toBeNull();
+    expect(priceRange([4999])).toEqual({ min: 4999, max: 4999 });
+    expect(priceRange([4999, 5999, 3999])).toEqual({ min: 3999, max: 5999 });
   });
 });
