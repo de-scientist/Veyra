@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ProductMediaManager } from '../../../../components/ProductMediaManager';
 import { AdminStatusBadge } from '../../../../components/admin';
@@ -247,9 +247,16 @@ export default function NewAdminProductPage() {
       setDirty(false);
       notify('success', 'Product information saved.');
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Could not save changes';
-      setFormError(message);
-      notify('error', message);
+      const details = (e as Error & { details?: ApiErrorDetails })?.details;
+      if (details?.issues?.length) {
+        setPublishIssues(details.issues);
+        setFormError('The server rejected this change. Review the issues below.');
+        notify('error', 'The server rejected this change.');
+      } else {
+        const message = e instanceof Error ? e.message : 'Could not save changes';
+        setFormError(message);
+        notify('error', message);
+      }
     } finally {
       setSaving(false);
     }
@@ -295,16 +302,148 @@ export default function NewAdminProductPage() {
       return;
     }
     setSaving(true);
+    setPublishIssues([]);
     try {
       await updateAdminProduct(createdId, { status: 'ACTIVE' });
       notify('success', 'Product published.');
       router.push(`/admin/products/${createdId}`);
     } catch (e) {
-      notify('error', e instanceof Error ? e.message : 'Publish failed');
+      // Server-side readiness failures arrive structured (issues) — surfaced
+      // inline so a UI bypass can never silently publish, nor fail silently.
+      const details = (e as Error & { details?: ApiErrorDetails })?.details;
+      if (details?.issues?.length) {
+        setPublishIssues(details.issues);
+        setFormError('Publishing was rejected by the server. Review the issues below.');
+      } else {
+        notify('error', e instanceof Error ? e.message : 'Publish failed');
+      }
     } finally {
       setSaving(false);
     }
   };
+
+  // Server-backed autosave (Objective C): debounced draft PATCH of basic
+  // fields only — status can never change here, so autosave cannot publish.
+  // Media/variants persist immediately through their own endpoints.
+  const persistDraft = useCallback(async (announce: boolean) => {
+    if (!createdId) return;
+    const parsed = productDraftSchema.safeParse({
+      name: formRef.current.name,
+      description: formRef.current.description,
+      categoryId: formRef.current.categoryId,
+      status: formRef.current.status,
+      slug: undefined,
+    });
+    if (!parsed.success) {
+      if (announce) {
+        const next: Record<string, string> = {};
+        for (const issue of parsed.error.issues) next[String(issue.path[0] ?? 'form')] = issue.message;
+        setErrors(next);
+        setFormError('Fix the highlighted fields before saving.');
+      }
+      return;
+    }
+    setAutosaveState({ status: 'saving', at: null, message: null });
+    try {
+      const saved = await saveProductDraft(createdId, {
+        name: parsed.data.name,
+        description: parsed.data.description,
+        categoryId: parsed.data.categoryId || null,
+        expectedUpdatedAt: serverUpdatedAtRef.current ?? undefined,
+      });
+      serverUpdatedAtRef.current = saved.updatedAt;
+      setServerUpdatedAt(saved.updatedAt);
+      setSnapshot({
+        name: parsed.data.name,
+        slug: snapshotRef.current?.slug ?? '',
+        description: parsed.data.description,
+        categoryId: parsed.data.categoryId,
+        status: snapshotRef.current?.status ?? 'DRAFT',
+      });
+      setDirty(false);
+      setErrors({});
+      setAutosaveState({ status: 'saved', at: new Date().toISOString(), message: null });
+      if (announce) notify('success', 'Draft saved.');
+    } catch (e) {
+      const code = (e as Error & { code?: string })?.code;
+      const details = (e as Error & { details?: ApiErrorDetails })?.details;
+      if (code === 'DRAFT_CONFLICT' && details?.product) {
+        // Stale write refused: adopt canonical server state instead of
+        // overwriting newer data, and let staff re-apply their edit.
+        const canonical = details.product as { name?: string; description?: string; categoryId?: string | null; updatedAt?: string };
+        const nextForm = {
+          name: typeof canonical.name === 'string' ? canonical.name : formRef.current.name,
+          slug: formRef.current.slug,
+          description: typeof canonical.description === 'string' ? canonical.description : formRef.current.description,
+          categoryId: typeof canonical.categoryId === 'string' ? canonical.categoryId : formRef.current.categoryId,
+          status: formRef.current.status,
+        };
+        setForm(nextForm);
+        if (typeof canonical.updatedAt === 'string') {
+          serverUpdatedAtRef.current = canonical.updatedAt;
+          setServerUpdatedAt(canonical.updatedAt);
+        }
+        setSnapshot({ name: nextForm.name, slug: snapshotRef.current?.slug ?? '', description: nextForm.description, categoryId: nextForm.categoryId, status: nextForm.status });
+        setAutosaveState({ status: 'error', at: null, message: 'Changed elsewhere — reloaded the latest version.' });
+        notify('error', 'This draft changed elsewhere. Reloaded the latest version — please re-apply your edit.');
+        return;
+      }
+      const message = e instanceof Error ? e.message : 'Draft save failed.';
+      setAutosaveState({ status: 'error', at: null, message });
+      if (announce) {
+        setFormError(message);
+        notify('error', message);
+      }
+    }
+  }, [createdId, notify]);
+
+  // Latest-state refs so the debounced saver never writes stale closures.
+  const formRef = useRef(form);
+  const serverUpdatedAtRef = useRef(serverUpdatedAt);
+  const snapshotRef = useRef(snapshot);
+  useEffect(() => {
+    formRef.current = form;
+    serverUpdatedAtRef.current = serverUpdatedAt;
+    snapshotRef.current = snapshot;
+  });
+
+  useEffect(() => {
+    if (phase !== 'complete' || !createdId || saving) return;
+    if (!basicFieldsDirty(snapshot, form)) return;
+    const timer = setTimeout(() => {
+      persistDraft(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [phase, createdId, saving, snapshot, form, persistDraft]);
+
+  const toggleCollection = (collectionId: string) => {
+    setSelectedCollections((prev) =>
+      prev.includes(collectionId) ? prev.filter((id) => id !== collectionId) : [...prev, collectionId],
+    );
+  };
+
+  const saveCollections = async () => {
+    if (!createdId) return;
+    setCollectionsError(null);
+    setCollectionsSaving(true);
+    try {
+      const result = await setProductCollections(createdId, selectedCollections);
+      const ids = result.collections.map((c) => c.id);
+      setAssignedCollections(ids);
+      setSelectedCollections(ids);
+      notify('success', 'Collection assignments saved.');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not save collections.';
+      setCollectionsError(message);
+      notify('error', message);
+    } finally {
+      setCollectionsSaving(false);
+    }
+  };
+
+  const collectionsDirty =
+    assignedCollections.length !== selectedCollections.length ||
+    assignedCollections.some((id) => !selectedCollections.includes(id));
 
   return (
     <div className="account-page product-workspace">
@@ -416,7 +555,9 @@ export default function NewAdminProductPage() {
                 <span>Status</span>
                 <select id="field-status" value={form.status} onChange={(e) => set('status', e.currentTarget.value)}>
                   <option value="DRAFT">Draft — not purchasable</option>
-                  <option value="ACTIVE">Active — purchasable when complete</option>
+                  {/* ACTIVE is intentionally absent here: publishing is a gated
+                      transition after variants + media exist (see Review). The
+                      backend rejects direct-ACTIVE creation. */}
                   <option value="ARCHIVED">Archived — hidden from storefront</option>
                 </select>
               </label>
@@ -426,7 +567,22 @@ export default function NewAdminProductPage() {
                 <button type="button" className="button button--secondary" disabled={saving || !postDraftDirty} onClick={saveBasicChanges} aria-busy={saving} title={!postDraftDirty ? 'No unsaved changes' : 'Save information changes'}>
                   {saving ? 'Saving…' : 'Save changes'}
                 </button>
-                {!postDraftDirty ? <span className="muted-copy">All changes saved.</span> : null}
+                <span className="muted-copy" role="status" aria-live="polite">
+                  {autosaveState.status === 'saving'
+                    ? 'Autosaving draft…'
+                    : autosaveState.status === 'error'
+                      ? `Autosave failed: ${autosaveState.message ?? 'will retry on next edit'}`
+                      : autosaveState.status === 'saved' && autosaveState.at
+                        ? `Draft saved ${new Date(autosaveState.at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                        : postDraftDirty
+                          ? 'Unsaved changes'
+                          : 'All changes saved.'}
+                </span>
+                {autosaveState.status === 'error' ? (
+                  <button type="button" className="text-button" onClick={() => persistDraft(true)}>
+                    Retry now
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </section>
@@ -473,17 +629,39 @@ export default function NewAdminProductPage() {
           <section className="workspace-card" aria-labelledby="ws-taxonomy-heading" id="ws-taxonomy">
             <h2 id="ws-taxonomy-heading">4 · Categories &amp; collections</h2>
             <p className="muted-copy workspace-card__hint">
-              Category is chosen in Basic information and required before publishing. Collection membership is managed
-              from the Collections admin area — no product-collection assignment endpoint exists yet.
+              Category is chosen in Basic information and required before publishing. Collections attach after the
+              draft exists and persist through the assignment API.
             </p>
-            {collections.length === 0 ? (
-              <p className="muted-copy" role="note">No collections available yet.</p>
+            {phase === 'complete' && createdId ? (
+              <>
+                {collections.length === 0 ? (
+                  <p className="muted-copy" role="note">No collections available yet.</p>
+                ) : (
+                  <fieldset className="workspace-fieldset">
+                    <legend>Collections</legend>
+                    {collections.slice(0, 20).map((c) => (
+                      <label key={c.id} className="facet-option" htmlFor={`collection-${c.id}`}>
+                        <input
+                          id={`collection-${c.id}`}
+                          type="checkbox"
+                          checked={selectedCollections.includes(c.id)}
+                          onChange={() => toggleCollection(c.id)}
+                        />
+                        <span>{c.name}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                {collectionsError ? <p className="error-message" role="alert">{collectionsError}</p> : null}
+                <div className="form-actions">
+                  <button type="button" className="button button--secondary" disabled={collectionsSaving || !collectionsDirty} onClick={saveCollections} title={!collectionsDirty ? 'No collection changes' : 'Save collection assignments'}>
+                    {collectionsSaving ? 'Saving…' : 'Save collections'}
+                  </button>
+                  {!collectionsDirty ? <span className="muted-copy">Assignments saved.</span> : null}
+                </div>
+              </>
             ) : (
-              <ul className="pill-nav" aria-label="Available collections">
-                {collections.slice(0, 8).map((c) => (
-                  <li key={c.id}><span>{c.name}</span></li>
-                ))}
-              </ul>
+              <p className="muted-copy" role="note">Save a draft first — collection assignment unlocks with the product record.</p>
             )}
             <div className="form-actions">
               <Link href="/admin/collections" className="button button--secondary">Manage Collections</Link>
@@ -575,6 +753,16 @@ export default function NewAdminProductPage() {
                 </li>
               ))}
             </ul>
+            {publishIssues.length > 0 ? (
+              <div className="error-message" role="alert">
+                <strong>Server readiness issues</strong>
+                <ul className="error-summary-list">
+                  {publishIssues.map((issue) => (
+                    <li key={`${issue.field}-${issue.code}`}>{issue.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {phase === 'complete' && createdId ? (
               <div className="form-actions">
                 <button type="button" className="button" disabled={saving || !publishReady} onClick={publishNow} title={!publishReady ? 'Add at least one variant and one image before publishing' : 'Publish product'}>

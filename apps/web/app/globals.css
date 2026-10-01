@@ -1264,6 +1264,9 @@ a.visually-hidden:focus-visible {
 .workspace-preview__placeholder { aspect-ratio: 4 / 3; display: grid; place-items: center; border-radius: var(--jb-radius-sm); border: 1px dashed var(--jb-border-strong); color: var(--jb-text-muted); font-size: 0.88rem; }
 .workspace-preview__name { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
 .workspace-preview__price { margin: 0; font-weight: 700; color: var(--jb-text); }
+/* Checkbox group inside workspace cards (collection assignment). */
+.workspace-fieldset { border: 0; margin: 0 0 0.5rem; padding: 0; display: grid; gap: 0.15rem; }
+.workspace-fieldset legend { font-weight: 700; font-size: 0.92rem; padding: 0; margin-bottom: 0.35rem; }
 @media (max-width: 1020px) {
   .product-workspace__layout { grid-template-columns: 1fr; }
 }
