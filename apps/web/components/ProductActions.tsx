@@ -140,7 +140,7 @@ export function ProductActions({ productId, productName, variants }: ProductActi
         <button type="button" className="button" disabled={!selectedVariant?.inStock || busy} onClick={submit} aria-busy={busy}>
           {busy ? 'Adding…' : selectedVariant?.inStock ? 'Add to cart' : 'Out of stock'}
         </button>
-        <WishlistButton productId={productId} />
+        <WishlistButton productId={productId} productName={productName} />
       </div>
       {error ? <p className="error-message" role="alert">{error}</p> : null}
     </div>

@@ -101,6 +101,7 @@ function toProductVariant(variant: ApiVariant): ProductVariant {
     compareAtPrice: variant.compareAtPrice ?? undefined,
     attributes: variant.attributes,
     inStock: variant.inStock,
+    availableQuantity: variant.availableQuantity,
   };
 }
 
@@ -129,6 +130,7 @@ function toProduct(row: ApiProduct): Product {
     imageAlts: row.images.map((image) => image.altText),
     variants: row.variants.map(toProductVariant),
     createdAt: typeof row.createdAt === 'string' ? row.createdAt : new Date(row.createdAt).toISOString(),
+    rating: row.rating,
     specs,
   };
 }

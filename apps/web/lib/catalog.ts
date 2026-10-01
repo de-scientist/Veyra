@@ -45,6 +45,8 @@ export type ProductVariant = {
   attributes: Record<string, string>;
   inStock: boolean;
   inventoryLabel?: string;
+  /** Authoritative sellable quantity (when the backend exposes it). */
+  availableQuantity?: number;
 };
 
 export type Product = {
@@ -68,6 +70,8 @@ export type Product = {
   imageAlts?: Array<string | null>;
   variants: ProductVariant[];
   createdAt: string;
+  /** Authoritative rating from the catalogue API (absent = no reviews yet). */
+  rating?: { average: number | null; count: number };
   /** Static product-level facts (material, care) — never guarantees/warranties. */
   specs?: Record<string, string>;
 };
