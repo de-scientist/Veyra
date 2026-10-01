@@ -327,6 +327,54 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
+  // ---- Draft persistence (Objective C) ----
+  //
+  // Server-backed autosave target for the creation workspace. The schema
+  // deliberately excludes `status`: a draft save can never publish, archive,
+  // or otherwise transition the product — publishing flows through the
+  // gated PATCH above. `expectedUpdatedAt` gives autosave optimistic
+  // concurrency: stale writes get 409 + canonical state, never silent
+  // overwrites. Media/variants persist immediately through their own
+  // endpoints and are never touched here (no duplicate writes).
+
+  const productDraftUpdateSchema = z.object({
+    name: z.string().min(2).max(200).optional(),
+    description: z.string().min(12).max(10000).optional(),
+    categoryId: z.string().min(1).nullable().optional(),
+    expectedUpdatedAt: z.string().datetime().optional(),
+  });
+
+  app.patch('/admin/products/:id/draft', { preHandler: requireOperationsAccess }, async (request) => {
+    const { id } = request.params as { id: string };
+    const payload = productDraftUpdateSchema.parse(request.body);
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing) throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
+    if (
+      payload.expectedUpdatedAt &&
+      new Date(payload.expectedUpdatedAt).getTime() !== existing.updatedAt.getTime()
+    ) {
+      throw new HttpError(409, 'DRAFT_CONFLICT', 'This draft was updated elsewhere. Reload for the latest version.', {
+        product: existing,
+      });
+    }
+    try {
+      const product = await prisma.product.update({
+        where: { id },
+        data: {
+          name: payload.name?.trim(),
+          description: payload.description?.trim(),
+          categoryId: payload.categoryId === null ? null : payload.categoryId,
+        },
+      });
+      await prisma.auditLog.create({
+        data: { actorId: actorId(request), action: 'PRODUCT_UPDATED', entity: 'Product', entityId: id, after: { draft: true } as Prisma.InputJsonValue, ...auditMeta(request) },
+      });
+      return { success: true, data: product };
+    } catch (error) {
+      conflict(error);
+    }
+  });
+
   app.post('/admin/products/:productId/variants', { preHandler: requireOperationsAccess }, async (request) => {
     const { productId } = request.params as { productId: string };
     const payload = variantSchema.parse(request.body);
@@ -945,5 +993,66 @@ export async function catalogueRoutes(app: FastifyInstance) {
     ]);
     await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'COLLECTION_ARCHIVED', entity: 'Collection', entityId: id, ...auditMeta(request) } });
     return { success: true, data: { deleted: true } };
+  });
+
+  // ---- Product ↔ collection assignment (Objective B) ----
+  //
+  // Reuses the existing ProductCollection join (@@unique on
+  // [productId, collectionId]); no second relationship. Replace semantics:
+  // PUT persists exactly the supplied set in one transaction, so concurrent
+  // partial writes can never leave stale assignments behind.
+
+  const productCollectionsSchema = z.object({
+    collectionIds: z.array(z.string().min(1).max(64)).max(100).default([]),
+  });
+
+  async function productCollectionsOf(productId: string) {
+    const rows = await prisma.productCollection.findMany({
+      where: { productId },
+      include: { collection: { select: { id: true, name: true, slug: true } } },
+      orderBy: { collection: { name: 'asc' } },
+    });
+    return rows.map((row) => row.collection);
+  }
+
+  app.get('/admin/products/:productId/collections', { preHandler: requireOperationsAccess }, async (request) => {
+    const { productId } = request.params as { productId: string };
+    const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });
+    if (!product) throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
+    return { success: true, data: { collections: await productCollectionsOf(productId) } };
+  });
+
+  app.put('/admin/products/:productId/collections', { preHandler: requireOperationsAccess }, async (request) => {
+    const { productId } = request.params as { productId: string };
+    const payload = productCollectionsSchema.parse(request.body);
+    const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });
+    if (!product) throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
+    const wanted = [...new Set(payload.collectionIds)];
+    if (wanted.length > 0) {
+      const found = await prisma.collection.findMany({
+        where: { id: { in: wanted }, deletedAt: null },
+        select: { id: true },
+      });
+      const missing = wanted.filter((id) => !found.some((row) => row.id === id));
+      if (missing.length > 0) {
+        throw new HttpError(404, 'COLLECTION_NOT_FOUND', `Unknown collection: ${missing[0]}.`);
+      }
+    }
+    await prisma.$transaction([
+      prisma.productCollection.deleteMany({ where: { productId } }),
+      ...(wanted.length > 0
+        ? [
+            prisma.productCollection.createMany({
+              data: wanted.map((collectionId) => ({ productId, collectionId })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
+    const collections = await productCollectionsOf(productId);
+    await prisma.auditLog.create({
+      data: { actorId: actorId(request), action: 'PRODUCT_UPDATED', entity: 'Product', entityId: productId, after: { collections: collections.map((c) => c.id) } as Prisma.InputJsonValue, ...auditMeta(request) },
+    });
+    return { success: true, data: { collections } };
   });
 }

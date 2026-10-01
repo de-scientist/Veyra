@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   calculateAvailableQuantity,
+  checkPublishReadiness,
   generateSlug,
   isLowStock,
   validateCatalogProduct,
@@ -67,5 +68,45 @@ describe('catalogue rules', () => {
     );
 
     expect(duplicateError.ok).toBe(false);
+  });
+
+  it('authoritatively gates publishing with coded issues', () => {
+    const ready = {
+      name: 'Classic Black Hoodie',
+      slug: 'classic-black-hoodie',
+      categoryId: 'cat-1',
+      description: 'A premium hoodie for testing.',
+      variants: [
+        { sku: 'HOD-BLK-M', price: 2500, status: 'ACTIVE' as const, attributeValues: [{ attributeId: 'color', value: 'Black' }] },
+      ],
+      imageCount: 2,
+      hasPrimaryImage: true,
+    };
+    expect(checkPublishReadiness(ready)).toEqual([]);
+
+    const empty = checkPublishReadiness({ name: '', categoryId: undefined, description: '', variants: [], imageCount: 0, hasPrimaryImage: false });
+    expect(empty.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['NAME_REQUIRED', 'SLUG_REQUIRED', 'CATEGORY_REQUIRED', 'DESCRIPTION_REQUIRED', 'NO_ACTIVE_VARIANT', 'NO_IMAGES']),
+    );
+
+    const noPrimary = checkPublishReadiness({ ...ready, hasPrimaryImage: false });
+    expect(noPrimary.map((issue) => issue.code)).toContain('NO_PRIMARY_IMAGE');
+
+    const dupe = checkPublishReadiness({
+      ...ready,
+      variants: [
+        { sku: 'HOD-BLK-M', price: 2500, status: 'ACTIVE' as const, attributeValues: [{ attributeId: 'color', value: 'Black' }] },
+        { sku: 'HOD-BLK-M2', price: 2500, status: 'ACTIVE' as const, attributeValues: [{ attributeId: 'color', value: 'Black' }] },
+      ],
+    });
+    expect(dupe.map((issue) => issue.code)).toContain('DUPLICATE_VARIANT_COMBINATION');
+
+    const badPrice = checkPublishReadiness({
+      ...ready,
+      variants: [
+        { sku: 'HOD-BLK-M', price: 0, status: 'ACTIVE' as const, attributeValues: [{ attributeId: 'color', value: 'Black' }] },
+      ],
+    });
+    expect(badPrice.map((issue) => issue.code)).toContain('INVALID_PRICE');
   });
 });
