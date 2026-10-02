@@ -41,10 +41,15 @@ JB Mercantile — Fashion • Footwear • Kitchen & Home. Start here; each page
 - [../DEPLOYMENT.md](../DEPLOYMENT.md) — deployment guide
 - [../OPERATIONS-RUNBOOK.md](../OPERATIONS-RUNBOOK.md) — runbook
 
+## Release validation (v8-RC)
+
+- [V8-RC-LIMITATIONS-REMEDIATION-REPORT.md](V8-RC-LIMITATIONS-REMEDIATION-REPORT.md) — variant integrity, publish gate, runtime validation, final status
+- [V8-RC-ARCHITECTURE-NOTES.md](V8-RC-ARCHITECTURE-NOTES.md) — no-migration decision, event strategy, variant integrity design
+- [V8-RC-VALIDATION-MATRIX.md](V8-RC-VALIDATION-MATRIX.md) — per-test evidence with PASS / PARTIAL / BLOCKED / NOT VERIFIED
+
 ## Project Management
 
-- `PHASE-*-REPORT.md` (repo root) — historical phase reports (note: no `PHASE-2-REPORT.md` exists)
-- [../LAUNCH-GATE.md](../LAUNCH-GATE.md) — release gate with PASS / NOT VERIFIED states
+- `PHASE-*-REPORT.md` (repo root) — historical phase reports (note: no `PHASE-2-REPORT.md` exists)- [../LAUNCH-GATE.md](../LAUNCH-GATE.md) — release gate with PASS / NOT VERIFIED states
 - [../BUSINESS-DECISIONS.md](../BUSINESS-DECISIONS.md) — open business decisions (several are launch BLOCKERs)
 - [../LEGAL-READINESS.md](../LEGAL-READINESS.md) — legal readiness register
 - [../JB-DESIGN-SYSTEM.md](../JB-DESIGN-SYSTEM.md) — JB design tokens and component rules
