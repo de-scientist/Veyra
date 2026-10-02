@@ -43,6 +43,20 @@ const productUpdateSchema = z.object({
   styleCode: z.string().min(2).max(10).regex(/^[A-Za-z0-9]+$/, 'Style code may only contain A-Z and 0-9.').nullable().optional(),
 });
 
+const variantAttributeInputSchema = z.object({
+  // Flexible attribute reference (backwards-compatible):
+  // - legacy: { attributeId, value } (exact value string, resolved server-side)
+  // - id-based: { attributeValueId } or { attributeId, attributeValueId }
+  // At least one of `value` / `attributeValueId` is required; when both are
+  // present they must agree. `attributeId` is required with `value` and, when
+  // supplied alongside `attributeValueId`, must own that value.
+  attributeId: z.string().min(1).max(64).optional(),
+  attributeValueId: z.string().min(1).max(64).optional(),
+  value: z.string().min(1).max(120).optional(),
+}).refine((entry) => entry.attributeValueId !== undefined || (entry.attributeId !== undefined && entry.value !== undefined), {
+  message: 'Each attribute entry must provide attributeValueId, or attributeId with value.',
+});
+
 const variantSchema = z.object({
   sku: z.string().min(3).max(64),
   name: z.string().max(200).optional(),
@@ -51,10 +65,7 @@ const variantSchema = z.object({
   compareAtPrice: z.number().min(0).optional(),
   barcode: z.string().max(64).optional(),
   weight: z.number().min(0).optional(),
-  attributeValues: z.array(z.object({
-    attributeId: z.string(),
-    value: z.string().min(1).max(120),
-  })).default([]),
+  attributeValues: z.array(variantAttributeInputSchema).default([]),
 });
 
 const variantUpdateSchema = z.object({
