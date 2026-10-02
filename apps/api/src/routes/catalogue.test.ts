@@ -116,7 +116,9 @@ describe('catalogue admin CRUD', () => {
       data: { name: `Sku ${stamp}`, slug: `crud-${stamp}-sku`, status: 'ACTIVE', code: `S${stamp.slice(-4).toUpperCase()}`, skuTemplate: '{BRAND}-{CATEGORY}-{STYLE}-{COLOR}-{SIZE}' },
     });
     const attribute = await prisma.attribute.create({ data: { name: `Sku Color ${stamp}`, slug: `crud-${stamp}-sku-color`, type: 'STRING' } });
-    const value = await prisma.attributeValue.create({ data: { attributeId: attribute.id, value: 'Black', code: 'BLK' } });
+    await prisma.attributeValue.create({ data: { attributeId: attribute.id, value: 'Black', code: 'BLK' } });
+    await prisma.attributeValue.create({ data: { attributeId: attribute.id, value: 'White', code: 'WHT' } });
+    await prisma.attributeValue.create({ data: { attributeId: attribute.id, value: 'Red', code: 'RED' } });
     const product = await prisma.product.create({
       data: { name: `Sku ${stamp}`, slug: `crud-${stamp}-sku`, description: 'SKU foundation fixture product.', status: 'DRAFT', categoryId: category.id, styleCode: 'SK1' },
     });
@@ -149,16 +151,19 @@ describe('catalogue admin CRUD', () => {
       expect(invalid.statusCode).toBe(400);
 
       // Invalid barcode is rejected; valid barcode persists and collides on reuse.
+      // Each creation uses a distinct attribute value: manual variants now
+      // persist mappings, so reusing one value would (correctly) collide on
+      // the attribute combination instead of exercising the barcode path.
       const badBarcode = await call('POST', `/api/v1/admin/products/${product.id}/variants`, emails.staff, {
         sku: `${sku}-2`, price: 1500, barcode: 'SHORT', attributeValues: attrs,
       });
       expect(badBarcode.statusCode).toBe(400);
       const withBarcode = await call('POST', `/api/v1/admin/products/${product.id}/variants`, emails.staff, {
-        sku: `${sku}-2`, price: 1500, barcode: '6001234567890', attributeValues: attrs,
+        sku: `${sku}-2`, price: 1500, barcode: '6001234567890', attributeValues: [{ attributeId: attribute.id, value: 'White' }],
       });
       expect(withBarcode.statusCode).toBe(200);
       const clash = await call('POST', `/api/v1/admin/products/${product.id}/variants`, emails.staff, {
-        sku: `${sku}-3`, price: 1500, barcode: '6001234567890', attributeValues: attrs,
+        sku: `${sku}-3`, price: 1500, barcode: '6001234567890', attributeValues: [{ attributeId: attribute.id, value: 'Red' }],
       });
       expect(clash.statusCode).toBe(409);
       expect((clash.json() as { error: { code: string } }).error.code).toBe('BARCODE_ALREADY_EXISTS');
@@ -166,7 +171,7 @@ describe('catalogue admin CRUD', () => {
       await prisma.inventory.deleteMany({ where: { variant: { productId: product.id } } });
       await prisma.productVariant.deleteMany({ where: { productId: product.id } });
       await prisma.product.delete({ where: { id: product.id } });
-      await prisma.attributeValue.delete({ where: { id: value.id } });
+      await prisma.attributeValue.deleteMany({ where: { attributeId: attribute.id } });
       await prisma.attribute.delete({ where: { id: attribute.id } });
       await prisma.category.delete({ where: { id: category.id } });
     }

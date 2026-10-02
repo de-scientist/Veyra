@@ -179,6 +179,58 @@ function auditMeta(request: FastifyRequest) {
   return { ipAddress: request.ip, userAgent: request.headers['user-agent']?.slice(0, 300) };
 }
 
+type ResolvedVariantMapping = { attributeId: string; attributeValueId: string; value: string };
+
+/**
+ * Resolve flexible manual-variant attribute input to concrete
+ * VariantAttributeValue rows. Never auto-creates attributes or values:
+ * unknown IDs / (attributeId, value) pairs are rejected, cross-attribute
+ * mismatches are rejected, and each attribute may appear at most once per
+ * variant. Throws HttpError (400) on any invalid mapping.
+ */
+async function resolveVariantAttributeMappings(
+  entries: Array<{ attributeId?: string; attributeValueId?: string; value?: string }>,
+): Promise<ResolvedVariantMapping[]> {
+  if (entries.length === 0) {
+    throw new HttpError(400, 'VARIANT_ATTRIBUTES_REQUIRED', 'A variant must include at least one attribute mapping.');
+  }
+  const seenAttributes = new Set<string>();
+  const resolved: ResolvedVariantMapping[] = [];
+  for (const entry of entries) {
+    let record: { id: string; attributeId: string; value: string } | null = null;
+    if (entry.attributeValueId !== undefined) {
+      record = await prisma.attributeValue.findUnique({ where: { id: entry.attributeValueId } });
+      if (!record) {
+        throw new HttpError(400, 'ATTRIBUTE_VALUE_NOT_FOUND', `Unknown attribute value: ${entry.attributeValueId}.`);
+      }
+      if (entry.attributeId !== undefined && record.attributeId !== entry.attributeId) {
+        throw new HttpError(400, 'INVALID_VARIANT_ATTRIBUTES', 'The attribute value does not belong to the given attribute.');
+      }
+      if (entry.value !== undefined && record.value !== entry.value) {
+        throw new HttpError(400, 'INVALID_VARIANT_ATTRIBUTES', 'The attribute value text does not match the given value.');
+      }
+    } else {
+      // Legacy { attributeId, value }: exact-match resolution only.
+      record = await prisma.attributeValue.findFirst({
+        where: { attributeId: entry.attributeId as string, value: entry.value as string },
+      });
+      if (!record) {
+        throw new HttpError(400, 'ATTRIBUTE_VALUE_NOT_FOUND', `Unknown attribute value '${entry.value}' for this attribute.`);
+      }
+    }
+    if (seenAttributes.has(record.attributeId)) {
+      throw new HttpError(400, 'DUPLICATE_VARIANT_ATTRIBUTES', 'Each attribute may appear only once per variant.');
+    }
+    seenAttributes.add(record.attributeId);
+    resolved.push({ attributeId: record.attributeId, attributeValueId: record.id, value: record.value });
+  }
+  return resolved;
+}
+
+function variantCombinationKey(mappings: Array<{ attributeId: string; attributeValueId: string }>): string {
+  return mappings.map((mapping) => `${mapping.attributeId}:${mapping.attributeValueId}`).sort().join('|');
+}
+
 function conflict(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
     // Deterministic SKU/barcode/code conflicts surface actionable codes so
@@ -411,6 +463,41 @@ export async function catalogueRoutes(app: FastifyInstance) {
       throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
     }
 
+    // Attribute mappings are resolved + validated BEFORE any write, so an
+    // invalid mapping can never leave a mapping-less variant behind. This
+    // requires mappings for every manual variant (any status) — the publish
+    // readiness gate alone is not sufficient, because it only inspects
+    // ACTIVE variants at publish time.
+    const resolvedMappings = await resolveVariantAttributeMappings(payload.attributeValues);
+
+    // Duplicate combination check against existing variants of this product.
+    // The DB @@unique on [variantId, attributeId, attributeValueId] guards
+    // per-row integrity; this cross-variant check gives an actionable 409.
+    // SKU precedence: a reused SKU reports SKU_ALREADY_EXISTS (matching the
+    // pre-existing P2002 mapping) even when the attributes also collide, so
+    // existing consumers keying on that code keep working. The DB unique
+    // constraint remains the final authority for races.
+    const skuTaken = await prisma.productVariant.findUnique({ where: { sku: normalizedSku }, select: { id: true } });
+    if (skuTaken) {
+      throw new HttpError(409, 'SKU_ALREADY_EXISTS', 'This SKU already exists. Correct the conflicting codes or use a distinct style/model code.');
+    }
+    const newCombinationKey = variantCombinationKey(resolvedMappings);
+    const siblingMappings = await prisma.variantAttributeValue.findMany({
+      where: { variant: { productId } },
+      select: { variantId: true, attributeId: true, attributeValueId: true },
+    });
+    const siblingKeys = new Map<string, string[]>();
+    for (const mapping of siblingMappings) {
+      const list = siblingKeys.get(mapping.variantId) ?? [];
+      list.push(`${mapping.attributeId}:${mapping.attributeValueId}`);
+      siblingKeys.set(mapping.variantId, list);
+    }
+    for (const parts of siblingKeys.values()) {
+      if (parts.sort().join('|') === newCombinationKey) {
+        throw new HttpError(409, 'DUPLICATE_VARIANT_COMBINATION', 'A variant with this attribute combination already exists for this product.');
+      }
+    }
+
     // Variant creation gates on variant-level publish readiness (sku, price,
     // attributes, product basics) — not on media. Media is required before
     // *publishing* (validateCatalogProduct), and images can only exist after
@@ -427,7 +514,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
           sku: normalizedSku,
           price: payload.price,
           status: payload.status,
-          attributeValues: payload.attributeValues,
+          attributeValues: resolvedMappings.map((mapping) => ({ attributeId: mapping.attributeId, value: mapping.value })),
         },
       ],
       images: Array.from({ length: imageCount }, (_, i) => ({ url: `existing-image-${i}` })),
@@ -444,9 +531,12 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
 
     try {
-      // Transaction safety: variant + zeroed inventory persist atomically.
-      // Concurrent duplicate SKUs are rejected by the DB unique constraint
-      // (P2002 -> 409 SKU_ALREADY_EXISTS); the whole transaction rolls back.
+      // Transaction safety: variant + attribute mappings + zeroed inventory +
+      // structured audit persist atomically. Any mapping/SKU failure rolls
+      // back the whole transaction, so a variant without its mappings can
+      // never be left behind. Concurrent duplicate SKUs are rejected by the
+      // DB unique constraint (P2002 -> 409 SKU_ALREADY_EXISTS).
+      const actor = actorId(request);
       const variant = await prisma.$transaction(async (client) => {
         const created = await client.productVariant.create({
           data: {
@@ -461,10 +551,43 @@ export async function catalogueRoutes(app: FastifyInstance) {
             skuTemplateVersion: product.category?.skuTemplateVersion ?? 1,
           },
         });
+        for (const mapping of resolvedMappings) {
+          await client.variantAttributeValue.create({
+            data: { variantId: created.id, attributeId: mapping.attributeId, attributeValueId: mapping.attributeValueId },
+          });
+        }
         await client.inventory.create({ data: { variantId: created.id, quantityOnHand: 0, quantityReserved: 0, lowStockThreshold: 5 } });
-        return created;
+        // Structured VARIANT_CREATED audit (same action the generate flow
+        // emits; no new enum value, no migration). The `after` payload is
+        // additive: existing consumers key on action/entity/entityId, which
+        // are unchanged. Contains ids + display values only — no secrets/PII.
+        await client.auditLog.create({
+          data: {
+            actorId: actor,
+            action: 'VARIANT_CREATED',
+            entity: 'ProductVariant',
+            entityId: created.id,
+            after: {
+              entity: 'ProductVariant',
+              productId,
+              operation: 'VARIANT_CREATED',
+              variantId: created.id,
+              sku: created.sku,
+              price: payload.price,
+              status: created.status,
+              attributeMappings: resolvedMappings,
+            } as Prisma.InputJsonValue,
+            ...auditMeta(request),
+          },
+        });
+        return client.productVariant.findUniqueOrThrow({
+          where: { id: created.id },
+          include: {
+            inventory: true,
+            variantAttributeValues: { include: { attribute: true, attributeValue: true } },
+          },
+        });
       });
-      await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'VARIANT_UPDATED', entity: 'ProductVariant', entityId: variant.id, after: { sku: variant.sku } as Prisma.InputJsonValue, ...auditMeta(request) } });
       return { success: true, data: variant };
     } catch (error) {
       conflict(error);

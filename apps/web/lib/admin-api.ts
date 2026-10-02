@@ -146,7 +146,9 @@ export function saveProductDraft(
   return request<DraftSaveResult>(`/admin/products/${id}/draft`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
-export function createAdminVariant(productId: string, input: { sku: string; name?: string; status?: string; price: number; compareAtPrice?: number; attributeValues?: Array<{ attributeId: string; value: string }> }) {
+export type AdminVariantAttributeInput = { attributeId?: string; attributeValueId?: string; value?: string };
+
+export function createAdminVariant(productId: string, input: { sku: string; name?: string; status?: string; price: number; compareAtPrice?: number; attributeValues?: AdminVariantAttributeInput[] }) {
   return request<{ id: string; sku: string }>(`/admin/products/${productId}/variants`, { method: 'POST', body: JSON.stringify(input) });
 }
 
