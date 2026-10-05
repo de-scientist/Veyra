@@ -206,6 +206,7 @@ export function VariantManager({
     setRowEdits({});
     setHasPreview(false);
     setPreviewState('idle');
+    setPreviewBlockedHint(null);
     notify('info', 'Category changed — variant dimensions were reset for the new category.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryKey]);
