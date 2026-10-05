@@ -8,6 +8,7 @@ import { AccountMenu, AccountMenuSkeleton } from './AccountMenu';
 import { JBIcon } from './JBIcons';
 import { JBLogo } from './JBLogo';
 import { ThemeToggle } from './ThemeProvider';
+import { JB_CONTACT_PHONE_DISPLAY, JB_CONTACT_PHONE_TEL, JB_DELIVERY_MESSAGE } from '../lib/business-contact';
 import { can } from '../lib/admin-api';
 import { departments } from '../lib/catalog';
 import { useSession } from '../lib/session';
@@ -120,15 +121,19 @@ export function Header() {
     <>
       <div className="utility-bar" role="region" aria-label="Store information">
         <div className="container utility-bar__inner">
+          <a className="utility-bar__link utility-bar__link--phone" href={JB_CONTACT_PHONE_TEL} aria-label={`Call JB Mercantile on ${JB_CONTACT_PHONE_DISPLAY}`}>
+            <JBIcon name="phone" size={14} />
+            {JB_CONTACT_PHONE_DISPLAY}
+          </a>
           <span className="utility-bar__item">
             <JBIcon name="truck" size={14} />
-            We deliver across Kenya
+            {JB_DELIVERY_MESSAGE}
           </span>
           <span className="utility-bar__item utility-bar__item--desktop">
             <JBIcon name="lock" size={14} />
             Secure M-Pesa payments
           </span>
-          <Link href="/shop" className="utility-bar__link">
+          <Link href="/shop" className="utility-bar__link utility-bar__link--desktop">
             Shop new arrivals
           </Link>
         </div>
