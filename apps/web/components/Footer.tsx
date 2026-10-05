@@ -1,14 +1,16 @@
 import Link from 'next/link';
 
 import { JBLogo } from './JBLogo';
+import { JBIcon } from './JBIcons';
 import { departments } from '../lib/catalog';
+import { JB_CONTACT_PHONE_DISPLAY, JB_CONTACT_PHONE_TEL } from '../lib/business-contact';
 import { getCollections } from '../lib/storefront';
 
 export async function Footer() {
   // Live collections; footer degrades to departments alone on API failure.
   // Only routes that exist are linked — no invented legal, contact, or FAQ
-  // pages. Authoritative phone/email are UNKNOWN (see business register),
-  // so no contact number is displayed rather than inventing one.
+  // pages. The authoritative JB contact number is the business-provided
+  // +254 741 298268, shared with the utility header via lib/business-contact.
   const collections = await getCollections().catch(() => []);
   return (
     <footer className="site-footer">
@@ -19,6 +21,11 @@ export async function Footer() {
           </p>
           <p className="site-footer__tagline">Fashion • Footwear • Kitchen &amp; Home</p>
           <p>Everyday essentials designed for Kenya and delivered with care. Secure checkout with M-Pesa support.</p>
+          <p className="site-footer__contact">
+            <JBIcon name="phone" size={14} />
+            <span className="visually-hidden">Call JB Mercantile on </span>
+            <a href={JB_CONTACT_PHONE_TEL}>{JB_CONTACT_PHONE_DISPLAY}</a>
+          </p>
         </div>
         <nav aria-label="Shop">
           <h4>Shop</h4>
