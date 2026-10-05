@@ -278,12 +278,6 @@ export function VariantManager({
           ? 'Select at least one value for each variant attribute before generating variants.'
           : null;
 
-  /**
-   * Backend validation codes mapped to admin-actionable guidance. The
-   * backend message is always preserved — the hint only adds the fix.
-   */
-  function explainPreviewFailure(error: unknown): string {
-
   const runPreview = useCallback(async () => {
     const seq = previewSeq.current + 1;
     previewSeq.current = seq;
