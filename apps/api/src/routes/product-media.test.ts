@@ -211,6 +211,21 @@ describe('product image CRUD', () => {
     expect(images.find((i) => i.isPrimary)?.id).toBe(secondId);
   });
 
+  it('accepts bodiless primary requests stamped with a JSON content-type (browser regression)', async () => {
+    // Browsers send `content-type: application/json` even when fetch has no
+    // body (the admin UI posts no payload here). This must reach the handler
+    // — previously Fastify rejected it with FST_ERR_CTP_EMPTY_JSON_BODY 400.
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/products/${productA}/images/${secondId}/primary`,
+      headers: { cookie: cookies[emails.staff], 'content-type': 'application/json' },
+    });
+    expect(response.statusCode).toBe(200);
+    const images = (response.json() as { data: Array<{ id: string; isPrimary: boolean }> }).data;
+    expect(images.filter((i) => i.isPrimary)).toHaveLength(1);
+    expect(images.find((i) => i.isPrimary)?.id).toBe(secondId);
+  });
+
   it('reorders atomically and rejects partial/foreign sets', async () => {
     const bad = await call('PATCH', `/api/v1/admin/products/${productA}/images/reorder`, emails.staff, { imageIds: [firstId] });
     expect(bad.statusCode).toBe(400);
