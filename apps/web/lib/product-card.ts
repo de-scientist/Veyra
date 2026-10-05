@@ -6,16 +6,18 @@ import { discountPercent, productInStock, type Product, type ProductVariant } fr
  * nothing here invents prices, discounts, ratings, or stock.
  */
 
-export type CardBadge = 'sale' | 'out' | 'new';
+export type CardBadge = 'sale' | 'out' | 'low' | 'new';
 
 /**
  * Single badge priority: out-of-stock (purchase-blocking) > sale
- * (authoritative `compareAtPrice` math) > new arrival (backend flag).
+ * (authoritative `compareAtPrice` math) > low stock (authoritative
+ * `availableQuantity` scarcity) > new arrival (backend flag).
  * At most one badge — never a crowded stack.
  */
 export function cardBadge(product: Product): CardBadge | null {
   if (!productInStock(product)) return 'out';
   if (discountPercent(product) !== null) return 'sale';
+  if (lowStockQuantity(product) !== null) return 'low';
   if (product.newArrival) return 'new';
   return null;
 }
@@ -49,6 +51,39 @@ export function lowStockQuantity(product: Product): number | null {
     }
   }
   return lowest;
+}
+
+const VARIANT_HINT_NOUNS: Record<string, string> = {
+  Color: 'colours',
+  Size: 'sizes',
+  'Shoe Size': 'sizes',
+  Capacity: 'capacities',
+  Power: 'options',
+  Material: 'materials',
+  Style: 'styles',
+  Brand: 'brands',
+};
+
+/**
+ * Generic variant summary from real attribute data (never hard-coded
+ * Size/Color assumptions): e.g. "3 colours", "5 sizes · 2 capacities".
+ * Returns null when no attribute has more than one distinct value.
+ */
+export function variantHint(product: Product): string | null {
+  const values = new Map<string, Set<string>>();
+  for (const variant of product.variants) {
+    for (const [attr, value] of Object.entries(variant.attributes)) {
+      const clean = value.trim();
+      if (!clean) continue;
+      if (!values.has(attr)) values.set(attr, new Set());
+      values.get(attr)!.add(clean);
+    }
+  }
+  const parts: string[] = [];
+  for (const [attr, set] of values) {
+    if (set.size > 1) parts.push(`${set.size} ${VARIANT_HINT_NOUNS[attr] ?? 'options'}`);
+  }
+  return parts.length ? parts.join(' · ') : null;
 }
 
 /** Distinct `Color` attribute values across variants (real values only). */

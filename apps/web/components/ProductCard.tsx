@@ -12,6 +12,7 @@ import {
   cardColors,
   lowStockQuantity,
   ratingSummary,
+  variantHint,
 } from '../lib/product-card';
 import {
   colorHex,
@@ -37,6 +38,7 @@ export function ProductCard({ product, eager = false }: { product: Product; eage
   const rating = ratingSummary(product);
   const lowQty = lowStockQuantity(product);
   const colors = cardColors(product);
+  const hint = variantHint(product);
   const productUrl = `/products/${product.slug}` as Route;
 
   const stockText = !inStock
@@ -63,6 +65,7 @@ export function ProductCard({ product, eager = false }: { product: Product; eage
           )}
         </Link>
         {badge === 'sale' && discount ? <span className="badge badge--sale">-{discount}%</span> : null}
+        {badge === 'low' && lowQty !== null ? <span className="badge badge--low">Only {lowQty} left</span> : null}
         {badge === 'new' ? <span className="badge">New</span> : null}
         {badge === 'out' ? <span className="badge badge--muted">Out of stock</span> : null}
         <div className="product-card__wishlist">
@@ -101,6 +104,7 @@ export function ProductCard({ product, eager = false }: { product: Product; eage
         <span className={`product-card__stock ${!inStock ? 'product-card__stock--out' : lowQty !== null ? 'product-card__stock--low' : 'product-card__stock--in'}`}>
           {stockText}
         </span>
+        {hint ? <span className="product-card__hint">{hint}</span> : null}
         <ProductCardActions product={product} />
       </div>
     </article>

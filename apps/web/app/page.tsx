@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 
 import { HeroCarousel } from '../components/HeroCarousel';
 import { ProductCard } from '../components/ProductCard';
+import { TrustStrip } from '../components/TrustStrip';
 import { departments } from '../lib/catalog';
 import { toJsonLd } from '../lib/json-ld';
 import {
@@ -163,24 +164,7 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      <section className="trust-strip" aria-label="Why shop with JB Mercantile">
-        <div className="trust-strip__item">
-          <strong>Secure checkout</strong>
-          <span>Order totals are always calculated by our backend — never in the browser.</span>
-        </div>
-        <div className="trust-strip__item">
-          <strong>M-Pesa payments</strong>
-          <span>Pay with M-Pesa and track confirmation right on your order.</span>
-        </div>
-        <div className="trust-strip__item">
-          <strong>Flexible delivery</strong>
-          <span>Flexible delivery across our zones, with pickup options at checkout.</span>
-        </div>
-        <div className="trust-strip__item">
-          <strong>Easy returns</strong>
-          <span>Request returns or exchanges from your account and follow each step.</span>
-        </div>
-      </section>
+      <TrustStrip />
     </main>
   );
 }

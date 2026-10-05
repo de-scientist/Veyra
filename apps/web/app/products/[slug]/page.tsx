@@ -6,9 +6,12 @@ import { PriceDisplay } from '../../../components/PriceDisplay';
 import { ProductCard } from '../../../components/ProductCard';
 import { ProductActions } from '../../../components/ProductActions';
 import { ProductGallery } from '../../../components/ProductGallery';
-import { ProductSpecifications } from '../../../components/ProductSpecifications';
+import { ProductRating } from '../../../components/ProductRating';
+import { ProductTabs } from '../../../components/ProductTabs';
+import { TrustStrip } from '../../../components/TrustStrip';
 import { StatusBadge } from '../../../components/jb-ui';
-import { getDepartmentBySlug, productInStock } from '../../../lib/catalog';
+import { discountPercent, getDepartmentBySlug, productInStock } from '../../../lib/catalog';
+import { ratingSummary } from '../../../lib/product-card';
 import { discoverProducts, getCategoryBySlug, getProductBySlug } from '../../../lib/storefront';
 import { toJsonLd } from '../../../lib/json-ld';
 
@@ -45,6 +48,9 @@ export default async function ProductPage({ params }: { params: { slug: string }
   const prices = product.variants.map((v) => v.price);
   const minPrice = prices.length ? Math.min(...prices) : product.price;
   const hasPriceRange = prices.length ? Math.max(...prices) !== minPrice : false;
+  const discount = discountPercent(product);
+  const rating = ratingSummary(product);
+  const firstSku = product.variants.length === 1 ? product.variants[0].sku : null;
 
   // Related: same category first, then department; never the product itself.
   const related = await discoverProducts(
@@ -124,32 +130,50 @@ export default async function ProductPage({ params }: { params: { slug: string }
             {department ? `${department.name} · ` : ''}{category ? category.name : product.brand}
           </p>
           <h1>{product.name}</h1>
-          <p className="muted-copy">
-            {hasPriceRange ? 'From ' : ''}
+          {rating ? (
+            <p className="product-summary__rating">
+              <ProductRating average={rating.average} count={rating.count} productName={product.name} />
+              <a href="#product-tab-Reviews" className="product-summary__reviews-link">
+                {rating.count} {rating.count === 1 ? 'review' : 'reviews'}
+              </a>
+            </p>
+          ) : null}
+          <p className="muted-copy product-summary__meta">
+            {firstSku ? <span>SKU {firstSku}</span> : <span>{product.variants.length} variants</span>}
+            {' · '}
+            <span>{product.brand}</span>
+          </p>
+          <p className="product-summary__price">
+            {hasPriceRange ? <span className="muted-copy">From </span> : null}
             <PriceDisplay price={minPrice} compareAtPrice={product.compareAtPrice} />
+            {discount !== null ? <span className="badge badge--current">Save {discount}%</span> : null}
           </p>
           <p>
             <StatusBadge status={inStock ? 'IN STOCK' : 'OUT OF STOCK'} />
           </p>
+          {product.shortDescription && product.shortDescription !== product.description ? (
+            <ul className="product-summary__highlights">
+              <li>{product.shortDescription}</li>
+            </ul>
+          ) : null}
           <p className="product-summary__description">{product.description}</p>
 
           <ProductActions productId={product.id} productName={product.name} variants={product.variants} />
 
-          <div className="status-row" style={{ marginTop: '1.5rem' }}>
-            <span>Delivery<small>Flexible delivery options across our zones — calculated at checkout.</small></span>
-            <span>Payment<small>Secure checkout with M-Pesa support.</small></span>
+          <div className="delivery-panel" aria-label="Delivery and payment information">
+            <h2>Delivery &amp; payment</h2>
+            <ul>
+              <li>We deliver across Kenya — pickup, local, and courier options at checkout.</li>
+              <li>Delivery fees are calculated at checkout from your zone and method.</li>
+              <li>Secure checkout with M-Pesa; only verified payments mark orders as paid.</li>
+            </ul>
           </div>
         </div>
       </div>
 
-      <section className="section-block" aria-labelledby="product-description-heading">
-        <h2 id="product-description-heading">About this product</h2>
-        <p className="muted-copy" style={{ maxWidth: '70ch' }}>{product.description}</p>
-      </section>
+      <ProductTabs product={product} />
 
-      <div className="section-block">
-        <ProductSpecifications product={product} />
-      </div>
+      <TrustStrip />
 
       {relatedProducts.length > 0 ? (
         <section className="section-block" aria-labelledby="related-heading">

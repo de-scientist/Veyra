@@ -9,6 +9,7 @@ import {
   ratingAccessibleLabel,
   ratingSummary,
   starFillPercent,
+  variantHint,
 } from './product-card';
 
 function makeProduct(overrides: Partial<Product> = {}): Product {
@@ -49,7 +50,22 @@ describe('cardBadge', () => {
     expect(cardBadge(makeProduct({ compareAtPrice: 6499 }))).toBe('sale');
   });
 
-  it('shows new only when in stock, undiscounted, and flagged', () => {
+  it('shows low-stock for scarce in-stock products', () => {
+    const product = makeProduct({
+      variants: [{ id: 'v1', sku: 'S', name: 'S', price: 4999, attributes: {}, inStock: true, availableQuantity: 3 }],
+    });
+    expect(cardBadge(product)).toBe('low');
+  });
+
+  it('prioritizes sale over low-stock scarcity', () => {
+    const product = makeProduct({
+      compareAtPrice: 6499,
+      variants: [{ id: 'v1', sku: 'S', name: 'S', price: 4999, attributes: {}, inStock: true, availableQuantity: 2 }],
+    });
+    expect(cardBadge(product)).toBe('sale');
+  });
+
+  it('shows new only when in stock, undiscounted, healthy, and flagged', () => {
     expect(cardBadge(makeProduct({ newArrival: true }))).toBe('new');
   });
 
@@ -121,6 +137,33 @@ describe('cardColors', () => {
 
   it('returns empty when products have no color attribute', () => {
     expect(cardColors(makeProduct())).toEqual([]);
+  });
+});
+
+describe('variantHint', () => {
+  it('summarizes multi-value attributes generically', () => {
+    const product = makeProduct({
+      variants: [
+        { id: 'v1', sku: 'A', name: 'A', price: 1, attributes: { Color: 'Black', Size: 'S' }, inStock: true },
+        { id: 'v2', sku: 'B', name: 'B', price: 1, attributes: { Color: 'Blue', Size: 'M' }, inStock: true },
+        { id: 'v3', sku: 'C', name: 'C', price: 1, attributes: { Color: 'Grey', Size: 'M' }, inStock: true },
+      ],
+    });
+    expect(variantHint(product)).toBe('3 colours · 2 sizes');
+  });
+
+  it('maps appliance attributes without clothing assumptions', () => {
+    const product = makeProduct({
+      variants: [
+        { id: 'v1', sku: 'A', name: 'A', price: 1, attributes: { Capacity: '1.5L' }, inStock: true },
+        { id: 'v2', sku: 'B', name: 'B', price: 1, attributes: { Capacity: '2L' }, inStock: true },
+      ],
+    });
+    expect(variantHint(product)).toBe('2 capacities');
+  });
+
+  it('stays silent when nothing varies', () => {
+    expect(variantHint(makeProduct())).toBeNull();
   });
 });
 

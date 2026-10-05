@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { addToWishlist, getWishlist, removeWishlistItem } from '../lib/shopping-api';
+import { addToWishlist, getWishlist, notifyWishlistUpdated, removeWishlistItem } from '../lib/shopping-api';
 import { JBIcon } from './JBIcons';
 import { useToast } from './Toast';
 
@@ -47,10 +47,12 @@ export function WishlistButton({ productId, productName }: WishlistButtonProps) 
       if (itemId) {
         const wishlist = await removeWishlistItem(itemId);
         setItemId(wishlist.items.find((item) => item.productId === productId)?.id ?? null);
+        notifyWishlistUpdated();
         notify('info', `Removed ${productName} from your wishlist.`);
       } else {
         const wishlist = await addToWishlist(productId);
         setItemId(wishlist.items.find((item) => item.productId === productId)?.id ?? null);
+        notifyWishlistUpdated();
         notify('success', `Saved ${productName} to your wishlist.`);
       }
     } catch (error) {

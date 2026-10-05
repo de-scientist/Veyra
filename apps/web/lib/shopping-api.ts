@@ -357,6 +357,19 @@ export function clearCart() {
   return request<Cart>('/cart', { method: 'DELETE' });
 }
 
+/**
+ * Event dispatched (same-tab) after any wishlist mutation, so the header
+ * wishlist count refreshes without a page reload. Mirrors
+ * CART_UPDATED_EVENT — backend stays authoritative, listeners re-fetch.
+ */
+export const WISHLIST_UPDATED_EVENT = 'jb:wishlist-updated';
+
+export function notifyWishlistUpdated() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(WISHLIST_UPDATED_EVENT));
+  }
+}
+
 export function getWishlist() {
   return request<{ id: string; items: WishlistItem[] }>('/wishlist');
 }
