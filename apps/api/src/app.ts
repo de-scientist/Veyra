@@ -60,7 +60,10 @@ export async function buildApp(): Promise<FastifyInstance> {
       callback(null, isAllowedOrigin(origin));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    // PUT is a genuine contract member (e.g. product-collection replacement
+    // PUT /admin/products/:productId/collections) — advertised so browser
+    // preflights succeed. No other methods are exposed.
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Confirmation-Token', 'X-Provider-Signature'],
     maxAge: 600,
   });
@@ -77,6 +80,25 @@ export async function buildApp(): Promise<FastifyInstance> {
       'x-ratelimit-remaining': true,
       'x-ratelimit-reset': true,
     },
+  });
+
+  // Bodiless mutating requests (e.g. POST .../images/:id/primary, POST
+  // /auth/logout) carry no payload, but some clients stamp
+  // `content-type: application/json` on them. Fastify's default JSON parser
+  // rejects those with FST_ERR_CTP_EMPTY_JSON_BODY (400) before any handler
+  // runs. An empty JSON body is treated as `{}` here instead — routes with
+  // required bodies still fail via their own zod schemas with structured
+  // 400s, so no validation is weakened.
+  app.addContentTypeParser(/^application\/json(;.*)?$/, { parseAs: 'string' }, (request, body, done) => {
+    if (body === '' || body === undefined || body === null) {
+      done(null, {});
+      return;
+    }
+    try {
+      done(null, JSON.parse(body as string));
+    } catch {
+      done(Object.assign(new Error('The request body must be valid JSON.'), { statusCode: 400, code: 'FST_ERR_CTP_INVALID_JSON_BODY' }));
+    }
   });
 
   // Handlers are registered inside the encapsulated API context: Fastify

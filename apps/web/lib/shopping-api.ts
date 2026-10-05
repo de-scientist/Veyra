@@ -313,10 +313,12 @@ export type ReorderResult = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Content-Type is only meaningful with a payload — see lib/admin-api.ts.
+  const hasBody = init?.body !== undefined && init?.body !== null;
   const response = await fetch(`${apiBaseUrl}/api/v1${path}`, {
     ...init,
     credentials: 'include',
-    headers: { 'content-type': 'application/json', ...init?.headers },
+    headers: { ...(hasBody ? { 'content-type': 'application/json' } : {}), ...init?.headers },
   });
   const body = await response.json().catch(() => null) as { data?: T; error?: { message?: string } } | null;
   if (!response.ok) throw new Error(body?.error?.message ?? 'Something went wrong. Please try again.');

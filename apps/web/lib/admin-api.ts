@@ -1,10 +1,15 @@
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Content-Type is only meaningful with a payload. Sending
+  // `application/json` on bodiless requests (e.g. POST .../images/:id/primary)
+  // makes strict servers reject the empty body with a 400 before the handler
+  // runs — so the header travels only when a body is present.
+  const hasBody = init?.body !== undefined && init?.body !== null;
   const response = await fetch(`${apiBaseUrl}/api/v1${path}`, {
     ...init,
     credentials: 'include',
-    headers: { 'content-type': 'application/json', ...init?.headers },
+    headers: { ...(hasBody ? { 'content-type': 'application/json' } : {}), ...init?.headers },
   });
   const body = (await response.json().catch(() => null)) as { data?: T; error?: { message?: string; code?: string; details?: unknown } } | null;
   if (!response.ok) {

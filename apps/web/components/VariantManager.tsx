@@ -49,6 +49,25 @@ import { useToast } from './Toast';
 const PREVIEW_DEBOUNCE_MS = 500;
 const MAX_VARIANTS_PER_OPERATION = 300;
 
+/**
+ * Backend validation codes mapped to admin-actionable guidance. The backend
+ * message is always preserved — the hint only adds the fix.
+ */
+function explainPreviewFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'SKU preview failed.';
+  const code = (error as Error & { code?: string })?.code;
+  if (code === 'MISSING_CATEGORY_CODE') {
+    return `${message} Fix: give the category a dictionary code (Categories → edit), or move the product to a coded category.`;
+  }
+  if (code === 'MISSING_SKU_COMPONENT') {
+    return `${message} Fix: enter a brand code above or select a brand.`;
+  }
+  if (code === 'MISSING_REQUIRED_DIMENSION' || code === 'ATTRIBUTE_VALUES_REQUIRED') {
+    return `${message} Fix: select at least one value for each variant attribute.`;
+  }
+  return message;
+}
+
 export type VariantManagerProps = {
   productId: string;
   productName: string;
@@ -149,12 +168,16 @@ export function VariantManager({
   const [rowEdits, setRowEdits] = useState<Record<string, RowEdit>>({});
   const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewBlockedHint, setPreviewBlockedHint] = useState<string | null>(null);
   const [hasPreview, setHasPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkStock, setBulkStock] = useState('');
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic preview sequence: a slower earlier response must never clobber
+  // newer matrix state when selections change mid-flight.
+  const previewSeq = useRef(0);
 
   // Reset configuration when the product category changes (dimensions are category-scoped).
   const categoryKey = categoryId ?? '';
@@ -238,12 +261,45 @@ export function VariantManager({
     return entries;
   }, [dimensions, selectedValues]);
 
+  // Prerequisite gates for the server preview. Firing the endpoint without
+  // these would only produce structured 400s (MISSING_CATEGORY_CODE,
+  // MISSING_SKU_COMPONENT, ATTRIBUTE_VALUES_REQUIRED) — the backend stays
+  // authoritative, the UI simply does not send doomed requests.
+  const brandReady = Boolean(brandValueId) || brandCode.trim().length > 0;
+  const categoryCoded = !category || Boolean(category.code);
+  const dimensionMissingValues = dimensions.some((attributeId) => (selectedValues[attributeId] ?? []).length === 0);
+  const previewBlockedReason = !categoryId
+    ? null
+    : !categoryCoded
+      ? 'This category has no dictionary code, so SKUs cannot be generated yet. Give the category a code (Categories → edit) or move the product to a coded category.'
+      : !brandReady
+        ? 'Enter a brand code (or select a brand) above to preview server-generated SKUs.'
+        : dimensionMissingValues
+          ? 'Select at least one value for each variant attribute before generating variants.'
+          : null;
+
+  /**
+   * Backend validation codes mapped to admin-actionable guidance. The
+   * backend message is always preserved — the hint only adds the fix.
+   */
+  function explainPreviewFailure(error: unknown): string {
+
   const runPreview = useCallback(async () => {
+    const seq = previewSeq.current + 1;
+    previewSeq.current = seq;
     if (!categoryId) {
       setPreviewState('idle');
       setPreviewError(null);
+      setPreviewBlockedHint(null);
       return;
     }
+    if (previewBlockedReason) {
+      setPreviewState('idle');
+      setPreviewError(null);
+      setPreviewBlockedHint(previewBlockedReason);
+      return;
+    }
+    setPreviewBlockedHint(null);
     if (overLimit) {
       setPreviewState('error');
       setPreviewError(`This selection would create ${selectionSummary.total.toLocaleString('en-KE')} variants — above the limit of ${MAX_VARIANTS_PER_OPERATION} per operation. Narrow the selection.`);
@@ -259,6 +315,8 @@ export function VariantManager({
       if (brandAttribute && brandValueId) payload.brandValueId = brandValueId;
       else if (brandCode.trim()) payload.brandCode = brandCode.trim().toUpperCase();
       const result: VariantGenerationResult = await generateProductVariants(productId, payload);
+      // A newer preview started while this one was in flight — drop the stale response.
+      if (previewSeq.current !== seq) return;
       const merged = mergePreviewRows({
         created: result.created,
         existing: result.existing,
@@ -282,10 +340,11 @@ export function VariantManager({
         setPreviewError(result.errors.map((e) => e.message).join(' '));
       }
     } catch (e) {
+      if (previewSeq.current !== seq) return;
       setPreviewState('error');
-      setPreviewError(e instanceof Error ? e.message : 'SKU preview failed.');
+      setPreviewError(explainPreviewFailure(e));
     }
-  }, [categoryId, overLimit, selectionSummary.total, requestAttributes, brandAttribute, brandValueId, brandCode, productId, existingVariants, resolvePair]);
+  }, [categoryId, previewBlockedReason, overLimit, selectionSummary.total, requestAttributes, brandAttribute, brandValueId, brandCode, productId, existingVariants, resolvePair]);
 
   // Debounced server-authoritative preview — never per keystroke.
   useEffect(() => {
@@ -364,6 +423,12 @@ export function VariantManager({
   };
 
   const handleGenerate = async () => {
+    // No valid combinations staged — never call the API (§12). An empty
+    // dimension list is legitimate (single default variant) and proceeds.
+    if (dimensionMissingValues) {
+      notify('info', 'Select at least one value for each variant attribute before generating variants.');
+      return;
+    }
     const newRows = rows.filter((row) => row.status === 'new');
     if (newRows.length === 0) {
       notify('info', 'Nothing new to create — every previewed combination already exists.');
@@ -409,9 +474,11 @@ export function VariantManager({
       notify('success', `Created ${result.summary.created} variant(s)${result.summary.existing > 0 ? `, ${result.summary.existing} already existed` : ''}.`);
       setRowEdits({});
       setChecked(new Set());
-      await onChanged();
       setHasPreview(false);
-      await runPreview();
+      // The refreshed `existingVariants` prop changes `runPreview` identity,
+      // so the debounced effect above re-runs the preview exactly once — no
+      // explicit call here (it would double the request).
+      await onChanged();
     } catch (e) {
       notify('error', e instanceof Error ? e.message : 'Variant creation failed.');
     } finally {
@@ -650,13 +717,19 @@ export function VariantManager({
         <span className="muted-copy">
           {previewState === 'loading' ? 'Generating SKUs…' : `${newCount} new · ${existingCount} existing · ${skippedCount} skipped`}
         </span>
+        <button type="button" className="button button--secondary button--small" onClick={() => void runPreview()} disabled={saving || previewState === 'loading' || !categoryId}>
+          Refresh preview
+        </button>
       </div>
 
       {previewState === 'loading' && (
         <p className="muted-copy" role="status" aria-busy="true">Generating SKUs…</p>
       )}
+      {previewBlockedHint && previewState === 'idle' && (
+        <p className="muted-copy" role="note">{previewBlockedHint}</p>
+      )}
       {previewState === 'error' && previewError && (
-        <div className="error-message" role="alert">{previewError}</div>
+        <div className="error-message" role="alert">{previewError} <button type="button" className="text-button" onClick={() => void runPreview()}>Try again</button></div>
       )}
       {previewState === 'ready' && previewError && (
         <div className="inline-message" role="alert">{previewError}</div>
