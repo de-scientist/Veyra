@@ -4,6 +4,7 @@ import { OrderConfirmationClient } from '../../../components/OrderConfirmationCl
 
 export const metadata: Metadata = { title: 'Order Confirmation | JB Mercantile', robots: { index: false, follow: false } };
 
-export default function OrderConfirmationPage({ params, searchParams }: { params: { orderNumber: string }; searchParams: { token?: string } }) {
-  return <main className="container page-shell"><OrderConfirmationClient orderNumber={params.orderNumber} confirmationToken={searchParams.token} /></main>;
+export default function OrderConfirmationPage({ params, searchParams }: { params: { orderNumber: string }; searchParams: { token?: string; pay?: string } }) {
+  const initialMethod = searchParams.pay === 'manual' ? 'manual' : 'mpesa';
+  return <main className="container page-shell"><OrderConfirmationClient orderNumber={params.orderNumber} confirmationToken={searchParams.token} initialMethod={initialMethod} /></main>;
 }
