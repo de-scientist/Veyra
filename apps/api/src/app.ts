@@ -89,7 +89,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   // runs. An empty JSON body is treated as `{}` here instead — routes with
   // required bodies still fail via their own zod schemas with structured
   // 400s, so no validation is weakened.
-  app.addContentTypeParser(/^application\/json(;.*)?$/, { parseAs: 'string' }, (request, body, done) => {
+  // NOTE: the override MUST use the exact 'application/json' string. A
+  // RegExp parser does not replace Fastify's built-in exact-match JSON
+  // parser, so a regex here silently never runs and the 400 persists.
+  // The raw body is stashed on the request for HMAC webhook verification
+  // (see routes/notifications.ts) — the encapsulated webhook context reuses
+  // this parser instead of registering its own.
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
+    (request as { rawBody?: string }).rawBody = (body ?? '') as string;
     if (body === '' || body === undefined || body === null) {
       done(null, {});
       return;

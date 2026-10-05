@@ -81,18 +81,12 @@ export async function notificationRoutes(app: FastifyInstance) {
     return { success: true, data: await retryDelivery(id, actor) };
   });
 
-  // Provider delivery callbacks live in an encapsulated context so the raw-body
-  // JSON parser (needed for HMAC verification) does not affect other routes.
+  // Provider delivery callbacks live in an encapsulated context. Raw-body
+  // capture for HMAC verification is provided by the root JSON parser in
+  // app.ts (which stashes `request.rawBody` for every JSON request) — this
+  // context registers no parser of its own, since Fastify rejects a
+  // duplicate 'application/json' parser.
   await app.register(async (webhooks) => {
-    webhooks.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
-      (request as FastifyRequest & { rawBody?: string }).rawBody = body as string;
-      try {
-        done(null, JSON.parse(body as string));
-      } catch (error) {
-        done(error as Error);
-      }
-    });
-
     webhooks.post('/webhooks/email/delivery', async (request) => {
       const rawBody = (request as FastifyRequest & { rawBody?: string }).rawBody ?? '';
       const signature = request.headers['x-provider-signature'] as string | undefined;
