@@ -118,7 +118,7 @@ export async function submitManualPayment(
     };
   }
 
-  let payment = await prisma.payment.findUnique({
+  const payment = await prisma.payment.findUnique({
     where: { orderId_provider: { orderId: order.id, provider: 'OTHER' } },
     include: { order: true },
   });
