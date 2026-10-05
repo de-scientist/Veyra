@@ -471,6 +471,68 @@ export function queryPaymentStatus(paymentId: string, confirmationToken?: string
   return request<{ payment: Payment; transactionId: string | null; refreshed: boolean; pending: boolean }>(`/payments/${encodeURIComponent(paymentId)}/query${suffix}`, { method: 'POST' });
 }
 
+export type ManualChannel = 'PAYBILL' | 'POCHI';
+
+export type ManualPayment = {
+  id: string;
+  orderNumber: string;
+  provider: 'OTHER';
+  channel: ManualChannel | null;
+  status: string;
+  amount: number;
+  currency: string;
+  providerReference: string | null;
+  paidAt: string | null;
+};
+
+/**
+ * Submits an externally-completed manual M-Pesa payment for staff
+ * verification. Resolves to a PENDING claim — never paid. Only backend +
+ * staff verification may transition payment to PAID.
+ */
+export function submitManualPayment(input: { orderNumber: string; transactionCode: string; channel: ManualChannel }, confirmationToken?: string) {
+  const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
+  return request<{ payment: ManualPayment; transactionId: string; submitted: boolean; replayed: boolean }>(
+    `/payments/manual/submit${suffix}`,
+    {
+      method: 'POST',
+      headers: confirmationToken ? { 'x-confirmation-token': confirmationToken } : {},
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export type ManualPendingItem = {
+  id: string;
+  orderNumber: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  amount: number;
+  currency: string;
+  providerReference: string | null;
+  channel: ManualChannel | null;
+  submittedAt: string;
+  transactionId: string | null;
+};
+
+export function getManualPendingPayments() {
+  return request<ManualPendingItem[]>('/admin/payments/manual-pending');
+}
+
+export function verifyManualPayment(paymentId: string, note?: string) {
+  return request<{ verified: boolean }>(`/admin/payments/${encodeURIComponent(paymentId)}/verify`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function rejectManualPayment(paymentId: string, reason: string) {
+  return request<{ rejected: boolean }>(`/admin/payments/${encodeURIComponent(paymentId)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export function getOrderDelivery(orderNumber: string, confirmationToken?: string) {
   const suffix = confirmationToken ? `?token=${encodeURIComponent(confirmationToken)}` : '';
   return request<Delivery>(`/orders/${encodeURIComponent(orderNumber)}/delivery${suffix}`);
