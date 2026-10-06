@@ -68,12 +68,19 @@ describe('fulfillment + delivery (Phase D)', () => {
     }
   }
 
-  /** Guest order placed through real checkout, then marked PAID like a confirmed payment would. */
+  /** Guest cart merged into the file's customer cart (authenticated checkout journey). */
+  async function mergeGuestIntoCustomer(guest: string) {
+    const merged = await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie: `${customerCookie}; ${guest}` } });
+    expect(merged.statusCode).toBe(200);
+    return `${customerCookie}; ${guest}`;
+  }
+
+  /** Customer-owned order placed through real authenticated checkout, then marked PAID like a confirmed payment would. */
   async function createPaidOrder(methodId: string, quantity = 1) {
     const cartResponse = await app.inject({ method: 'GET', url: '/api/v1/cart' });
-    const cookie = trackGuest(cookies(cartResponse));
-    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie }, payload: { variantId, quantity } });
-    const placed = await placeCheckout(cookie, methodId);
+    const guest = trackGuest(cookies(cartResponse));
+    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie: guest }, payload: { variantId, quantity } });
+    const placed = await placeCheckout(await mergeGuestIntoCustomer(guest), methodId);
     expect(placed.statusCode).toBe(200);
     const data = (placed.json() as { data: { order: { orderNumber: string }; confirmationToken?: string } }).data;
     const order = await prisma.order.findUniqueOrThrow({ where: { orderNumber: data.order.orderNumber } });
@@ -85,9 +92,9 @@ describe('fulfillment + delivery (Phase D)', () => {
 
   async function createUnpaidOrder() {
     const cartResponse = await app.inject({ method: 'GET', url: '/api/v1/cart' });
-    const cookie = trackGuest(cookies(cartResponse));
-    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie }, payload: { variantId, quantity: 1 } });
-    const placed = await placeCheckout(cookie, courierMethodId);
+    const guest = trackGuest(cookies(cartResponse));
+    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie: guest }, payload: { variantId, quantity: 1 } });
+    const placed = await placeCheckout(await mergeGuestIntoCustomer(guest), courierMethodId);
     const orderNumber = ((placed.json() as { data: { order: { orderNumber: string } } }).data.order.orderNumber);
     const order = await prisma.order.findUniqueOrThrow({ where: { orderNumber } });
     created.orders.push(order.id);

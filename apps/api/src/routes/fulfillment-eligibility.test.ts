@@ -59,11 +59,18 @@ describe('fulfillment eligibility + audit (Phase D)', () => {
     }
   }
 
+  /** Guest cart merged into the file's customer cart (authenticated checkout journey). */
+  async function mergeGuestIntoCustomer(guest: string) {
+    const merged = await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie: `${customerCookie}; ${guest}` } });
+    expect(merged.statusCode).toBe(200);
+    return `${customerCookie}; ${guest}`;
+  }
+
   async function createPaidOrder() {
     const cartResponse = await app.inject({ method: 'GET', url: '/api/v1/cart' });
-    const cookie = trackGuest(cookies(cartResponse));
-    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie }, payload: { variantId, quantity: 1 } });
-    const placed = await placeCheckout(cookie, courierMethodId);
+    const guest = trackGuest(cookies(cartResponse));
+    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie: guest }, payload: { variantId, quantity: 1 } });
+    const placed = await placeCheckout(await mergeGuestIntoCustomer(guest), courierMethodId);
     expect(placed.statusCode).toBe(200);
     const data = (placed.json() as { data: { order: { orderNumber: string } } }).data;
     const order = await prisma.order.findUniqueOrThrow({ where: { orderNumber: data.order.orderNumber } });
