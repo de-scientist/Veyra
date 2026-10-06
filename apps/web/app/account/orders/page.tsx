@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { claimGuestOrder, getOrders, type PaginatedOrders } from '../../../lib/shopping-api';
+import { JBLoading } from '../../../components/JBLoading';
 import { PriceDisplay } from '../../../components/PriceDisplay';
 import { StatusBadge } from '../../../components/jb-ui';
 
@@ -76,7 +77,7 @@ export default function OrdersPage() {
     });
   }
 
-  if (loading && !data) return <div className="empty-state"><p>Loading orders…</p></div>;
+  if (loading && !data) return <JBLoading context="orders" />;
   if (error && !data) return <div className="empty-state"><h1>Unable to load orders</h1><p>{error}</p></div>;
 
   return (

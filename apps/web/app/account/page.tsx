@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { getAccountDashboard, type DashboardData, type AccountOrder, type OrderSummary } from '../../lib/shopping-api';
+import { JBLoading } from '../../components/JBLoading';
 import { PriceDisplay } from '../../components/PriceDisplay';
 import { StatusBadge } from '../../components/jb-ui';
 import { JBIcon, type JBIconName } from '../../components/JBIcons';
@@ -216,7 +217,7 @@ export default function AccountDashboard() {
     return () => { mounted = false; };
   }, []);
 
-  if (loading) return <div className="empty-state"><p>Loading your account…</p></div>;
+  if (loading) return <JBLoading context="account" />;
   if (error) return <div className="empty-state"><h1>Unable to load account</h1><p>{error}</p></div>;
   if (!data) return <div className="empty-state"><h1>No account data</h1></div>;
 
