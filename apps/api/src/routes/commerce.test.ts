@@ -61,6 +61,40 @@ describe('commerce flow (Phase B)', () => {
   }
 
   /**
+   * Fresh authenticated customer for checkout tests. Checkout is
+   * authenticated-only (guests keep browse/cart); each test gets its own
+   * customer so user carts never leak state between tests.
+   */
+  async function newCustomerCookie(email: string) {
+    const role = await prisma.role.upsert({ where: { slug: 'customer' }, update: {}, create: { name: 'Customer', slug: 'customer' } });
+    const user = await prisma.user.create({ data: { email, passwordHash: await hashPassword('password123'), firstName: 'Phase', lastName: 'Buyer' } });
+    created.users.push(user.id);
+    await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
+    const rawToken = crypto.randomUUID();
+    await prisma.session.create({ data: { userId: user.id, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 3600000) } });
+    return `veyra_session=${rawToken}`;
+  }
+
+  /**
+   * Guest → authenticated checkout journey: items land in a guest cart, then
+   * the first authenticated read merges them into the user cart (existing
+   * `getOrCreateCart` behavior). Returns the combined cookie for
+   * preview/place calls; the merged user cart is tracked for cleanup.
+   */
+  async function checkoutCookieWithItems(variant: string, quantity: number, email: string) {
+    const customerCookie = await newCustomerCookie(email);
+    const guestCookie = await freshGuestCart();
+    const added = await addItem(guestCookie, variant, quantity);
+    expect(added.statusCode).toBe(200);
+    const merged = await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie: `${customerCookie}; ${guestCookie}` } });
+    expect(merged.statusCode).toBe(200);
+    const cart = (merged.json() as { data: { id: string; itemCount: number } }).data;
+    expect(cart.itemCount).toBe(quantity);
+    created.carts.push(cart.id);
+    return `${customerCookie}; ${guestCookie}`;
+  }
+
+  /**
    * Placement with retry on transient write races. When suites run in
    * parallel, a placement may lose a lock race and receive the retryable
    * 409 CHECKOUT_CONFLICT (its transaction rolled back); retrying with a
@@ -225,8 +259,7 @@ describe('commerce flow (Phase B)', () => {
     });
 
     it('flags price changes instead of charging stale prices', async () => {
-      const cookie = await freshGuestCart();
-      await addItem(cookie, variantId, 1);
+      const cookie = await checkoutCookieWithItems(variantId, 1, `phase-b-price-${stamp}@example.com`);
       await prisma.productVariant.update({ where: { id: variantId }, data: { priceOverride: 2500 } });
       try {
         const cart = (await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie } })).json() as {
@@ -257,16 +290,25 @@ describe('commerce flow (Phase B)', () => {
   });
 
   describe('checkout validation', () => {
-    it('rejects empty carts', async () => {
-      const cookie = await freshGuestCart();
-      const response = await place(cookie, `phase-b-empty-${stamp}-123456`);
+    it('rejects guest checkout and empty authenticated carts', async () => {
+      // Guests cannot preview or place: the frontend redirects them to login.
+      const guestCookie = await freshGuestCart();
+      const guestPlace = await place(guestCookie, `phase-b-guest-${stamp}-123456`);
+      expect(guestPlace.statusCode).toBe(401);
+      expect((guestPlace.json() as { error: { code: string } }).error.code).toBe('UNAUTHENTICATED');
+      const guestPreview = await app.inject({ method: 'POST', url: '/api/v1/checkout/preview', headers: { cookie: guestCookie }, payload: checkoutInput() });
+      expect(guestPreview.statusCode).toBe(401);
+
+      // Authenticated customers with nothing in the cart get a controlled
+      // empty-cart error — never an order.
+      const customerCookie = await newCustomerCookie(`phase-b-empty-${stamp}@example.com`);
+      const response = await place(customerCookie, `phase-b-empty-${stamp}-123456`);
       expect(response.statusCode).toBe(409);
       expect((response.json() as { error: { code: string } }).error.code).toBe('CHECKOUT_CART_EMPTY');
     });
 
     it('rejects invalid zones, methods, and addresses with controlled errors', async () => {
-      const cookie = await freshGuestCart();
-      await addItem(cookie, variantId, 1);
+      const cookie = await checkoutCookieWithItems(variantId, 1, `phase-b-stale-${stamp}@example.com`);
       const staleZone = await place(cookie, `phase-b-stale-${stamp}-123456`, { shippingZoneCode: 'NOPE-UNKNOWN' });
       expect(staleZone.statusCode).toBe(409);
       const badMethod = await place(cookie, `phase-b-method-${stamp}-123456`, { deliveryMethodId: 'not-a-uuid' });
@@ -278,8 +320,7 @@ describe('commerce flow (Phase B)', () => {
     });
 
     it('leaves cart and inventory intact after failed checkout', async () => {
-      const cookie = await freshGuestCart();
-      await addItem(cookie, variantId, 1);
+      const cookie = await checkoutCookieWithItems(variantId, 1, `phase-b-fail-${stamp}@example.com`);
       const before = await prisma.inventory.findUniqueOrThrow({ where: { variantId } });
       const reservationsBefore = await prisma.inventoryReservation.count({ where: { variantId } });
       const failed = await place(cookie, `phase-b-fail-${stamp}-123456`, { shippingZoneCode: 'NOPE-UNKNOWN' });
