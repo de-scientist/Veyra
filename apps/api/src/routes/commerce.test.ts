@@ -335,8 +335,7 @@ describe('commerce flow (Phase B)', () => {
 
   describe('order creation', () => {
     it('creates a transactional order with snapshots, delivery, history, and UNPAID payment', async () => {
-      const cookie = await freshGuestCart();
-      await addItem(cookie, variantId, 2);
+      const cookie = await checkoutCookieWithItems(variantId, 2, `phase-b-order-${stamp}@example.com`);
       const reservedBefore = (await prisma.inventory.findUniqueOrThrow({ where: { variantId } })).quantityReserved;
       const response = await place(cookie, `phase-b-order-${stamp}-123456`);
       expect(response.statusCode).toBe(200);
@@ -363,14 +362,13 @@ describe('commerce flow (Phase B)', () => {
       const inventory = await prisma.inventory.findUniqueOrThrow({ where: { variantId } });
       expect(inventory.quantityReserved).toBe(reservedBefore + 2);
 
-      // Cart is finalized only after success: the same guest cookie yields a fresh empty cart.
+      // Cart is finalized only after success: the same customer cookie yields a fresh empty cart.
       const after = (await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie } })).json() as { data: { itemCount: number } };
       expect(after.data.itemCount).toBe(0);
     });
 
     it('is idempotent: replaying the same key returns the same order once', async () => {
-      const cookie = await freshGuestCart();
-      await addItem(cookie, variantId, 1);
+      const cookie = await checkoutCookieWithItems(variantId, 1, `phase-b-idem-${stamp}@example.com`);
       const { response: first, key } = await placeSettled(cookie, `phase-b-idem-${stamp}-123456`);
       expect(first.statusCode).toBe(200);
       const firstNumber = ((first.json() as { data: { order: { orderNumber: string } } }).data.order.orderNumber);
@@ -386,9 +384,10 @@ describe('commerce flow (Phase B)', () => {
 
     it('issues unique order numbers', async () => {
       const numbers = new Set<string>();
-      for (const suffix of ['a', 'b']) {
-        const cookie = await freshGuestCart();
-        await addItem(cookie, variantId, 1);
+      const cookie = await checkoutCookieWithItems(variantId, 1, `phase-b-uniq-${stamp}@example.com`);
+      // First order consumed the merged cart; refill it through a second
+      // guest → merge cycle for the same customer.
+      const refill = await freshGuestCart();
         const { response } = await placeSettled(cookie, `phase-b-uniq-${stamp}-${suffix}12345`);
         expect(response.statusCode).toBe(200);
         const orderNumber = ((response.json() as { data: { order: { orderNumber: string } } }).data.order.orderNumber);
