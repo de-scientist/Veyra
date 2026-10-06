@@ -97,9 +97,9 @@ describe('payments + M-Pesa (Phase C)', () => {
     if (sessionId) created.guestSessions.push(decodeURIComponent(sessionId));
     const variant = await prisma.productVariant.findUniqueOrThrow({ where: { id: variantId } });
     await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie: guest }, payload: { variantId, quantity } });
-    // Guest cart merges into the buyer cart (authenticated checkout journey).
-    const merged = await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie: `${buyerCookie}; ${guest}` } });
-    expect(merged.statusCode).toBe(200);
+    // The guest → buyer merge happens inside the checkout call itself (no
+    // extra round-trip: this high-volume file shares the per-app
+    // rate-limit budget). Explicit merge coverage lives in commerce.test.ts.
     const cookie = `${buyerCookie}; ${guest}`;
     // Contractual retry for transient write-race losers under parallel-suite load.
     let placed;

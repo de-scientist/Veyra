@@ -59,10 +59,12 @@ describe('fulfillment eligibility + audit (Phase D)', () => {
     }
   }
 
-  /** Guest cart merged into the file's customer cart (authenticated checkout journey). */
-  async function mergeGuestIntoCustomer(guest: string) {
-    const merged = await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie: `${customerCookie}; ${guest}` } });
-    expect(merged.statusCode).toBe(200);
+  /**
+   * Combined session + guest cookie for authenticated checkout. The merge
+   * happens inside the checkout call — no extra round-trip, keeping this
+   * file inside the per-app rate-limit budget (see fulfillment.test.ts).
+   */
+  function customerCheckoutCookie(guest: string) {
     return `${customerCookie}; ${guest}`;
   }
 
@@ -70,7 +72,7 @@ describe('fulfillment eligibility + audit (Phase D)', () => {
     const cartResponse = await app.inject({ method: 'GET', url: '/api/v1/cart' });
     const guest = trackGuest(cookies(cartResponse));
     await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie: guest }, payload: { variantId, quantity: 1 } });
-    const placed = await placeCheckout(await mergeGuestIntoCustomer(guest), courierMethodId);
+    const placed = await placeCheckout(customerCheckoutCookie(guest), courierMethodId);
     expect(placed.statusCode).toBe(200);
     const data = (placed.json() as { data: { order: { orderNumber: string } } }).data;
     const order = await prisma.order.findUniqueOrThrow({ where: { orderNumber: data.order.orderNumber } });
@@ -84,7 +86,7 @@ describe('fulfillment eligibility + audit (Phase D)', () => {
     const cartResponse = await app.inject({ method: 'GET', url: '/api/v1/cart' });
     const guest = trackGuest(cookies(cartResponse));
     await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie: guest }, payload: { variantId, quantity: 1 } });
-    const placed = await placeCheckout(await mergeGuestIntoCustomer(guest), courierMethodId);
+    const placed = await placeCheckout(customerCheckoutCookie(guest), courierMethodId);
     expect(placed.statusCode).toBe(200);
     const orderNumber = ((placed.json() as { data: { order: { orderNumber: string } } }).data.order.orderNumber);
     const order = await prisma.order.findUniqueOrThrow({ where: { orderNumber } });
