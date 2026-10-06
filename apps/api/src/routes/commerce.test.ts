@@ -385,9 +385,20 @@ describe('commerce flow (Phase B)', () => {
     it('issues unique order numbers', async () => {
       const numbers = new Set<string>();
       const cookie = await checkoutCookieWithItems(variantId, 1, `phase-b-uniq-${stamp}@example.com`);
-      // First order consumed the merged cart; refill it through a second
-      // guest → merge cycle for the same customer.
-      const refill = await freshGuestCart();
+      for (const suffix of ['a', 'b']) {
+        if (suffix === 'b') {
+          // The first order consumed the user cart; refill it through a
+          // second guest → merge cycle for the same customer. The session
+          // part is paired with the fresh guest cookie explicitly: cookie
+          // lookup takes the first `veyra_guest_cart=` entry, so the retired
+          // guest session from the first cycle must not shadow the refill.
+          const sessionPart = cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('veyra_session=')) ?? cookie;
+          const refill = await freshGuestCart();
+          const added = await addItem(refill, variantId, 1);
+          expect(added.statusCode).toBe(200);
+          const merged = await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie: `${sessionPart}; ${refill}` } });
+          expect(merged.statusCode).toBe(200);
+        }
         const { response } = await placeSettled(cookie, `phase-b-uniq-${stamp}-${suffix}12345`);
         expect(response.statusCode).toBe(200);
         const orderNumber = ((response.json() as { data: { order: { orderNumber: string } } }).data.order.orderNumber);
@@ -400,10 +411,8 @@ describe('commerce flow (Phase B)', () => {
 
   describe('inventory concurrency', () => {
     it('lets only one buyer take the last unit; stock never goes negative', async () => {
-      const cookieA = await freshGuestCart();
-      const cookieB = await freshGuestCart();
-      await addItem(cookieA, lowStockVariantId, 1);
-      await addItem(cookieB, lowStockVariantId, 1);
+      const cookieA = await checkoutCookieWithItems(lowStockVariantId, 1, `phase-b-race-a-${stamp}@example.com`);
+      const cookieB = await checkoutCookieWithItems(lowStockVariantId, 1, `phase-b-race-b-${stamp}@example.com`);
       const [resultA, resultB] = await Promise.all([
         place(cookieA, `phase-b-race-a-${stamp}-123456`),
         place(cookieB, `phase-b-race-b-${stamp}-123456`),
