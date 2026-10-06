@@ -27,6 +27,9 @@ describe('unauthenticated access', () => {
     ['POST', '/api/v1/admin/inventory/any-variant/restock'],
     ['POST', '/api/v1/admin/refunds/any-id/process'],
     ['POST', '/api/v1/account/security/password'],
+    ['POST', '/api/v1/checkout'],
+    ['POST', '/api/v1/checkout/preview'],
+    ['GET', '/api/v1/checkout/saved-addresses'],
   ] as const;
 
   for (const [method, url] of guarded) {
@@ -48,10 +51,32 @@ describe('input validation precedes data access', () => {
     expect((response.json() as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');
   });
 
-  it('rejects checkout without an idempotency key', async () => {
+  it('rejects checkout without authentication before input validation', async () => {
     const response = await app.inject({ method: 'POST', url: '/api/v1/checkout', payload: {} });
-    expect(response.statusCode).toBe(400);
-    expect((response.json() as { error: { code: string } }).error.code).toBe('CHECKOUT_IDEMPOTENCY_REQUIRED');
+    expect(response.statusCode).toBe(401);
+    expect((response.json() as { error: { code: string } }).error.code).toBe('UNAUTHENTICATED');
+  });
+
+  it('rejects authenticated checkout without an idempotency key', async () => {
+    const email = `sec-idem-${Date.now().toString(36)}@example.com`;
+    const user = await prisma.user.create({ data: { email, passwordHash: await hashPassword('password123'), firstName: 'Sec', lastName: 'Idem' } });
+    const rawToken = crypto.randomUUID();
+    await prisma.session.create({ data: { userId: user.id, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 3600000) } });
+    try {
+      const response = await app.inject({ method: 'POST', url: '/api/v1/checkout', headers: { cookie: `veyra_session=${rawToken}` }, payload: {} });
+      expect(response.statusCode).toBe(400);
+      expect((response.json() as { error: { code: string } }).error.code).toBe('CHECKOUT_IDEMPOTENCY_REQUIRED');
+    } finally {
+      await prisma.session.deleteMany({ where: { userId: user.id } });
+      await prisma.userRole.deleteMany({ where: { userId: user.id } });
+      await prisma.user.deleteMany({ where: { id: user.id } });
+    }
+  });
+
+  it('rejects unauthenticated checkout preview', async () => {
+    const response = await app.inject({ method: 'POST', url: '/api/v1/checkout/preview', payload: {} });
+    expect(response.statusCode).toBe(401);
+    expect((response.json() as { error: { code: string } }).error.code).toBe('UNAUTHENTICATED');
   });
 
   it('rejects oversized analytics ranges', async () => {

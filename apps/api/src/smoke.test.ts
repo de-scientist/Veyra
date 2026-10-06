@@ -84,7 +84,7 @@ describe('production smoke journey', () => {
     expect((validation.json() as { data: { readyForCheckout: boolean } }).data.readyForCheckout).toBe(true);
   });
 
-  it('preview totals are authoritative and checkout creates the order', async () => {
+  it('preview totals are authoritative and authenticated checkout creates the order', async () => {
     const input = {
       customerName: 'Smoke Buyer',
       customerEmail: createdIds.customerEmail,
@@ -93,7 +93,17 @@ describe('production smoke journey', () => {
       shippingZoneCode: (await prisma.shippingZone.findFirstOrThrow({ where: { id: createdIds.zone } })).code,
       address: { line1: '1 Smoke Road', city: 'Nairobi', country: 'KE' },
     };
-    const preview = await app.inject({ method: 'POST', url: '/api/v1/checkout/preview', headers: { cookie: guestCookie }, payload: input });
+    // Guest cart merges into the customer cart on first authenticated read —
+    // the same journey a shopper takes through Cart → Checkout → Login.
+    const merged = await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie: `${customerCookie}; ${guestCookie}` } });
+    expect(merged.statusCode).toBe(200);
+    expect((merged.json() as { data: { itemCount: number } }).data.itemCount).toBe(1);
+    const authCookie = `${customerCookie}; ${guestCookie}`;
+
+    const denied = await app.inject({ method: 'POST', url: '/api/v1/checkout/preview', headers: { cookie: guestCookie }, payload: input });
+    expect(denied.statusCode).toBe(401);
+
+    const preview = await app.inject({ method: 'POST', url: '/api/v1/checkout/preview', headers: { cookie: authCookie }, payload: input });
     expect(preview.statusCode).toBe(200);
     const previewTotal = (preview.json() as { data: { grandTotal: number } }).data.grandTotal;
     expect(previewTotal).toBeGreaterThan(0);
@@ -101,7 +111,7 @@ describe('production smoke journey', () => {
     const placed = await app.inject({
       method: 'POST',
       url: '/api/v1/checkout',
-      headers: { cookie: guestCookie, 'idempotency-key': `smoke-${stamp}-key-123456` },
+      headers: { cookie: authCookie, 'idempotency-key': `smoke-${stamp}-key-123456` },
       payload: input,
     });
     expect(placed.statusCode).toBe(200);
@@ -120,7 +130,7 @@ describe('production smoke journey', () => {
     expect(inventory.quantityOnHand).toBe(10);
   });
 
-  it('guest confirmation token opens the order; strangers stay out', async () => {
+  it('confirmation token opens the order; strangers stay out', async () => {
     const open = await app.inject({ method: 'GET', url: `/api/v1/orders/${orderNumber}?token=${confirmationToken}` });
     expect(open.statusCode).toBe(200);
     const items = (open.json() as { data: { items: Array<{ sku: string; quantity: number; unitPrice: number }> } }).data.items;

@@ -42,6 +42,18 @@ function headerValue(request: FastifyRequest, name: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/**
+ * Authenticated customer id from `requireAuth`. The preHandler already
+ * rejected missing/expired/revoked sessions and inactive accounts, so a
+ * missing id here is a server invariant violation — never a guest fallback:
+ * checkout creation is authenticated-only (guests keep browse/cart).
+ */
+function getRequestUserId(request: FastifyRequest): string {
+  const user = (request as FastifyRequest & { user?: { id: string } }).user;
+  if (!user?.id) throw new HttpError(500, 'CHECKOUT_AUTH_UNAVAILABLE', 'Authentication was confirmed but the customer identity is missing.');
+  return user.id;
+}
+
 export async function checkoutRoutes(app: FastifyInstance) {
   app.get('/checkout/options', async () => {
     const methods = await prisma.shippingMethod.findMany({
@@ -57,19 +69,23 @@ export async function checkoutRoutes(app: FastifyInstance) {
     return { success: true, data: { methods, zones } };
   });
 
-  app.post('/checkout/preview', async (request, reply) => {
+  app.post('/checkout/preview', { preHandler: requireAuth }, async (request, reply) => {
+    getRequestUserId(request);
     const cart = await getOrCreateCart(request, reply);
     const input = asInput(request.body);
     return { success: true, data: await previewCheckout(cart.id, input) };
   });
 
-  app.post('/checkout', sensitiveLimit(), async (request, reply) => {
+  app.post('/checkout', { preHandler: requireAuth, config: sensitiveLimit().config }, async (request, reply) => {
     const key = headerValue(request, 'idempotency-key');
     if (!key || key.length < 16 || key.length > 200) throw new HttpError(400, 'CHECKOUT_IDEMPOTENCY_REQUIRED', 'A valid Idempotency-Key header is required.');
     const input = asInput(request.body);
     const cart = await getOrCreateCart(request, reply);
-    const userId = await getSessionUserId(request);
-    const scope = userId ? `user:${userId}` : `guest:${cart.sessionId ?? cart.id}`;
+    // Authenticated-only checkout: `requireAuth` ran first, so the order is
+    // always linked to the customer. The guest cart (if any) was merged into
+    // the user cart inside `getOrCreateCart` — no guest scope remains.
+    const userId = getRequestUserId(request);
+    const scope = `user:${userId}`;
     const result = await placeOrder(cart.id, input, scope, key, userId);
     return { success: true, data: { ...result, nextAction: 'PAYMENT_PENDING' } };
   });
