@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Suspense } from 'react';
 
 import { JBLogo } from '../../components/JBLogo';
 import { RegisterForm } from '../../components/AuthForms';
@@ -22,7 +23,9 @@ export default function RegisterPage() {
           <h1>Create your account</h1>
           <p className="muted-copy">Faster checkout, order tracking, and easy returns.</p>
         </div>
-        <RegisterForm />
+        <Suspense>
+          <RegisterForm />
+        </Suspense>
       </div>
     </main>
   );

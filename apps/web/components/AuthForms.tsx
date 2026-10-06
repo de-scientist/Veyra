@@ -97,10 +97,19 @@ export function LoginForm() {
 
 export function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { status } = useSession();
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', confirm: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const target = safeRedirectTarget(searchParams.get('redirect'));
+
+  // Same no-loop rule as login: an authenticated customer never stays on
+  // /register — they continue to the safe return path (e.g. /checkout).
+  useEffect(() => {
+    if (status === 'authenticated') router.replace(target);
+  }, [status, router, target]);
 
   function update(field: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -123,7 +132,7 @@ export function RegisterForm() {
         password: form.password,
       });
       notifySessionUpdated();
-      router.push('/account');
+      router.push(target);
       router.refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to create your account.');
@@ -131,6 +140,8 @@ export function RegisterForm() {
       setBusy(false);
     }
   }
+
+  if (status === 'authenticated') return <JBLoading context="account" />;
 
   return (
     <form className="auth-form" onSubmit={submit}>
