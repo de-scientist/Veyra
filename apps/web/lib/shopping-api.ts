@@ -320,8 +320,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'include',
     headers: { ...(hasBody ? { 'content-type': 'application/json' } : {}), ...init?.headers },
   });
-  const body = await response.json().catch(() => null) as { data?: T; error?: { message?: string } } | null;
-  if (!response.ok) throw new Error(body?.error?.message ?? 'Something went wrong. Please try again.');
+  const body = await response.json().catch(() => null) as { data?: T; error?: { message?: string; code?: string; details?: unknown } } | null;
+  if (!response.ok) {
+    const error = new Error(body?.error?.message ?? 'Something went wrong. Please try again.');
+    // Structured backend failures (e.g. UNAUTHENTICATED on guarded checkout
+    // routes) travel on `code` per the API error contract — preserved here so
+    // callers such as the checkout guard can react without parsing messages.
+    (error as Error & { code?: string }).code = body?.error?.code;
+    (error as Error & { details?: unknown }).details = body?.error?.details;
+    throw error;
+  }
   return body?.data as T;
 }
 

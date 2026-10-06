@@ -82,9 +82,9 @@ describe('fulfillment eligibility + audit (Phase D)', () => {
 
   async function createUnpaidOrder() {
     const cartResponse = await app.inject({ method: 'GET', url: '/api/v1/cart' });
-    const cookie = trackGuest(cookies(cartResponse));
-    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie }, payload: { variantId, quantity: 1 } });
-    const placed = await placeCheckout(cookie, courierMethodId);
+    const guest = trackGuest(cookies(cartResponse));
+    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie: guest }, payload: { variantId, quantity: 1 } });
+    const placed = await placeCheckout(await mergeGuestIntoCustomer(guest), courierMethodId);
     expect(placed.statusCode).toBe(200);
     const orderNumber = ((placed.json() as { data: { order: { orderNumber: string } } }).data.order.orderNumber);
     const order = await prisma.order.findUniqueOrThrow({ where: { orderNumber } });

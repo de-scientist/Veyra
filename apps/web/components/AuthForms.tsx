@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Route } from 'next';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { notifySessionUpdated } from '../lib/session';
+import { notifySessionUpdated, useSession } from '../lib/session';
+import { JBLoading } from './JBLoading';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -38,11 +39,19 @@ export function safeRedirectTarget(raw: string | null): Route {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { status } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const target = safeRedirectTarget(searchParams.get('redirect'));
+
+  // Already signed in: never strand an authenticated customer on /login
+  // (and never loop) — send them to the safe return path instead.
+  useEffect(() => {
+    if (status === 'authenticated') router.replace(target);
+  }, [status, router, target]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -53,7 +62,7 @@ export function LoginForm() {
       // The layout-level SessionProvider does not remount on client
       // navigation, so explicitly revalidate: navbar flips guest → avatar.
       notifySessionUpdated();
-      router.push(safeRedirectTarget(searchParams.get('redirect')));
+      router.push(target);
       router.refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to sign in.');
@@ -61,6 +70,8 @@ export function LoginForm() {
       setBusy(false);
     }
   }
+
+  if (status === 'authenticated') return <JBLoading context="account" />;
 
   return (
     <form className="auth-form" onSubmit={submit} noValidate={false}>

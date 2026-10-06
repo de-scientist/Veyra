@@ -1535,6 +1535,37 @@ a.visually-hidden:focus-visible {
 .product-card--skeleton { pointer-events: none; }
 .product-card__media-skeleton { aspect-ratio: 4 / 5; border-radius: 0; }
 
+/* ---------- Branded full-page loader (JBLoading) ---------- */
+.jb-loading { display: grid; justify-items: center; padding: 3rem 1rem; }
+.jb-loading__visual { display: grid; justify-items: center; gap: 0.65rem; text-align: center; }
+.jb-loading__logo { animation: jb-loader-pulse 1.6s ease-in-out infinite; line-height: 0; }
+.jb-loading__spinner {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 3px solid var(--jb-border-strong); border-top-color: var(--jb-primary);
+  animation: jb-loading-spin 0.8s linear infinite;
+}
+@keyframes jb-loading-spin { to { transform: rotate(360deg); } }
+.jb-loading__brand { margin: 0.25rem 0 0; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.01em; }
+.jb-loading__tagline {
+  margin: 0; color: var(--jb-text-muted); font-weight: 700;
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em;
+}
+.jb-loading__percent {
+  margin: 0.25rem 0 0; font-weight: 800; font-size: 1.35rem;
+  color: var(--jb-primary); font-variant-numeric: tabular-nums;
+}
+.jb-loading__bar {
+  width: min(220px, 60%); height: 4px; border-radius: var(--jb-radius-pill);
+  background: var(--jb-surface-muted); border: 1px solid var(--jb-border); overflow: hidden;
+}
+.jb-loading__bar > span { display: block; height: 100%; background: var(--jb-primary); border-radius: inherit; transition: width 0.12s linear; }
+.jb-loading__message { margin: 0.25rem 0 0; color: var(--jb-text-muted); font-weight: 600; font-size: 0.95rem; }
+
+@media (max-width: 640px) {
+  .jb-loading { padding: 2rem 0.75rem; }
+  .jb-loading__percent { font-size: 1.2rem; }
+}
+
 /* ---------- Commerce upgrade: alerts ---------- */
 .jb-alert {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;

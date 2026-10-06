@@ -1,21 +1,40 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { Route } from 'next';
 
 import { buildCheckoutInput, getCart, getCheckoutOptions, getSavedAddresses, notifyCartUpdated, placeCheckout, previewCheckout, type Cart, type CheckoutInput, type CheckoutOptions, type CheckoutPreview } from '../lib/shopping-api';
+import { useSession } from '../lib/session';
 import { JB_CONTACT_PHONE_DISPLAY, JB_CONTACT_PHONE_TEL, JB_DELIVERY_MESSAGE } from '../lib/business-contact';
 import { JBIcon } from './JBIcons';
-import { JBAlert, JBButtonLoader, JBPageLoader } from './JBLoading';
+import { JBAlert, JBButtonLoader, JBLoading } from './JBLoading';
 import { PriceDisplay } from './PriceDisplay';
 
 const emptyAddress = { line1: '', city: '', state: '', postalCode: '', country: 'KE' };
+
+/** Minimum branded-loader dwell so auth resolution never flashes past. */
+const CHECKOUT_GUARD_MIN_MS = 350;
+
+function checkoutLoginTarget(): Route {
+  return `/login?redirect=${encodeURIComponent('/checkout')}` as Route;
+}
+
+function isUnauthenticated(reason: unknown) {
+  return typeof reason === 'object' && reason !== null && (reason as { code?: string }).code === 'UNAUTHENTICATED';
+}
 
 type PayChoice = 'mpesa' | 'manual';
 
 export function CheckoutPageClient() {
   const router = useRouter();
+  // Single authoritative session (SessionProvider owns `/auth/me`): the
+  // checkout form never renders until authentication is confirmed, and no
+  // order API is touched before that — guests are sent to login instead.
+  const { status } = useSession();
+  const guardStartRef = useRef(0);
+  if (guardStartRef.current === 0) guardStartRef.current = Date.now();
   const [cart, setCart] = useState<Cart | null>(null);
   const [options, setOptions] = useState<CheckoutOptions | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<Array<{ id: string; label: string | null; line1: string; line2: string | null; city: string; state: string | null; postalCode: string | null; country: string }>>([]);
@@ -28,13 +47,41 @@ export function CheckoutPageClient() {
   const [form, setForm] = useState({ customerName: '', customerEmail: '', customerPhone: '', deliveryMethodId: '', shippingZoneCode: '', addressId: '', ...emptyAddress, notes: '', confirmPriceChanges: false });
 
   useEffect(() => {
+    // Authentication unknown: keep the branded loader up, never redirect on
+    // a session that simply hasn't resolved yet (prevents redirect flicker).
+    if (status === 'loading') return;
+    if (status === 'guest') {
+      // `replace` keeps Cart → Checkout → Login history loop-free: after a
+      // successful login the customer lands on checkout, and Back returns to
+      // the cart — never to a stale checkout guard.
+      const wait = Math.max(0, CHECKOUT_GUARD_MIN_MS - (Date.now() - guardStartRef.current));
+      const timer = window.setTimeout(() => router.replace(checkoutLoginTarget()), wait);
+      return () => window.clearTimeout(timer);
+    }
+    let cancelled = false;
+    // Authenticated: the first cart read also merges any guest cart into the
+    // user cart (backend `getOrCreateCart`) — nothing the shopper added is
+    // lost by signing in at checkout time.
     Promise.all([getCart(), getCheckoutOptions()]).then(([loadedCart, loadedOptions]) => {
+      if (cancelled) return;
       setCart(loadedCart);
       setOptions(loadedOptions);
       setForm((current) => ({ ...current, deliveryMethodId: loadedOptions.methods[0]?.id ?? '', shippingZoneCode: loadedOptions.zones[0]?.code ?? '' }));
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : 'Unable to load checkout.'));
-    getSavedAddresses().then(setSavedAddresses).catch(() => undefined);
-  }, []);
+    }).catch((reason) => {
+      if (cancelled) return;
+      // Session revoked/expired mid-checkout: send the customer through login
+      // again instead of stranding them on a failing form.
+      if (isUnauthenticated(reason)) {
+        router.replace(checkoutLoginTarget());
+        return;
+      }
+      setError(reason instanceof Error ? reason.message : 'Unable to load checkout.');
+    });
+    getSavedAddresses().then((addresses) => {
+      if (!cancelled) setSavedAddresses(addresses);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [status, router]);
 
   const selectedMethod = options?.methods.find((method) => method.id === form.deliveryMethodId);
   const needsAddress = selectedMethod?.type !== 'PICKUP';
@@ -59,7 +106,15 @@ export function CheckoutPageClient() {
     }
     setBusy(true);
     setError('');
-    try { setPreview(await previewCheckout(input())); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to calculate checkout totals.'); } finally { setBusy(false); }
+    try {
+      setPreview(await previewCheckout(input()));
+    } catch (reason) {
+      if (isUnauthenticated(reason)) {
+        router.replace(checkoutLoginTarget());
+        return;
+      }
+      setError(reason instanceof Error ? reason.message : 'Unable to calculate checkout totals.');
+    } finally { setBusy(false); }
   }
 
   async function placeOrder() {
@@ -72,11 +127,20 @@ export function CheckoutPageClient() {
       const token = result.confirmationToken ? `?token=${encodeURIComponent(result.confirmationToken)}` : '';
       const pay = `${token ? '&' : '?'}pay=${payChoice}`;
       router.push(`/order-confirmation/${result.order.orderNumber}${token}${pay}` as never);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to place the order. Please review your cart.'); } finally { setPlacing(false); }
+    } catch (reason) {
+      if (isUnauthenticated(reason)) {
+        router.replace(checkoutLoginTarget());
+        return;
+      }
+      setError(reason instanceof Error ? reason.message : 'Unable to place the order. Please review your cart.');
+    } finally { setPlacing(false); }
   }
 
+  // Auth gate first: no checkout form, no cart fetch, no order call is ever
+  // exposed before the session is confirmed authenticated.
+  if (status !== 'authenticated') return <JBLoading context="checkout" />;
   if (error && !cart) return <div className="empty-state"><h1>Checkout is unavailable</h1><p>{error}</p><Link className="button" href="/cart">Return to cart</Link></div>;
-  if (!cart || !options) return <JBPageLoader message="Loading checkout…" />;
+  if (!cart || !options) return <JBLoading context="checkout" />;
   if (!cart.items.length) return <div className="empty-state"><h1>Your cart is empty</h1><p>Add something from the collection before checking out.</p><Link className="button" href="/shop">Shop now</Link></div>;
 
   const summaryItems = preview?.items ?? cart.items.map((item) => ({ id: item.id, productName: item.product.name, variant: item.variant.name, sku: item.variant.sku, variantId: item.variantId, quantity: item.quantity, unitPrice: item.currentPrice, subtotal: item.currentPrice * item.quantity }));

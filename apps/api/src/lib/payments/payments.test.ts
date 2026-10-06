@@ -23,6 +23,7 @@ describe('payments + M-Pesa (Phase C)', () => {
   let variantId = '';
   let methodId = '';
   let zoneCode = '';
+  let buyerCookie = '';
   let otherCookie = '';
   const created = { users: [] as string[], orders: [] as string[], guestSessions: [] as string[] };
   const ids = { category: '', product: '', zone: '', method: '' };
@@ -88,14 +89,18 @@ describe('payments + M-Pesa (Phase C)', () => {
     };
   }
 
-  /** Fresh guest order (PENDING/UNPAID) with confirmation token; session tracked for scoped cleanup. */
+  /** Fresh customer-owned order (PENDING/UNPAID) with confirmation token; session tracked for scoped cleanup. */
   async function createOrder(quantity = 1) {
     const cartResponse = await app.inject({ method: 'GET', url: '/api/v1/cart' });
-    const cookie = cookies(cartResponse);
-    const sessionId = cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('veyra_guest_cart='))?.slice('veyra_guest_cart='.length);
+    const guest = cookies(cartResponse);
+    const sessionId = guest.split(';').map((part) => part.trim()).find((part) => part.startsWith('veyra_guest_cart='))?.slice('veyra_guest_cart='.length);
     if (sessionId) created.guestSessions.push(decodeURIComponent(sessionId));
     const variant = await prisma.productVariant.findUniqueOrThrow({ where: { id: variantId } });
-    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie }, payload: { variantId, quantity } });
+    await app.inject({ method: 'POST', url: '/api/v1/cart/items', headers: { cookie: guest }, payload: { variantId, quantity } });
+    // Guest cart merges into the buyer cart (authenticated checkout journey).
+    const merged = await app.inject({ method: 'GET', url: '/api/v1/cart', headers: { cookie: `${buyerCookie}; ${guest}` } });
+    expect(merged.statusCode).toBe(200);
+    const cookie = `${buyerCookie}; ${guest}`;
     // Contractual retry for transient write-race losers under parallel-suite load.
     let placed;
     for (let attempt = 0; ; attempt += 1) {
@@ -148,6 +153,12 @@ describe('payments + M-Pesa (Phase C)', () => {
     await prisma.shippingRate.create({ data: { zoneId: zone.id, methodId: method.id, basePrice: 0, minOrderValue: 0, status: 'ACTIVE' } });
 
     const role = await prisma.role.upsert({ where: { slug: 'customer' }, update: {}, create: { name: 'Customer', slug: 'customer' } });
+    const buyer = await prisma.user.create({ data: { email: `phase-c-buyer-${stamp}@example.com`, passwordHash: await hashPassword('password123'), firstName: 'Phase', lastName: 'Buyer' } });
+    created.users.push(buyer.id);
+    await prisma.userRole.create({ data: { userId: buyer.id, roleId: role.id } });
+    const buyerToken = crypto.randomUUID();
+    await prisma.session.create({ data: { userId: buyer.id, tokenHash: hashToken(buyerToken), expiresAt: new Date(Date.now() + 3600000) } });
+    buyerCookie = `veyra_session=${buyerToken}`;
     const other = await prisma.user.create({ data: { email: `phase-c-other-${stamp}@example.com`, passwordHash: await hashPassword('password123'), firstName: 'Phase', lastName: 'Other' } });
     created.users.push(other.id);
     await prisma.userRole.create({ data: { userId: other.id, roleId: role.id } });

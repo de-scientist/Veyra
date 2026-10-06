@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { JBLogo } from './JBLogo';
 
 /**
@@ -9,16 +11,124 @@ import { JBLogo } from './JBLogo';
  * disabled under `prefers-reduced-motion` in globals.css.
  */
 
-/** Branded page loader — JB mark with a subtle pulse + loading text. */
-export function JBPageLoader({ message = 'Loading…' }: { message?: string }) {
+/**
+ * Canonical JB Mercantile tagline, matching the site footer
+ * (`site-footer__tagline`). Never invent a second slogan here.
+ */
+export const JB_LOADING_TAGLINE = 'Fashion • Footwear • Kitchen & Home';
+
+/** Full-page loading contexts with shopper-friendly status messages. */
+export type JBLoadingContext =
+  | 'home'
+  | 'shop'
+  | 'product'
+  | 'cart'
+  | 'checkout'
+  | 'account'
+  | 'orders'
+  | 'wishlist'
+  | 'admin'
+  | 'default';
+
+export const JB_LOADING_MESSAGES: Record<JBLoadingContext, string> = {
+  home: 'Your store is loading...',
+  shop: 'Our products are loading...',
+  product: 'Product details are loading...',
+  cart: 'Your cart is loading...',
+  checkout: 'Your checkout is loading...',
+  account: 'Your account is loading...',
+  orders: 'Your orders are loading...',
+  wishlist: 'Your wishlist is loading...',
+  admin: 'Your dashboard is loading...',
+  default: 'Loading...',
+};
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(query.matches);
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return reduced;
+}
+
+/**
+ * Visual progress indicator (NOT real network progress). Eases out quickly
+ * at first, then creeps toward — but never reaches — 99% while `done` is
+ * false. Flips to 100 only when the caller confirms readiness. Timers are
+ * cleaned up on unmount; no state updates survive it.
+ */
+export function useJBVisualProgress(done: boolean) {
+  const [progress, setProgress] = useState(3);
+  useEffect(() => {
+    if (done) {
+      setProgress(100);
+      return;
+    }
+    const id = window.setInterval(() => {
+      setProgress((previous) => {
+        if (previous >= 99) return 99;
+        const remaining = 99 - previous;
+        return Math.min(99, previous + Math.max(1, Math.ceil(remaining / 12)));
+      });
+    }, 90);
+    return () => window.clearInterval(id);
+  }, [done]);
+  return progress;
+}
+
+/**
+ * Branded full-page loader: JB logo, spinner, brand name, canonical tagline,
+ * visual percentage + progress bar, and a contextual status message.
+ * Accessibility: a single static `role="status"` announcement carries the
+ * message; the ticking percentage is `aria-hidden` so screen readers never
+ * hear "1%, 2%, 3%…". Under reduced motion the percentage/bar are omitted in
+ * favour of the static message (CSS animations are already neutralised in
+ * globals.css).
+ */
+export function JBLoading({
+  context = 'default',
+  message,
+  done = false,
+}: {
+  context?: JBLoadingContext;
+  message?: string;
+  /** Set true when the page/data transition is ready to complete. */
+  done?: boolean;
+}) {
+  const resolved = message ?? JB_LOADING_MESSAGES[context];
+  const progress = useJBVisualProgress(done);
+  const reducedMotion = usePrefersReducedMotion();
   return (
-    <div className="jb-loader" role="status" aria-live="polite" aria-label={message}>
-      <span className="jb-loader__mark" aria-hidden="true">
-        <JBLogo variant="compact" alt="" height={36} />
-      </span>
-      <span className="jb-loader__text">{message}</span>
+    <div className="jb-loading">
+      <span className="visually-hidden" role="status">{resolved}</span>
+      <div className="jb-loading__visual" aria-hidden="true">
+        <span className="jb-loading__logo">
+          <JBLogo variant="compact" alt="" height={44} />
+        </span>
+        <span className="jb-loading__spinner" />
+        <p className="jb-loading__brand">JB Mercantile</p>
+        <p className="jb-loading__tagline">{JB_LOADING_TAGLINE}</p>
+        {reducedMotion ? null : (
+          <>
+            <p className="jb-loading__percent">{progress}%</p>
+            <span className="jb-loading__bar">
+              <span style={{ width: `${progress}%` }} />
+            </span>
+          </>
+        )}
+        <p className="jb-loading__message">{resolved}</p>
+      </div>
     </div>
   );
+}
+
+/** Branded page loader — JB mark with a subtle pulse + loading text. */
+export function JBPageLoader({ message = 'Loading…' }: { message?: string }) {
+  return <JBLoading message={message} />;
 }
 
 /** Inline button progress label — callers set `aria-busy` + `disabled`. */
