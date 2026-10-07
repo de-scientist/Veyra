@@ -19,9 +19,10 @@ export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', slug: '', description: '', parentId: '' });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', parentId: '', code: '', skuTemplate: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -38,8 +39,9 @@ export default function AdminCategoriesPage() {
   }, [load]);
 
   const resetForm = () => {
-    setForm({ name: '', slug: '', description: '', parentId: '' });
+    setForm({ name: '', slug: '', description: '', parentId: '', code: '', skuTemplate: '' });
     setEditingId(null);
+    setCodeError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,6 +50,12 @@ export default function AdminCategoriesPage() {
       setError('Category name must be at least 2 characters.');
       return;
     }
+    const code = form.code.trim().toUpperCase();
+    if (code && !/^[A-Z0-9]{2,5}$/.test(code)) {
+      setCodeError('Code must be 2–5 letters/digits (A–Z, 0–9), e.g. TSH.');
+      return;
+    }
+    setCodeError(null);
     setBusy(true);
     setError(null);
     try {
@@ -56,6 +64,8 @@ export default function AdminCategoriesPage() {
           name: form.name.trim(),
           description: form.description.trim() || undefined,
           parentId: form.parentId || null,
+          ...(code ? { code } : {}),
+          ...(form.skuTemplate.trim() ? { skuTemplate: form.skuTemplate.trim() } : {}),
         });
         notify('success', 'Category updated.');
       } else {
@@ -64,6 +74,8 @@ export default function AdminCategoriesPage() {
           slug: form.slug.trim() || undefined,
           description: form.description.trim() || undefined,
           parentId: form.parentId || null,
+          ...(code ? { code } : {}),
+          ...(form.skuTemplate.trim() ? { skuTemplate: form.skuTemplate.trim() } : {}),
         });
         notify('success', 'Category created.');
       }
@@ -78,7 +90,8 @@ export default function AdminCategoriesPage() {
 
   const handleEdit = (category: AdminCategory) => {
     setEditingId(category.id);
-    setForm({ name: category.name, slug: category.slug, description: category.description ?? '', parentId: category.parentId ?? '' });
+    setCodeError(null);
+    setForm({ name: category.name, slug: category.slug, description: category.description ?? '', parentId: category.parentId ?? '', code: category.code ?? '', skuTemplate: category.skuTemplate ?? '' });
   };
 
   const handleArchive = async (category: AdminCategory) => {
@@ -143,7 +156,33 @@ export default function AdminCategoriesPage() {
               <span>Description</span>
               <textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} maxLength={2000} rows={2} />
             </label>
+            <label>
+              <span>SKU code (2–5 letters/digits)</span>
+              <input
+                type="text"
+                value={form.code}
+                onChange={(e) => setForm((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
+                maxLength={5}
+                placeholder="e.g. TSH"
+                aria-describedby="category-code-help"
+              />
+            </label>
+            <label>
+              <span>SKU template (optional)</span>
+              <input
+                type="text"
+                value={form.skuTemplate}
+                onChange={(e) => setForm((p) => ({ ...p, skuTemplate: e.target.value }))}
+                maxLength={120}
+                placeholder="e.g. {BRAND}-{CATEGORY}-{STYLE}"
+              />
+            </label>
           </div>
+          <p id="category-code-help" className="muted-copy">
+            The code is used when generating variant SKUs. Once set it cannot be removed from here —
+            changing it does not rewrite existing SKUs. Leave blank if SKUs are managed by support.
+          </p>
+          {codeError && <div className="inline-message" role="alert">{codeError}</div>}
           <div className="form-actions">
             <button type="submit" className="button" disabled={busy}>{busy ? 'Saving…' : editingId ? 'Save changes' : 'Create category'}</button>
             {editingId ? <button type="button" className="text-button" onClick={resetForm}>Cancel</button> : null}
@@ -159,13 +198,14 @@ export default function AdminCategoriesPage() {
           <div className="admin-table-wrapper">
             <table className="admin-table">
               <thead>
-                <tr><th>Name</th><th>Slug</th><th>Parent</th><th>Products</th><th>Actions</th></tr>
+                <tr><th>Name</th><th>Slug</th><th>Code</th><th>Parent</th><th>Products</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {categories.map((category) => (
                   <tr key={category.id}>
                     <td>{category.name}</td>
                     <td className="muted-copy">{category.slug}</td>
+                    <td className="muted-copy">{category.code ?? '—'}</td>
                     <td>{categories.find((c) => c.id === category.parentId)?.name ?? '—'}</td>
                     <td>{category._count.products}</td>
                     <td>

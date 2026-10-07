@@ -264,17 +264,17 @@ export function deleteAdminProductImage(productId: string, imageId: string) {
 
 export type AdminCategory = { id: string; name: string; slug: string; description: string | null; parentId: string | null; status: string; code: string | null; skuTemplate: string | null; _count: { products: number } };
 export type AdminCollection = { id: string; name: string; slug: string; description: string | null; status: string; _count: { products: number } };
-export type AdminAttribute = { id: string; name: string; slug: string; type: string; values: Array<{ id: string; value: string }> };
+export type AdminAttribute = { id: string; name: string; slug: string; type: string; values: Array<{ id: string; value: string; code?: string | null }> };
 
 export function getAdminCategories() {
   return request<AdminCategory[]>('/admin/categories');
 }
 
-export function createAdminCategory(input: { name: string; slug?: string; description?: string; parentId?: string | null }) {
+export function createAdminCategory(input: { name: string; slug?: string; description?: string; parentId?: string | null; code?: string; skuTemplate?: string }) {
   return request<AdminCategory>('/admin/categories', { method: 'POST', body: JSON.stringify(input) });
 }
 
-export function updateAdminCategory(id: string, input: { name?: string; slug?: string; description?: string; parentId?: string | null }) {
+export function updateAdminCategory(id: string, input: { name?: string; slug?: string; description?: string; parentId?: string | null; code?: string; skuTemplate?: string }) {
   return request<AdminCategory>(`/admin/categories/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
@@ -331,8 +331,8 @@ export function createAdminAttribute(input: { name: string; type?: string }) {
   return request<AdminAttribute>('/admin/attributes', { method: 'POST', body: JSON.stringify(input) });
 }
 
-export function createAdminAttributeValue(attributeId: string, value: string) {
-  return request<{ id: string }>(`/admin/attributes/${attributeId}/values`, { method: 'POST', body: JSON.stringify({ value }) });
+export function createAdminAttributeValue(attributeId: string, value: string, code?: string) {
+  return request<{ id: string }>(`/admin/attributes/${attributeId}/values`, { method: 'POST', body: JSON.stringify(code ? { value, code } : { value }) });
 }
 
 export function updateAdminAttribute(id: string, input: { name?: string; type?: string }) {

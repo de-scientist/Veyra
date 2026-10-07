@@ -24,6 +24,7 @@ export default function AdminAttributesPage() {
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [valueDrafts, setValueDrafts] = useState<Record<string, string>>({});
+  const [codeDrafts, setCodeDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -69,9 +70,15 @@ export default function AdminAttributesPage() {
   const handleAddValue = async (attributeId: string) => {
     const value = (valueDrafts[attributeId] ?? '').trim();
     if (!value) return;
+    const code = (codeDrafts[attributeId] ?? '').trim().toUpperCase();
+    if (code && !/^[A-Z0-9]{1,6}$/.test(code)) {
+      setError('Value code must be 1–6 letters/digits (A–Z, 0–9), e.g. BLK.');
+      return;
+    }
     try {
-      await createAdminAttributeValue(attributeId, value);
+      await createAdminAttributeValue(attributeId, value, code || undefined);
       setValueDrafts((prev) => ({ ...prev, [attributeId]: '' }));
+      setCodeDrafts((prev) => ({ ...prev, [attributeId]: '' }));
       notify('success', 'Value added.');
       await load();
     } catch (e) {
@@ -160,11 +167,12 @@ export default function AdminAttributesPage() {
                 <p>
                   <strong>{attribute.name}</strong> <span className="muted-copy">{attribute.slug} · {attribute.type}</span>
                 </p>
+                <p className="muted-copy">Attribute type is system-managed and display-only. Value codes (short A–Z/0–9 segments) are used when generating variant SKUs.</p>
                 {attribute.values.length > 0 ? (
                   <ul className="chip-list" aria-label={`${attribute.name} values`}>
                     {attribute.values.map((value) => (
                       <li key={value.id} className="chip">
-                        {value.value}
+                        {value.value}{value.code ? ` (${value.code})` : ''}
                         <button
                           type="button"
                           className="chip__remove"
@@ -196,6 +204,16 @@ export default function AdminAttributesPage() {
                       placeholder="New value…"
                       maxLength={120}
                       aria-label={`New value for ${attribute.name}`}
+                    />
+                    <input
+                      type="text"
+                      value={codeDrafts[attribute.id] ?? ''}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setCodeDrafts((prev) => ({ ...prev, [attribute.id]: e.target.value.toUpperCase() }))
+                      }
+                      placeholder="Code (e.g. BLK)"
+                      maxLength={6}
+                      aria-label={`SKU code for new ${attribute.name} value`}
                     />
                     <button type="submit" className="button button--secondary button--small">Add value</button>
                   </form>

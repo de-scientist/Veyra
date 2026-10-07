@@ -7,6 +7,7 @@ import { getAdminAttributes, getAdminCategories, getAdminCollections, getAdminPr
 import { AdminStatusBadge } from '../../../../components/admin';
 import { JBIcon } from '../../../../components/JBIcons';
 import { ProductMediaManager } from '../../../../components/ProductMediaManager';
+import { publishChecklist } from '../../../../lib/product-publish';
 import { useToast } from '../../../../components/Toast';
 import { VariantManager } from '../../../../components/VariantManager';
 
@@ -83,7 +84,14 @@ export default function AdminProductDetailPage({ params }: PageProps) {
       setMessage('Product updated');
       await load(productId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Update failed');
+      const message = e instanceof Error ? e.message : 'Update failed';
+      // The backend enforces publish readiness on any transition to ACTIVE;
+      // surface its checklist so staff know what is still missing.
+      setError(
+        /PRODUCT_NOT_READY|NOT_PUBLISHABLE|readiness/i.test(message)
+          ? `This product cannot be published yet: ${message} Complete the missing items (category, variant with price, primary image) and try again.`
+          : message,
+      );
     }
   };
 
@@ -124,6 +132,17 @@ export default function AdminProductDetailPage({ params }: PageProps) {
   if (loading) return <div className="empty-state"><p>Loading product…</p></div>;
   if (error && !product) return <div className="empty-state"><h1>Product not found</h1><p>{error}</p><Link href="/admin/products" className="button">Back to Products</Link></div>;
   if (!product) return <div className="empty-state"><h1>Product not found</h1></div>;
+
+  const readiness = publishChecklist({
+    name: form.name,
+    slug: product.slug,
+    categoryId: form.categoryId,
+    description: form.description,
+    variantCount: product.variants.length,
+    imageCount: product.images.length,
+  });
+  const switchingToActive = form.status === 'ACTIVE' && product.status !== 'ACTIVE';
+  const readinessBlockers = readiness.filter((item) => !item.ok);
 
   return (
     <div className="account-page product-workspace">
@@ -178,6 +197,12 @@ export default function AdminProductDetailPage({ params }: PageProps) {
               <div className="form-actions">
                 <button type="submit" className="button"><JBIcon name="check" size={16} /> Save Changes</button>
               </div>
+              {switchingToActive && readinessBlockers.length > 0 ? (
+                <p className="inline-message" role="note">
+                  Publishing checklist incomplete: {readinessBlockers.map((b) => b.label).join('; ')}. The server will
+                  reject the change until these are complete.
+                </p>
+              ) : null}
             </form>
           </section>
 

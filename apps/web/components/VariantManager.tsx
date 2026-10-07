@@ -57,7 +57,7 @@ function explainPreviewFailure(error: unknown): string {
   const message = error instanceof Error ? error.message : 'SKU preview failed.';
   const code = (error as Error & { code?: string })?.code;
   if (code === 'MISSING_CATEGORY_CODE') {
-    return `${message} Fix: give the category a dictionary code (Categories → edit), or move the product to a coded category.`;
+    return `${message} Fix: give the category a dictionary code (Catalogue → Categories → Edit, SKU code field), or move the product to a coded category.`;
   }
   if (code === 'MISSING_SKU_COMPONENT') {
     return `${message} Fix: enter a brand code above or select a brand.`;
@@ -272,7 +272,7 @@ export function VariantManager({
   const previewBlockedReason = !categoryId
     ? null
     : !categoryCoded
-      ? 'This category has no dictionary code, so SKUs cannot be generated yet. Give the category a code (Categories → edit) or move the product to a coded category.'
+      ? 'This category has no dictionary code, so SKUs cannot be generated yet. Give the category a code under Catalogue → Categories → Edit (SKU code field), or move the product to a coded category.'
       : !brandReady
         ? 'Enter a brand code (or select a brand) above to preview server-generated SKUs.'
         : dimensionMissingValues

@@ -40,9 +40,11 @@ export function slugify(value: string): string {
 
 export type PublishChecklistItem = { key: string; label: string; ok: boolean; hint?: string };
 
-/** Client-side publish gate (mirrors the checklist UX, not the backend:
- *  PATCH status→ACTIVE is not readiness-validated server-side, so the UI
- *  refuses to publish incomplete products on the staff's behalf). */
+/** Client-side publish gate (early UX feedback only — the backend is
+ *  authoritative: PATCH status→ACTIVE runs checkPublishReadiness
+ *  server-side and rejects incomplete products with PRODUCT_NOT_READY. The
+ *  UI refuses to publish incomplete products on the staff's behalf so the
+ *  server rejection is rarely reached). */
 export function canPublishNow(variantCount: number, imageCount: number): boolean {
   return variantCount > 0 && imageCount > 0;
 }

@@ -216,6 +216,30 @@ describe('catalogue admin CRUD', () => {
     expect(badCode.statusCode).toBe(400);
   });
 
+  it('sets category codes via PATCH without rewriting existing SKUs', async () => {
+    const created = await call('POST', '/api/v1/admin/categories', emails.staff, {
+      name: `Coded ${stamp}`, code: 'CD1',
+    });
+    expect(created.statusCode).toBe(200);
+    const category = (created.json() as { data: { id: string; code: string } }).data;
+    expect(category.code).toBe('CD1');
+    const product = await prisma.product.create({
+      data: { name: `Coded Prod ${stamp}`, slug: `crud-${stamp}-coded`, description: 'Category code integrity fixture.', status: 'DRAFT', categoryId: category.id, styleCode: 'CD1' },
+    });
+    const variant = await prisma.productVariant.create({ data: { productId: product.id, sku: `CD1-FROZEN-${stamp}`.toUpperCase().slice(0, 32), priceOverride: 10 } });
+    try {
+      const patched = await call('PATCH', `/api/v1/admin/categories/${category.id}`, emails.staff, { code: 'CD2' });
+      expect(patched.statusCode).toBe(200);
+      expect((patched.json() as { data: { code: string } }).data.code).toBe('CD2');
+      const stored = await prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } });
+      expect(stored.sku).toBe(`CD1-FROZEN-${stamp}`.toUpperCase().slice(0, 32));
+    } finally {
+      await prisma.productVariant.delete({ where: { id: variant.id } });
+      await prisma.product.delete({ where: { id: product.id } });
+      await prisma.category.delete({ where: { id: category.id } });
+    }
+  });
+
   it('serves admin product detail for drafts', async () => {
     const product = await prisma.product.create({
       data: { name: `Detail ${stamp}`, slug: `crud-${stamp}-detail`, description: 'Admin detail fixture.', status: 'DRAFT' },

@@ -167,6 +167,41 @@ describe('manual POST /variants attribute integrity', () => {
     expect(stored).toBe(2);
   });
 
+  it('creates a variant on an imageless draft (media is publish-time only)', async () => {
+    // Reconciliation fix: manual variant creation gates on variant-level
+    // readiness only. Media (NO_IMAGES/NO_PRIMARY_IMAGE) must not block the
+    // first variant — it is enforced at publish (PATCH status→ACTIVE).
+    const bare = await prisma.product.create({
+      data: {
+        name: `Vm Bare ${stamp}`,
+        slug: `vm-bare-${stamp}`,
+        description: 'Imageless draft fixture for variant-creation media rule.',
+        status: 'DRAFT',
+        categoryId,
+        styleCode: 'VM1',
+      },
+    });
+    try {
+      expect(await prisma.productImage.count({ where: { productId: bare.id } })).toBe(0);
+      const sku = `VM-${stamp}-BARE`.toUpperCase();
+      const response = await call('POST', `/api/v1/admin/products/${bare.id}/variants`, emails.staff, {
+        sku,
+        price: 1200,
+        attributeValues: [{ attributeValueId: blackValueId }],
+      });
+      expect(response.statusCode).toBe(200);
+      expect(await prisma.productVariant.findUnique({ where: { sku } })).toBeTruthy();
+    } finally {
+      const ids = (await prisma.productVariant.findMany({ where: { productId: bare.id }, select: { id: true } })).map((row) => row.id);
+      if (ids.length) {
+        await prisma.inventory.deleteMany({ where: { variantId: { in: ids } } });
+        await prisma.variantAttributeValue.deleteMany({ where: { variantId: { in: ids } } });
+        await prisma.productVariant.deleteMany({ where: { id: { in: ids } } });
+      }
+      await prisma.product.delete({ where: { id: bare.id } });
+    }
+  });
+
   it('rejects missing mappings without creating a variant', async () => {
     const sku = `VM-${stamp}-EMPTY`.toUpperCase();
     const before = await prisma.productVariant.count({ where: { productId } });

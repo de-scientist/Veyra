@@ -525,10 +525,10 @@ export async function catalogueRoutes(app: FastifyInstance) {
     if (variantOnlyErrors.length > 0) {
       throw new HttpError(400, 'PRODUCT_NOT_PUBLISHABLE', variantOnlyErrors.join('; '));
     }
-
-    if (!validation.ok) {
-      throw new HttpError(400, 'PRODUCT_NOT_PUBLISHABLE', validation.errors.join('; '));
-    }
+    // Intentional: media errors are ignored here. Media is a publish-time
+    // requirement (checkPublishReadiness on PATCH status→ACTIVE), not a
+    // variant-creation requirement — the first variant must be creatable on
+    // an imageless draft.
 
     try {
       // Transaction safety: variant + attribute mappings + zeroed inventory +
