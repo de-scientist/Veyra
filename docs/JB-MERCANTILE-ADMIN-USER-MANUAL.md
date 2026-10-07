@@ -5,10 +5,10 @@
 | Item | Detail |
 |---|---|
 | Title | JB Mercantile Admin Dashboard User Manual |
-| Version | 1.0 |
-| Date | 2026-10-06 |
+| Version | 1.1 |
+| Date | 2026-10-07 |
 | Reader | Non-technical administrators (basic computer skills assumed) |
-| Basis | Source-code audit of the JB Mercantile repository (no live browser testing was available, so all navigation is described in words; no screenshots are included and none are fabricated) |
+| Basis | Source-code reconciliation of the JB Mercantile repository (no live browser testing was available, so all navigation is described in words; no screenshots are included and none are fabricated). Reconciles v1.0 against the implementation; supersedes the audit in `JB-MERCANTILE-ADMIN-MANUAL-AUDIT.md` where they differ (see `JB-MERCANTILE-MANUAL-IMPLEMENTATION-RECONCILIATION.md`; open business questions live in `BUSINESS-DECISIONS.md`) |
 | Scope | Admin dashboard operation with emphasis on creating, publishing, editing, and managing products |
 
 > **How to use this manual.** Chapters 2–7 get you signed in and oriented.
@@ -441,24 +441,42 @@ If the category you need does not exist:
 1. Go to **Catalogue → Categories** (heading **"Categories"**, *"Department
    hierarchy for discovery and navigation"*).
 2. Fill **"Name *"** (at least 2 characters), optional **"Slug"**
-   (auto-generated if blank), **"Parent"** (**"Top level (department)"** or an
+   (auto-generated if blank, create-only — it cannot be changed when
+   editing), **"Parent"** (**"Top level (department)"** or an
    existing category), and **"Description"**.
-3. Select **"Create category"**. Success: **"Category created."** To change
+3. Fill **"SKU code (2–5 letters/digits)"** (for example `TSH`): 2–5
+   letters/digits (A–Z, 0–9), typed in capitals. This is the dictionary
+   code the variant generator uses when building SKUs. Leave it blank
+   only if SKUs for this category are managed by technical support.
+4. Optionally fill **"SKU template (optional)"** (for example
+   `{BRAND}-{CATEGORY}-{STYLE}`): the pattern used to build SKUs for
+   this category. Leave it blank to use the system default for the
+   category's department.
+5. Select **"Create category"**. Success: **"Category created."** To change
    an existing one, select its **"Edit"**, adjust, and **"Save changes"**
    (**"Category updated."**).
-4. Do not type a new category into the product form — the product dropdown
+6. Do not type a new category into the product form — the product dropdown
    only accepts existing categories.
-5. Categories with products, or with live sub-categories, cannot be archived
+7. Categories with products, or with live sub-categories, cannot be archived
    until their products are moved first (the confirmation dialog tells you).
    Archiving hides the category from the storefront; nothing is permanently
    deleted.
 
-> **Important limitation.** Variant SKUs require the product's category to
-> have an internal dictionary **code**. The variant panel may instruct you to
-> *"Give the category a dictionary code (Categories → edit)"*, but the
-> Categories page currently exposes **no code field**. If you hit this
-> message, stop and ask technical support to set the category code — you
-> cannot fix it from the dashboard.
+> **SKU safety rules for category codes.** The help text under the code
+> field states the rule: *"The code is used when generating variant SKUs.
+> Once set it cannot be removed from here — changing it does not rewrite
+> existing SKUs."* In practice: set the code once, early, before generating
+> variants. Changing it later affects only future SKUs and cannot repair or
+> rename SKUs that already exist. If a code must be removed or fundamentally
+> redefined, ask technical support — do not work around it by recreating the
+> category, because the products and SKUs belong to the existing record.
+
+> **Category codes are self-service.** Variant SKUs require the product's
+> category to have an internal dictionary **code**, and you set it yourself on
+> the Categories page (**SKU code** field — §12.1). If the variant panel says
+> the category has no dictionary code, follow §12.1: open
+> **Catalogue → Categories → Edit**, enter the code, and save. Changing a code
+> never rewrites existing SKUs.
 
 ### 12.2. Collections
 
@@ -543,6 +561,13 @@ Prerequisite: the product draft exists **and a category is assigned**
 category-scoped."* otherwise). New variants start with **zero stock** — you
 add stock afterwards in Inventory (Chapter 16).
 
+> **Note on order.** Variants do **not** require images to exist first: you
+> may generate variants before uploading images. **Publishing** is what
+> requires images (at least one image, including a primary — Chapter 18).
+> The stage order in Chapter 9 (images before variants) is recommended
+> because it keeps the readiness checklist green as you go, not because the
+> system blocks variant creation on an imageless draft.
+
 1. Open section **Variants, SKUs & pricing**. Read the hint: select variant
    options to preview server-generated SKUs, then set per-variant prices and
    stock.
@@ -560,8 +585,12 @@ add stock afterwards in Inventory (Chapter 16).
    **"{new} new · {existing} existing · {skipped} skipped"**, or
    **"Generating SKUs…"** while it works. **"Refresh preview"** re-checks.
 6. If blocked, read the inline hint and fix it (do not force it):
-   - *"This category has no dictionary code…"* → category code missing:
-     contact support (§12.1 limitation).
+   - *"This category has no dictionary code, so SKUs cannot be generated
+     yet. Give the category a code under Catalogue → Categories → Edit
+     (SKU code field), or move the product to a coded category."* → open
+     **Catalogue → Categories**, select **"Edit"** on the product's
+     category, enter the **"SKU code (2–5 letters/digits)"**, and select
+     **"Save changes"** (§12.1); then return and **"Refresh preview"**.
    - *"Enter a brand code (or select a brand)…"* → complete step 4.
    - *"Select at least one value for each variant attribute…"* → tick values.
    - *"This selection would create {N} variants — above the limit of 300
@@ -762,7 +791,7 @@ generating variants, add opening stock as follows.
 | Save Draft | Create page, before anything exists | Creates the product as **Draft**; unlocks media/variants/collections |
 | Save changes | Create page (after draft) and Edit page | Saves name/description/category/status (and collections via **"Save collections"**); never publishes by itself on the create page |
 | Publish product | Create page, **"7 · Review & publish"** (and sticky bar) | Flips Draft → **Active** after passing the readiness checklist; then opens the editor |
-| Change Status + Save Changes | Edit page status dropdown | Direct status change (Draft/Active/Archived) with no readiness gate — use carefully (see §18.3) |
+| Change Status + Save Changes | Edit page status dropdown | Requests a status change (Draft/Active/Archived). Switching to **Active** runs the **same server readiness check** as publishing: an incomplete product is rejected with its issues listed — the edit page cannot bypass publishing rules (see §18.3) |
 | Archive / Restore | Product list row actions; **"Archive"** / **"Restore"** with confirmation | Archive hides from storefront (*"It will disappear from the storefront but historical orders are preserved."*); Restore re-activates |
 
 ### 18.2. The publish checklist (create page)
@@ -795,11 +824,18 @@ and retry. Success: **"Product published."** and the editor opens; use
 - There is **no permanent delete** for products or variants anywhere in the
   dashboard. Never recreate a product just to change its description or
   image — edit it (Chapter 20).
-- The edit page's status dropdown has no readiness gate: setting
-  **Active** there publishes immediately even without variants/images (an
-  incomplete product then simply shows as unavailable/empty on the
-  storefront). Prefer the create-page **"Publish product"** flow, and always
-  verify on the storefront afterwards.
+- The edit page's status dropdown is **also** readiness-gated by the server:
+  switching to **Active** runs the same publication check as
+  **"Publish product"** (name, slug, category, description, purchasable
+  variants with real prices, image + primary). The page warns you first
+  (*"Publishing checklist incomplete: … The server will reject the change
+  until these are complete."*), and if you save anyway the server refuses
+  with *"This product cannot be published yet: … Complete the missing items
+  (category, variant with price, primary image) and try again."* Nothing
+  changes on a rejected publish — the product keeps its previous status and
+  the rejection is audit-logged. Prefer the create-page **"Publish product"**
+  flow (its checklist shows every requirement up front), and always verify
+  on the storefront afterwards.
 - While any save is processing (**"Saving…"**, **"Publishing…"**,
   **"Apply…"**), wait for it to finish. Do not double-click create/generate
   buttons, and do not refresh mid-save.
@@ -837,8 +873,9 @@ and retry. Success: **"Product published."** and the editor opens; use
 8. **Variants.** In Variants/SKUs/pricing: add dimensions (illustrative:
    Colour, Capacity), tick White × 1.5L (plus any real options), complete
    brand, review the SKU preview, then **"Create 1 variant"** (or N) and
-   confirm. If the panel complains about a missing category code, stop and
-   contact support (§12.1).
+   confirm. If the panel complains about a missing category code, set it
+   yourself under Catalogue → Categories → Edit (**"SKU code"** field,
+   §12.1), then **"Refresh preview"** and continue.
 9. **Price.** Enter `8500` in the variant's price field and **"Save price
    changes"** → *"Price updated for 1 variant(s)."*
 10. **Stock.** Catalogue → Inventory → select the variant SKU → Restock,
@@ -872,9 +909,13 @@ and retry. Success: **"Product published."** and the editor opens; use
   Name ≥2, description ≥12 characters, same as creation. Category may be set
   to **"No category"**, but the product then fails publish-readiness until a
   category is restored. Slug cannot be changed here.
-- **Status** changes take effect on save immediately with no readiness
-  check: setting **Active** publishes at once; **Archived** hides the product
-  and locks its images read-only. Prefer deliberate use (§18.3).
+- **Status** changes to Draft or Archived take effect on save immediately.
+  Switching to **Active** is a publish request: the server runs the same
+  readiness check as the create-page **"Publish product"** flow and rejects
+  incomplete products with the issues listed (§18.3). An *"incomplete"*
+  product can therefore never slip onto the storefront through the edit
+  page — but still prefer the create-page flow, whose checklist shows every
+  requirement before you attempt it.
 - **Images:** same tools as Chapter 11 (upload/reorder/primary/alt/replace/
   delete), except archived products are read-only.
 - **Collections:** tick/untick (first 20 shown) and **"Save collections"**
@@ -907,12 +948,15 @@ Covered in full in §12.1 (categories), §12.2 (collections), and §13.1
 
 - **Categories** (`Catalogue → Categories`): **"New category"** form
   (**"Name *"**, **"Slug (optional)"** create-only, **"Parent"**,
-  **"Description"**) → **"Create category"** (*"Category created."*);
+  **"Description"**, **"SKU code (2–5 letters/digits)"** e.g. `TSH`,
+  **"SKU template (optional)"** e.g. `{BRAND}-{CATEGORY}-{STYLE}`) →
+  **"Create category"** (*"Category created."*);
   per-row **"Edit"** → **"Save changes"** (*"Category updated."*, no slug
-  editing); per-row **"Archive"** with confirmation (blocked with an
-  explanatory message while products or live sub-categories remain).
-  No code/template fields exist in the UI — category SKU codes require
-  technical support (§12.1).
+  editing; a code once set cannot be removed from this form). The table
+  shows each category's **Code** (or `—`). Per-row **"Archive"** with
+  confirmation (blocked with an explanatory message while products or live
+  sub-categories remain). Codes/templates feed future SKU generation only
+  and never rewrite existing SKUs (§12.1).
 - **Collections** (`Catalogue → Collections`): same pattern plus
   **"Status"** (Active/Draft/Archived); **"Archive"** unlinks memberships
   (*"It holds {n} product(s). Memberships will be removed…"*). No code
@@ -959,13 +1003,19 @@ Each module below exists in the sidebar. Purpose, access, tasks, cautions:
   **"Approve"**/**"Reject"** each with confirmation (*"The review will be
   marked {status} and the decision is audited."*).
 - **Coupons**: **"New Coupon"** (code auto-uppercased, value, type, validity,
-  usage cap) → **"Create Coupon"** (*"Coupon created and audited."*). Later
-  you can only change status, usage cap, and expiry — code/value/type are
-  permanent. Redemption at checkout is partially implemented: confirm
-  current behaviour with support before advertising a coupon.
+   usage cap) → **"Create Coupon"** (*"Coupon created and audited."*). Later
+   you can only change status, usage cap, and expiry — code/value/type are
+   permanent. Redemption at checkout is **not implemented**: do not promise
+   coupons to customers; confirm redemption behaviour with the business
+   owner first (see Chapter 29).
 - **Notifications**: operations queue for system messages (order/delivery
-  updates); retry/resend failed items; manual outbox drain. Customer
-  notification preferences live on the customer side.
+  updates) with delivery status across in-app, email, and SMS channels
+  (filter by All/QUEUED/PROCESSING/SENT/DELIVERED/FAILED); select
+  **"Run worker"** to drain pending items (*"Worker ran: X processed,
+  Y failed"*); **"Resend"** failed items individually (*"Delivery queued
+  for resend"*). Customer notification preferences live on the customer
+  side. Delivery is queued and retried, never guaranteed instant — see
+  Chapter 29.
 - **Analytics** (*"Analytics"*, Africa/Nairobi timezone): read-only
   Overview/Sales/Products/Customers/Inventory/Payments/Fulfillment/Delivery/
   Returns/Reports/Data Quality/Definitions with date presets and audited CSV
@@ -998,7 +1048,7 @@ name/SKU, exact on-screen message, approximate time.
 | 5 | Category list empty / needed category missing | None created yet | Create it under Catalogue → Categories (§12.1) | — | Do not use a wrong category as placeholder |
 | 6 | Collection assignment fails / none listed | No collections exist; save not clicked | Create under Collections; tick boxes; **"Save collections"**; confirm *"saved"* message | Product, collection, message | Do not assume ticking alone saved |
 | 7 | Attribute options do not appear | Attribute/value not in dictionary | Create under Attributes (§13.1), return to product | Attribute name | Do not free-type values into variant fields |
-| 8 | Variant generation error / blocked hint | Missing category, category without code, missing brand, empty values, >300 combos | Read the exact hint; fix inputs; **"Refresh preview"**; retry once | Full message, product, selection | Do not click Create repeatedly; if *"no dictionary code"* → support (§12.1) |
+| 8 | Variant generation error / blocked hint | Missing category, category without code, missing brand, empty values, >300 combos | Read the exact hint; for a missing category code, set it yourself under **Catalogue → Categories → Edit** (**"SKU code"** field, §12.1), then **"Refresh preview"**; fix other inputs likewise; retry once | Full message, product, selection | Do not click Create repeatedly while it is still processing |
 | 9 | Duplicate SKU / combination already exists | Combination exists | Reuse the existing row (*"already existed"*); archive+recreate only if genuinely wrong | SKU | Do not retype SKUs; they are immutable |
 | 10 | Image upload fails / rejected | Wrong format; too large; network drop; draft not saved | Use JPG/PNG/WebP; smaller file; save draft first; **"Retry"** | File type/size, message, time | Do not assume a preview means saved — confirm **"Saved"** + count |
 | 11 | Cannot set primary image | Archived product; image not saved yet | Restore product; confirm image in gallery; **"Set primary"** → *"Primary image changed."* | Product, message | — |
@@ -1009,7 +1059,7 @@ name/SKU, exact on-screen message, approximate time.
 | 16 | Changes not reflected | Unsaved (no confirmation toast); autosave failed; viewing cached page | Confirm success toast; **"Retry now"** on autosave failure; reload the page | Action, time | Do not re-submit blindly while processing |
 | 17 | Session expires mid-work | 7-day/session revoked/signed out elsewhere | Sign in again; drafts and media persist — resume where you left off | — | — |
 | 18 | Page stuck loading | Network issue; checking access | Wait for **"Checking admin access…"**; reload once; sign in again if bounced | Page, duration | Do not hammer refresh during saves |
-| 19 | Save/publish rejected by server | Readiness issues listed | Read **"Server readiness issues"**; fix each; retry once | Full issues list, product | Do not force via edit-page status dropdown to dodge the checklist |
+| 19 | Save/publish rejected by server | Readiness issues listed | Read **"Server readiness issues"** (create page) or the *"cannot be published yet"* message (edit page); fix each item; retry once | Full issues list, product | Do not re-attempt publishing without fixing the listed items — the server enforces the same checklist on every publish path |
 
 ## 24. Security and Good Operating Practices
 
@@ -1043,7 +1093,14 @@ it Active (buyable) after the readiness checklist passes (Chapter 18).
 **Why can't I publish?** The button enables only with ≥1 variant and ≥1
 image, and the server additionally requires name, slug, category,
 description ≥12 chars, purchasable variants with real prices, and a primary
-image. Work the checklist top to bottom.
+image. Work the checklist top to bottom. The same check runs if you set
+**Active** on the edit page — there is no way to publish an incomplete
+product through the dashboard.
+
+**Must I upload images before creating variants?** No — either order works.
+Variants can be generated on an imageless draft; only publishing requires
+images (at least one, including a primary). Images-first is recommended
+because it keeps the readiness checklist green as you go.
 
 **What is a variant / SKU / primary image / collection?** See Glossary
 (Chapter 26) and Chapters 13, 14, 11, 12.
@@ -1135,10 +1192,11 @@ Copy/use per product. All boxes must be ticked before publishing.
 
 ## 28. Support and Escalation
 
-Contact technical support when: access/roles are wrong; category codes are
-needed for SKUs; compare-at pricing is required; shipping/tax configuration
-must change; any server error persists after one careful retry; image cleanup
-warnings appear; or the UI contradicts this manual.
+Contact technical support when: access/roles are wrong; a category code
+must be removed or fundamentally redefined (setting codes is
+self-service — §12.1); compare-at pricing is required; shipping/tax
+configuration must change; any server error persists after one careful
+retry; image cleanup warnings appear; or the UI contradicts this manual.
 
 Always include: your account email (never your password), exact page/URL,
 product name and SKU (for catalogue issues), the exact on-screen message,
@@ -1160,23 +1218,37 @@ Evidence labels: **VERIFIED** (confirmed in code), **PARTIALLY VERIFIED**
 - Seed/demo names (categories, collections, attributes, products) come from
   `prisma/seed*.ts` and are illustrative where labelled; live store data was
   not inspected: **PARTIALLY VERIFIED**.
-- Category dictionary codes/SKU templates: settable via API but with no
-  dashboard field: **VERIFIED** gap — business must decide who sets codes
-  and confirm the intended SKU format policy.
+- Category dictionary codes/SKU templates: settable by administrators via
+  the **"SKU code"** / **"SKU template"** fields with validation and help
+  text (**VERIFIED** — the v1.0 "contact support" dead end is closed in
+  v1.1). Business must still confirm who in the organisation may set or
+  change codes and confirm the intended SKU format policy
+  (`docs/BUSINESS-DECISIONS.md` BD-002, BD-003).
 - Compare-at/discount display: backend field exists, dashboard field
-  **NOT IMPLEMENTED** — confirm whether was/now pricing is wanted.
-- Product-level base price: present in the data model but not writable from
-  the dashboard: **VERIFIED** gap — confirm intentional (variant-price-only
-  model) or omission.
-- Manual single-variant creation on an imageless product may be blocked by a
-  media check the code comments describe as publish-time-only
-  (**PARTIALLY VERIFIED**, contradictory code): recommended path in this
-  manual (images before variants) avoids it either way.
-- Coupon redemption at checkout: **PARTIALLY VERIFIED** — confirm current
-  behaviour before advertising coupons.
-- Analytics thresholds/definitions, notification delivery guarantees, review
-  visibility rules: **NOT VERIFIED** here — confirm with the business owner
-  before quoting to customers.
+  **NOT IMPLEMENTED** — confirm whether was/now pricing is wanted (BD-005).
+- Product-level base price: present in the data model as a display fallback
+  but not settable from the dashboard: **VERIFIED** — confirm the
+  variant-price-only model is intentional (BD-004).
+- Variants may be generated before images are uploaded; **publishing**
+  requires at least one image including a primary (**VERIFIED** against
+  backend enforcement + intent comments). The recommended path in this
+  manual (images before variants) keeps the checklist green either way
+  (BD-012).
+- Coupon administration (create, activate/deactivate, usage caps, expiry):
+  **VERIFIED**. Coupon redemption at checkout: **NOT IMPLEMENTED** (no
+  redemption path exists in the API) — do not advertise coupons to
+  customers before the business defines redemption behaviour (BD-006).
+- Analytics thresholds/definitions: metric queries and the Nairobi-timezone
+  Definitions page are **VERIFIED**, but interpretive thresholds are
+  technical defaults — confirm business definitions before quoting them
+  (BD-007).
+- Notification delivery: queue/worker/resend mechanics are **VERIFIED**,
+  but production email/SMS vendors are **NOT VERIFIED** — confirm
+  expectations and vendors with the business owner (BD-008).
+- Reviews: moderation queue (Approve/Reject, audited) and APPROVED-only
+  storefront display are **VERIFIED**; customer review submission is
+  **NOT IMPLEMENTED** — confirm submission/moderation policy before
+  promising it (BD-009).
 - Historical defect reports (variant-400, primary-image-400, collection
   CORS, form runtime errors) show fixed code patterns and regression tests
   in the current tree, but live-browser E2E remains **NOT VERIFIED**.
