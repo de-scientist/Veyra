@@ -1,5 +1,14 @@
 /* JB Mercantile Design System v2 — Royal Blue + White, Light/Dark/System. Single token source. */
 
+/* Tailwind-first foundation (see tailwind.config.ts): utilities are generated
+   from the --jb-* / semantic tokens below, so `bg-primary text-foreground
+   border-border rounded-md shadow-sm` always tracks the active theme.
+   Preflight is OFF in tailwind.config.ts — the hand-written base further down
+   owns resets/typography/focus. Do not add a second token source. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root,
 [data-theme="light"] {
   color-scheme: light;
