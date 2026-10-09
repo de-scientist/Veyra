@@ -290,32 +290,33 @@ Creating a sellable product always follows the same stages, in order:
    access: ask your administrator. If you get **"403 — Not authorized"**, see
    §6.3.
 
-### 10.2. Section 1 — Basic information
+### 10.2. Section 1 — Product Details
 
 Fill the fields in order. Exact labels, rules, and guidance:
 
 | Field (exact label) | Required? | What to enter | Example (illustrative) | Common mistake |
 |---|---|---|---|---|
 | Product name * | Yes — at least 2 characters, at most 200 | The customer-facing name. Be specific: include kind, key feature, and audience | "Men's Cotton Crew-Neck T-Shirt" | Vague names like "Shirt" that customers cannot distinguish |
-| Slug (auto: …) | No — auto-generated from the name if left blank | Web-address text. Leave blank unless you need a custom address; if you type one, keep it short, lowercase, words separated by hyphens | Leave blank (recommended) | Typing uppercase letters or spaces; the system normalises them anyway |
-| Description * (min 12 characters) | Yes — at least 12 characters, at most 10,000 | A useful description: what it is, material/features, fit or size guidance, care, what is in the box | "Soft 100% cotton crew-neck T-shirt for everyday wear. Breathable knit, reinforced collar, machine washable." | One-word descriptions; copying supplier text with false claims |
 | Category * | Yes — you must choose one | The single best-fitting category from the dropdown | Fashion → Men's Fashion → T-Shirts (illustrative) | Leaving "Select a category" chosen — saving is blocked |
-| Status | Has a default; see below | Leave as **"Draft — not purchasable"** while creating. **"Archived — hidden from storefront"** hides the product. There is deliberately **no Active option here** — publishing happens later via **"Publish product"** | Draft | Trying to publish from this dropdown — it is not possible on this page |
+| Description * (min 12 characters) | Yes — at least 12 characters, at most 10,000 | A useful description: what it is, material/features, fit or size guidance, care, what is in the box | "Soft 100% cotton crew-neck T-shirt for everyday wear. Breathable knit, reinforced collar, machine washable." | One-word descriptions; copying supplier text with false claims |
+
+There is deliberately no slug field and no status dropdown on this page: the
+web address is created automatically (see below) and every new product starts
+as a draft. Publishing is a separate gated step (Chapter 18).
 
 What the fields mean:
 
 - **Product name** is what customers see. It is different from the **SKU**
   (Chapter 14), which is an internal stock code customers rarely see.
-- **Slug** becomes the product's web address (`/products/your-slug`). You
-  cannot change it after the draft is created, so if you type a custom slug,
-  double-check it.
+- **Web address** (`/products/your-slug`) is created automatically from the
+  name and shown under the category field (*"Web address:
+  /products/…"*). You cannot change it after the draft is created.
 - **Category** is required before publishing and determines which variant
   options are available (Chapter 13). If the category you need does not
   exist, see Chapter 12 — do not pick a wrong category as a placeholder.
-- **Status** here is only a starting state. Saving never publishes: even
-  though the system technically supports an active state, this page only
-  offers Draft and Archived, and publishing is a separate gated step
-  (Chapter 18).
+- New products always start as **Draft — not purchasable** (shown in
+  Organisation & Visibility). Saving never publishes: publishing is a
+  separate gated step (Chapter 18).
 
 ### 10.3. Saving the draft
 
@@ -324,9 +325,9 @@ What the fields mean:
    **"Discard unsaved changes?"** — and unsaved typing is lost).
 2. While saving, the button reads **"Saving…"** and is disabled. Wait. Do not
    click repeatedly and do not close the page mid-save.
-3. Success: a confirmation **"Draft created. Add images and the first variant
-   below."** appears, and the page unlocks: media uploads, variants,
-   collections, autosave, and the review panel all become available. The
+3. Success: a confirmation **"Draft created. Add images, then set the price
+   and stock."** appears, and the page unlocks: images, Pricing & Stock,
+   options, collections, autosave, and the review panel all become available. The
    header buttons change to **"Back to Products"**, **"Open product editor"**,
    and **"Publish product"** (disabled until ready).
 4. If fields are invalid you see **"Fix the highlighted fields before
@@ -343,13 +344,14 @@ What the fields mean:
 ### 10.4. What to do next
 
 After the draft is saved, work through the unlocked sections in this order:
-images (Chapter 11), variants (Chapter 13), prices (Chapter 15), stock
-(Chapter 16), collections (Chapter 12), then review and publish
-(Chapters 17–18). The sidebar **"Setup progress"** panel tracks you
-(**"{done} of {total} sections complete"**) across Basic information,
-Product media, Variants/SKUs/pricing, Categories & collections, and Review &
-publish, and the **"Storefront preview"** panel shows how the product will
-look to customers as you fill it in.
+images (Chapter 11), price and stock (Chapters 15–16), options only if the
+product has versions customers choose between (Chapter 13), collections
+(Chapter 12), then review and publish (Chapters 17–18). The sidebar
+**"Setup progress"** panel tracks you (**"{done} of {total} sections
+complete"**) across Product details, Images, Pricing & Stock, Options &
+Variants, Organisation & Visibility, and Review & publish, and the
+**"Storefront preview"** panel shows how the product will look to customers
+as you fill it in.
 
 ## 11. Product Images and Cloudinary
 
@@ -359,13 +361,13 @@ screen is *not* proof of saving (see §11.4).
 
 ### 11.1. Where and how to upload
 
-1. On the **"Create Product"** (or edit) page, find section **Product
-   media**. Before the draft exists it shows *"Save a draft first — then
-   drag & drop or browse JPG · PNG · WebP here."* — save the draft first
-   (§10.3).
+1. On the **"Create Product"** (or edit) page, find section **2 · Images**.
+   Before the draft exists it shows *"Save a draft first — then drag & drop
+   or browse JPG · PNG · WebP here."* — save the draft first (§10.3).
 2. After the draft exists you see **"Drag images here"** with a
-   **"choose files"** option and the note *"JPEG, PNG, or WebP. Use clear,
-   well-lit product photos."*
+   **"choose files"** option and the note *"JPEG, PNG, or WebP photos. At
+   least one photo is needed before publishing, and the first photo is shown
+   as the primary image in the shop."*
 3. Either drag image files onto the area or select **"choose files"** and
    pick files from your computer. Accepted types: **JPEG, PNG, WebP** only.
    Anything else is rejected with *"…file(s) rejected: only JPEG, PNG, or
