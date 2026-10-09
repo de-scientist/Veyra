@@ -80,7 +80,7 @@ export type VariantManagerProps = {
   onChanged: () => Promise<void> | void;
 };
 
-type RowEdit = { price: string; stock: string; included: boolean };
+type RowEdit = { price: string; compareAt: string; stock: string; included: boolean };
 
 function normalizeSlug(slug: string): string {
   return slug.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -108,6 +108,11 @@ function brandOf(variants: AdminProductDetailVariant[]): { code: string | null; 
   const top = [...counts.entries()].sort((a, b) => b[1].count - a[1].count)[0];
   if (!top) return { code: null, valueId: null };
   return { code: top[1].value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6) || null, valueId: top[0] };
+}
+
+/** Current persisted compare-at value for change detection (null-safe). */
+function rowComparable(row: MatrixRow): number | null {
+  return row.compareAtPrice ?? null;
 }
 
 export function VariantManager({
@@ -159,6 +164,7 @@ export function VariantManager({
         barcode: v.barcode ?? null,
         status: v.status,
         priceOverride: v.priceOverride === null ? null : Number(v.priceOverride),
+        compareAtPrice: v.compareAtPrice === null || v.compareAtPrice === undefined ? null : Number(v.compareAtPrice),
         quantityOnHand: v.inventory ? v.inventory.quantityOnHand : null,
         quantityReserved: v.inventory ? v.inventory.quantityReserved : 0,
         pairs: pairsOf(v),
@@ -166,12 +172,14 @@ export function VariantManager({
     ),
   );
   const [rowEdits, setRowEdits] = useState<Record<string, RowEdit>>({});
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewBlockedHint, setPreviewBlockedHint] = useState<string | null>(null);
   const [hasPreview, setHasPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkPrice, setBulkPrice] = useState('');
+  const [bulkCompareAt, setBulkCompareAt] = useState('');
   const [bulkStock, setBulkStock] = useState('');
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,6 +205,7 @@ export function VariantManager({
           barcode: v.barcode ?? null,
           status: v.status,
           priceOverride: v.priceOverride === null ? null : Number(v.priceOverride),
+        compareAtPrice: v.compareAtPrice === null || v.compareAtPrice === undefined ? null : Number(v.compareAtPrice),
           quantityOnHand: v.inventory ? v.inventory.quantityOnHand : null,
           quantityReserved: v.inventory ? v.inventory.quantityReserved : 0,
           pairs: pairsOf(v),
@@ -234,6 +243,7 @@ export function VariantManager({
           barcode: v.barcode ?? null,
           status: v.status,
           priceOverride: v.priceOverride === null ? null : Number(v.priceOverride),
+        compareAtPrice: v.compareAtPrice === null || v.compareAtPrice === undefined ? null : Number(v.compareAtPrice),
           quantityOnHand: v.inventory ? v.inventory.quantityOnHand : null,
           quantityReserved: v.inventory ? v.inventory.quantityReserved : 0,
           pairs: pairsOf(v),
@@ -321,6 +331,7 @@ export function VariantManager({
           status: v.status,
           barcode: v.barcode ?? null,
           priceOverride: v.priceOverride === null ? null : Number(v.priceOverride),
+        compareAtPrice: v.compareAtPrice === null || v.compareAtPrice === undefined ? null : Number(v.compareAtPrice),
           quantityOnHand: v.inventory ? v.inventory.quantityOnHand : null,
           quantityReserved: v.inventory ? v.inventory.quantityReserved : 0,
           pairs: pairsOf(v),
@@ -352,9 +363,16 @@ export function VariantManager({
     };
   }, [runPreview]);
 
-  const editOf = (key: string): RowEdit => rowEdits[key] ?? { price: '', stock: '', included: true };
+  const editOf = (key: string): RowEdit => rowEdits[key] ?? { price: '', compareAt: '', stock: '', included: true };
   const setEdit = (key: string, patch: Partial<RowEdit>) => {
     setRowEdits((prev) => ({ ...prev, [key]: { ...editOf(key), ...patch } }));
+    // Clearing a field clears its row error; re-validation happens on save.
+    setRowErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   };
 
   const toggleValue = (attributeId: string, valueId: string) => {
@@ -389,9 +407,13 @@ export function VariantManager({
     });
   };
 
-  const applyBulk = () => {
+  const applyBulk = async () => {
     if (checked.size === 0) {
       notify('info', 'Select at least one matrix row to apply bulk values.');
+      return;
+    }
+    if (!bulkPrice.trim() && !bulkCompareAt.trim() && !bulkStock.trim()) {
+      notify('info', 'Enter a bulk price, previous price, or stock quantity first.');
       return;
     }
     if (bulkPrice.trim()) {
@@ -400,7 +422,17 @@ export function VariantManager({
         notify('error', parsed.error);
         return;
       }
-      for (const key of checked) setEdit(key, { price: bulkPrice.trim() });
+      if (parsed.value !== null && !(parsed.value > 0)) {
+        notify('error', 'Bulk selling price must be above KES 0.');
+        return;
+      }
+    }
+    if (bulkCompareAt.trim()) {
+      const parsed = validatePriceInput(bulkCompareAt);
+      if (!parsed.ok) {
+        notify('error', `Bulk previous price: ${parsed.error}`);
+        return;
+      }
     }
     if (bulkStock.trim()) {
       const parsed = validateStockInput(bulkStock);
@@ -408,11 +440,24 @@ export function VariantManager({
         notify('error', parsed.error);
         return;
       }
-      for (const key of checked) setEdit(key, { stock: bulkStock.trim() });
     }
-    if (!bulkPrice.trim() && !bulkStock.trim()) {
-      notify('info', 'Enter a bulk price or stock quantity first.');
-      return;
+    // Bulk staging changes local inputs only; the server write happens on
+    // Save with its own confirmation, so nothing persists silently here.
+    const proceed = await confirm({
+      title: 'Apply bulk values?',
+      description: `Stage bulk values for ${checked.size} selected item(s). Review each row, then choose Save to persist.`,
+      confirmLabel: 'Stage values',
+      onConfirm: () => undefined,
+    });
+    if (!proceed) return;
+    if (bulkPrice.trim()) {
+      for (const key of checked) setEdit(key, { price: bulkPrice.trim() });
+    }
+    if (bulkCompareAt.trim()) {
+      for (const key of checked) setEdit(key, { compareAt: bulkCompareAt.trim() });
+    }
+    if (bulkStock.trim()) {
+      for (const key of checked) setEdit(key, { stock: bulkStock.trim() });
     }
     notify('success', `Bulk values staged for ${checked.size} variant(s). Save to persist.`);
   };
@@ -447,13 +492,34 @@ export function VariantManager({
       const result = await generateProductVariants(productId, payload);
       const createdBySku = new Map(result.created.map((item) => [item.sku, item.id]));
       // Per-row prices → one batch PATCH (never one request per variant).
-      const priceWrites: Array<{ id: string; price: number }> = [];
+      // Previous (compare-at) prices ride the same batch write; both fields
+      // map to the existing authoritative columns (no new model).
+      const priceWrites: Array<{ id: string; price?: number; compareAtPrice?: number | null }> = [];
       for (const row of withEdits) {
         if (row.status !== 'new' || !row.included) continue;
         const parsed = validatePriceInput(editOf(row.key).price);
-        if (!parsed.ok) throw new Error(`Row ${row.sku}: ${parsed.error}`);
+        if (!parsed.ok) {
+          setRowErrors((prev) => ({ ...prev, [row.key]: parsed.error }));
+          throw new Error(`Row ${row.sku}: ${parsed.error}`);
+        }
+        if (parsed.value === null || !(parsed.value > 0)) {
+          const message = 'Enter a selling price above KES 0 for each new item.';
+          setRowErrors((prev) => ({ ...prev, [row.key]: message }));
+          throw new Error(`Row ${row.sku}: ${message}`);
+        }
+        const compareParsed = validatePriceInput(editOf(row.key).compareAt);
+        if (!compareParsed.ok) {
+          setRowErrors((prev) => ({ ...prev, [row.key]: compareParsed.error }));
+          throw new Error(`Row ${row.sku}: ${compareParsed.error}`);
+        }
         const createdId = createdBySku.get(row.sku);
-        if (parsed.value !== null && createdId) priceWrites.push({ id: createdId, price: parsed.value });
+        if (createdId) {
+          priceWrites.push({
+            id: createdId,
+            price: parsed.value,
+            ...(compareParsed.value !== null ? { compareAtPrice: compareParsed.value } : {}),
+          });
+        }
       }
       if (priceWrites.length > 0) await batchUpdateVariants(productId, { variants: priceWrites });
       // Per-row stock → one batch restock (new variants start at zero).
@@ -482,27 +548,67 @@ export function VariantManager({
   };
 
   const handleSavePrices = async () => {
-    const writes: Array<{ id: string; price: number }> = [];
+    const writes: Array<{ id: string; price?: number; compareAtPrice?: number | null }> = [];
+    const nextErrors: Record<string, string> = {};
     for (const row of rows) {
       if (!row.variantId) continue;
       const raw = editOf(row.key).price;
-      if (!raw.trim()) continue;
-      const parsed = validatePriceInput(raw);
-      if (!parsed.ok) {
-        notify('error', `Row ${row.sku}: ${parsed.error}`);
-        return;
+      const rawCompare = editOf(row.key).compareAt;
+      if (!raw.trim() && !rawCompare.trim()) continue;
+      if (raw.trim()) {
+        const parsed = validatePriceInput(raw);
+        if (!parsed.ok) {
+          nextErrors[row.key] = parsed.error;
+          continue;
+        }
+        if (parsed.value !== null && !(parsed.value > 0)) {
+          nextErrors[row.key] = 'Enter a selling price above KES 0.';
+          continue;
+        }
+        if (parsed.value !== null && parsed.value !== row.priceOverride) {
+          const entry = writes.find((w) => w.id === row.variantId);
+          if (entry) entry.price = parsed.value;
+          else writes.push({ id: row.variantId as string, price: parsed.value });
+        }
       }
-      if (parsed.value !== null && parsed.value !== row.priceOverride) writes.push({ id: row.variantId, price: parsed.value });
+      if (rawCompare.trim()) {
+        const parsed = validatePriceInput(rawCompare);
+        if (!parsed.ok) {
+          nextErrors[row.key] = parsed.error;
+          continue;
+        }
+        const currentCompare = rowComparable(row);
+        if (parsed.value !== currentCompare) {
+          const entry = writes.find((w) => w.id === row.variantId);
+          if (entry) entry.compareAtPrice = parsed.value;
+          else writes.push({ id: row.variantId as string, compareAtPrice: parsed.value });
+        }
+      }
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setRowErrors(nextErrors);
+      const first = rows.find((r) => nextErrors[r.key]);
+      notify('error', first ? `Row ${first.sku}: ${nextErrors[first.key]}` : 'Fix the highlighted rows before saving.');
+      return;
     }
     if (writes.length === 0) {
       notify('info', 'No price changes to save.');
       return;
     }
+    // Confirmation step: bulk/server price writes never persist silently.
+    const proceed = await confirm({
+      title: `Save prices for ${writes.length} item(s)?`,
+      description: 'Selling prices update through the authorised pricing workflow and are audited. Stock is unchanged by this action.',
+      confirmLabel: 'Save prices',
+      onConfirm: () => undefined,
+    });
+    if (!proceed) return;
     setSaving(true);
     try {
       await batchUpdateVariants(productId, { variants: writes });
       notify('success', `Price updated for ${writes.length} variant(s).`);
       setRowEdits({});
+      setRowErrors({});
       await onChanged();
     } catch (e) {
       notify('error', e instanceof Error ? e.message : 'Price update failed.');
@@ -515,6 +621,7 @@ export function VariantManager({
     if (!row.variantId || row.quantityOnHand === null) return;
     const parsed = validateStockInput(editOf(row.key).stock);
     if (!parsed.ok) {
+      setRowErrors((prev) => ({ ...prev, [row.key]: parsed.error }));
       notify('error', `Row ${row.sku}: ${parsed.error}`);
       return;
     }
@@ -711,6 +818,7 @@ export function VariantManager({
         <strong>{selectionSummary.label}</strong>
         <span className="muted-copy">
           {previewState === 'loading' ? 'Generating SKUs…' : `${newCount} new · ${existingCount} existing · ${skippedCount} skipped`}
+          {basePrice !== null && basePrice !== undefined ? ` · Catalogue fallback ${formatKES(basePrice)} (used only when an item has no price)` : ''}
         </span>
         <button type="button" className="button button--secondary button--small" onClick={() => void runPreview()} disabled={saving || previewState === 'loading' || !categoryId}>
           Refresh preview
@@ -734,14 +842,18 @@ export function VariantManager({
         <>
           <div className="variant-manager__bulk">
             <label>
-              <span className="visually-hidden">Bulk price (KES)</span>
-              <input type="number" min="0" step="0.01" placeholder="Bulk price (KES)" value={bulkPrice} onChange={(e) => setBulkPrice(e.currentTarget.value)} aria-label="Bulk price in KES" />
+              <span className="visually-hidden">Bulk selling price (KES)</span>
+              <input type="number" min="0" step="0.01" placeholder="Bulk price (KES)" value={bulkPrice} onChange={(e) => setBulkPrice(e.currentTarget.value)} aria-label="Bulk selling price in KES" />
+            </label>
+            <label>
+              <span className="visually-hidden">Bulk previous price (KES)</span>
+              <input type="number" min="0" step="0.01" placeholder="Bulk previous (KES)" value={bulkCompareAt} onChange={(e) => setBulkCompareAt(e.currentTarget.value)} aria-label="Bulk previous price in KES" />
             </label>
             <label>
               <span className="visually-hidden">Bulk stock</span>
               <input type="number" min="0" step="1" placeholder="Bulk stock" value={bulkStock} onChange={(e) => setBulkStock(e.currentTarget.value)} aria-label="Bulk stock quantity" />
             </label>
-            <button type="button" className="button button--secondary button--small" onClick={applyBulk} disabled={saving || checked.size === 0}>
+            <button type="button" className="button button--secondary button--small" onClick={() => void applyBulk()} disabled={saving || checked.size === 0}>
               Apply to {checked.size} selected
             </button>
             <button type="button" className="button button--secondary button--small" onClick={() => void handleSavePrices()} disabled={saving}>
@@ -754,14 +866,15 @@ export function VariantManager({
 
           <div className="admin-table-wrapper variant-matrix-wrapper">
             <table className="admin-table variant-matrix">
-              <caption className="visually-hidden">Product variants with SKU, price and stock</caption>
+              <caption className="visually-hidden">Product items with SKU, selling price, previous price and stock</caption>
               <thead>
                 <tr>
                   <th scope="col"><span className="visually-hidden">Select</span></th>
-                  <th scope="col">Variant</th>
+                  <th scope="col">Item</th>
                   <th scope="col">SKU</th>
                   <th scope="col">Barcode</th>
-                  <th scope="col">Price (KES)</th>
+                  <th scope="col">Selling price (KES)</th>
+                  <th scope="col">Previous price (KES)</th>
                   <th scope="col">Stock</th>
                   <th scope="col">Status</th>
                   <th scope="col">Actions</th>
@@ -800,6 +913,7 @@ export function VariantManager({
                         <strong>{row.label || productName}</strong>
                         {row.status === 'new' && <span className="status-badge status-badge--new">New</span>}
                         {row.status === 'skipped' && <span className="status-badge">Skipped</span>}
+                        {rowErrors[row.key] ? <span className="field-error" role="alert">{rowErrors[row.key]}</span> : null}
                       </td>
                       <td data-label="SKU"><code>{row.sku}</code></td>
                       <td data-label="Barcode">
@@ -813,7 +927,7 @@ export function VariantManager({
                           <span className="muted-copy">—</span>
                         )}
                       </td>
-                      <td data-label="Price (KES)">
+                      <td data-label="Selling price (KES)">
                         {row.status === 'existing' ? (
                           <span>{formatKES(row.priceOverride)}</span>
                         ) : (
@@ -822,10 +936,12 @@ export function VariantManager({
                             min="0"
                             step="0.01"
                             value={edit.price}
-                            placeholder={basePrice !== null && basePrice !== undefined ? String(basePrice) : 'Inherit'}
+                            placeholder="Required, e.g. 2500"
                             onChange={(e) => setEdit(row.key, { price: e.currentTarget.value })}
-                            aria-label={`Price for ${row.sku}`}
+                            aria-label={`Selling price for ${row.sku}`}
+                            aria-invalid={Boolean(rowErrors[row.key])}
                             disabled={!edit.included}
+                            required
                           />
                         )}
                         {row.status === 'existing' && (
@@ -836,9 +952,24 @@ export function VariantManager({
                             value={edit.price}
                             placeholder="New price"
                             onChange={(e) => setEdit(row.key, { price: e.currentTarget.value })}
-                            aria-label={`New price for ${row.sku}`}
+                            aria-label={`New selling price for ${row.sku}`}
                           />
                         )}
+                      </td>
+                      <td data-label="Previous price (KES)">
+                        {row.status === 'existing' ? (
+                          <span className="muted-copy">{row.compareAtPrice === null ? '—' : formatKES(row.compareAtPrice)}</span>
+                        ) : null}
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={edit.compareAt}
+                          placeholder={row.status === 'existing' ? 'New previous' : 'Optional'}
+                          onChange={(e) => setEdit(row.key, { compareAt: e.currentTarget.value })}
+                          aria-label={`Previous price for ${row.sku}`}
+                          disabled={row.status === 'new' && !edit.included}
+                        />
                       </td>
                       <td data-label="Stock">
                         {row.status === 'existing' ? (

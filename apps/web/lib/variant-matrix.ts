@@ -138,6 +138,8 @@ export type MatrixRow = {
   variantId: string | null;
   variantStatus: string | null;
   priceOverride: number | null;
+  /** Existing backend compare-at price (nullable); never fabricated. */
+  compareAtPrice: number | null;
   quantityOnHand: number | null;
   quantityReserved: number;
   included: boolean;
@@ -164,6 +166,7 @@ export function mergePreviewRows(options: {
     status: string;
     barcode: string | null;
     priceOverride: number | null;
+    compareAtPrice?: number | null;
     quantityOnHand: number | null;
     quantityReserved: number;
     pairs: MatrixPair[];
@@ -195,6 +198,7 @@ export function mergePreviewRows(options: {
       variantId: item.id,
       variantStatus: detail?.status ?? null,
       priceOverride: detail?.priceOverride ?? null,
+      compareAtPrice: detail?.compareAtPrice ?? null,
       quantityOnHand: detail?.quantityOnHand ?? null,
       quantityReserved: detail?.quantityReserved ?? 0,
       included: true,
@@ -212,6 +216,7 @@ export function mergePreviewRows(options: {
       variantId: null,
       variantStatus: null,
       priceOverride: null,
+      compareAtPrice: null,
       quantityOnHand: null,
       quantityReserved: 0,
       included: true,
@@ -229,6 +234,7 @@ export function mergePreviewRows(options: {
       variantId: null,
       variantStatus: null,
       priceOverride: null,
+      compareAtPrice: null,
       quantityOnHand: null,
       quantityReserved: 0,
       included: false,
@@ -247,6 +253,7 @@ export function existingVariantRows(
     barcode: string | null;
     status: string;
     priceOverride: number | null;
+    compareAtPrice?: number | null;
     quantityOnHand: number | null;
     quantityReserved: number;
     pairs: MatrixPair[];
@@ -262,6 +269,7 @@ export function existingVariantRows(
     variantId: variant.id,
     variantStatus: variant.status,
     priceOverride: variant.priceOverride,
+    compareAtPrice: variant.compareAtPrice ?? null,
     quantityOnHand: variant.quantityOnHand,
     quantityReserved: variant.quantityReserved,
     included: true,
