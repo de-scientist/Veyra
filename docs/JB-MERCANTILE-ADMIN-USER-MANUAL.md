@@ -494,9 +494,10 @@ set of products together.** A product may be in many collections or none.
 
 Assigning collections to a product (after its draft exists):
 
-1. On the **"Create Product"** (or edit) page, find **Categories &
-   collections**. Category is shown read-only here (it is set in Basic
-   information).
+1. On the **"Create Product"** (or edit) page, find **5 · Organisation &
+   Visibility**. Category is set in Product Details (it is required before
+   publishing); status is shown here as *"Draft — not purchasable until
+   published"* on the create page.
 2. Tick the **Collections** checkboxes (up to 20 shown; *"No collections
    available yet."* if none exist).
 3. Select **"Save collections"**. Success: **"Collection assignments saved."**
@@ -561,12 +562,17 @@ duplicates an existing combination), and you can narrow the set if some
 combinations should not exist (see allow-list note in §13.3). Each variant
 gets its own SKU, price, and stock.
 
-### 13.3. Generating variants — exact procedure
+### 13.3. Adding options — exact procedure
+
+You only need this section when the product has versions customers choose
+between. For a single item, the price and stock in **Pricing & Stock**
+(Chapter 15) already create the buyable item automatically — skip this
+chapter entirely.
 
 Prerequisite: the product draft exists **and a category is assigned**
 (*"Assign a category to the product first — variant dimensions are
-category-scoped."* otherwise). New variants start with **zero stock** — you
-add stock afterwards in Inventory (Chapter 16).
+category-scoped."* otherwise). New items start with **zero stock** — you
+set stock per item (Chapter 15) or afterwards in Inventory (Chapter 16).
 
 > **Note on order.** Variants do **not** require images to exist first: you
 > may generate variants before uploading images. **Publishing** is what
@@ -575,9 +581,10 @@ add stock afterwards in Inventory (Chapter 16).
 > because it keeps the readiness checklist green as you go, not because the
 > system blocks variant creation on an imageless draft.
 
-1. Open section **Variants, SKUs & pricing**. Read the hint: select variant
-   options to preview server-generated SKUs, then set per-variant prices and
-   stock.
+1. Open section **4 · Options & Variants** and tick **"This product has
+   options or variations"** (if the product already has several items, options
+   stay on: *"Options are on because this product already has {N} items."*).
+   Read the hint: choose what varies, then set each item's price and stock.
 2. Under **"Variant options — what changes between variants?"**, select
    **"+ Add variant option"** and **"Add"** for each dimension (e.g. Colour,
    Size). The category lists which dimensions are required
@@ -608,31 +615,39 @@ add stock afterwards in Inventory (Chapter 16).
    preserved."*). While saving: **"Saving…"**. Success: *"Created {c}
    variant(s){, {e} already existed}."* If everything already exists:
    *"Nothing new to create — every previewed combination already exists."*
-8. The variant table appears (caption *"Product variants with SKU, price and
-   stock"*): columns **Select, Variant, SKU, Barcode, Price (KES), Stock,
-   Status, Actions**. New rows show a **"New"** badge. Verify every expected
-   combination is present with a sensible SKU; a missing row means its values
-   were not selected or were skipped — adjust and generate again (existing
-   rows are never duplicated: *"Idempotent — existing combinations are
-   preserved, never duplicated."*).
-9. On failure you get the server's message plus a fix hint, or row-level
-   *"Row {sku}: {error}"* messages, and **"Try again"**. Correct the inputs
-   and retry once. Do not click **"Create"** repeatedly while it is still
-   processing.
+8. The item table appears (caption *"Product items with SKU, selling price,
+   previous price and stock"*): columns **Select, Item, SKU, Barcode,
+   Selling price (KES), Previous price (KES), Stock, Status, Actions**. New
+   rows show a **"New"** badge. Verify every expected combination is present
+   with a sensible SKU; a missing row means its values were not selected or
+   were skipped — adjust and generate again (existing rows are never
+   duplicated: *"Idempotent — existing combinations are preserved, never
+   duplicated."*).
+9. Every new row needs a selling price above KES 0 (*"Required, e.g.
+   2500"*); the previous price is optional (*"Optional"*). On failure you
+   get the server's message plus a fix hint, row-level messages beside the
+   affected row, and **"Try again"**. Correct the inputs and retry once. Do
+   not click **"Create"** repeatedly while it is still processing.
 
 Advanced: an allow-list (commercially-valid subset) can restrict which
 combinations are created; it is an API-level option applied through the same
 flow. Bulk barcode creation (**"Generate missing barcodes"**) never changes
 existing codes.
 
-### 13.4. Managing variants afterwards
+### 13.4. Managing items afterwards
 
-- **Prices:** type per-row (new rows: price field with *"Inherit"*
-  placeholder; existing rows: *"New price"* field) and **"Save price
-  changes"** (*"Price updated for {N} variant(s)."* / *"No price changes to
-  save."*). Bulk: enter **"Bulk price (KES)"**, tick rows, **"Apply to {N}
-  selected"**, then save (**"Bulk values staged for {N} variant(s). Save to
-  persist."**).
+- **Prices:** existing rows show the current selling price and previous
+  price (or *"—"* when none) with *"New price"* / *"New previous"* fields;
+  select **"Save price changes"** and confirm **"Save prices for {N}
+  item(s)?"** (**"Save prices"** to confirm). Success: *"Price updated for
+  {N} variant(s)."* / *"No price changes to save."* New rows require a
+  selling price above KES 0 before they can be created. Problems appear
+  beside the affected row as well as in a message. Bulk: enter **"Bulk
+  price (KES)"**, **"Bulk previous (KES)"**, and/or **"Bulk stock"**, tick
+  rows, **"Apply to {N} selected"**, confirm **"Apply bulk values?"**
+  (**"Stage values"**), review each row, then save (**"Bulk values staged
+  for {N} variant(s). Save to persist."**). Nothing is saved until the
+  server confirms it.
 - **Stock:** per-row *"Set stock"* + **"Apply"** (*"Stock for {sku} set to
   {N}."*) or bulk stock the same way. Larger corrections belong in Inventory
   (Chapter 16).
@@ -670,31 +685,54 @@ for stock and order management. Think of it as the variant's ID card number.
 
 ### 15.1. How prices work
 
-- Prices are set **per variant** in Kenyan Shillings (the store currency is
-  fixed to KES; you enter plain numbers like `3500`, formatted as
-  `KSh 3,500` on the storefront).
+- Prices are in Kenyan Shillings (the store currency is fixed to KES; you
+  enter plain numbers like `3500`, formatted with decimals on the
+  storefront).
 - There is **no product-level price field** in the admin: the selling price
-  lives on each variant. A new variant with no explicit price inherits for
-  display, but **publishing requires every active variant to have a real
-  price above zero** — set a price on every variant before publishing.
-- Rules enforced on prices: valid number with at most two decimals (e.g.
-  `2500.00`); never negative (*"Price cannot be negative."*); at most
-  99,999,999.99 (*"Price must not exceed …"*); malformed entries
-  (*"Enter a valid price, e.g. 2500.00."*) are rejected, never silently
-  saved.
+  lives on each buyable item (variant). A product with no options still has
+  exactly one item, and its price is set in **Pricing & Stock**.
+- **Single item (no options):** open section **3 · Pricing & Stock** and fill
+  **"Selling price (KES) \*"** (e.g. `2500.00`), **"Quantity in stock \*"**
+  (e.g. `20`, or `0` if none yet), plus **Brand** (or **Brand code**) the
+  first time — the brand becomes part of the automatic SKU. Select **"Save
+  price & create item"** (or **"Save price & stock"** when the item already
+  exists). Success: *"Price KSh … saved for …."* / *"Pricing & stock saved
+  for …."* The item's **SKU** is shown read-only (server-generated, cannot
+  be changed) with **Availability** in plain language (**In stock** / **Low
+  stock** / **Out of stock**, plus the available count). Available stock is
+  always on hand minus reservations — you never edit it directly.
+- **Several items (options on):** section **3 · Pricing & Stock** points to
+  **4 · Options & Variants**, where the item table has a **Selling price
+  (KES)** column per row (§13.3–13.4). A common price can be staged to
+  ticked rows with **"Bulk price (KES)"** + **"Apply to {N} selected"**
+  (confirmed), then saved.
+- A new item with no explicit price cannot be published: **publishing
+  requires every active item to have a real price above zero** — set a price
+  on every item before publishing.
+- Rules enforced on prices: required selling price for every purchasable
+  item; valid number with at most two decimals (e.g. `2500.00`); never
+  negative (*"Price cannot be negative."*); at most 99,999,999.99 (*"Price
+  must not exceed …"*); no silent conversion or rounding — malformed entries
+  (*"Enter a valid price, e.g. 2500.00."*, *"Price supports at most two
+  decimal places."*) are rejected, never silently saved. Nothing is shown as
+  saved until the server confirms it.
 
-### 15.2. Discounts and compare-at prices
+### 15.2. Previous prices and discounts
 
-The backend supports an optional per-variant **compare-at (original) price**,
-but the admin interface currently exposes **no field for it**. Practical
-consequences:
+Each item has an optional **previous price** (*"Previous price (KES) —
+optional"* on the single-item form; **Previous price (KES)** column in the
+item table; **"Bulk previous (KES)"** for bulk staging). Rules:
 
-- Set the price customers will actually pay. Do not invent a "discount" the
-  system does not display.
-- Do not type the original price into the selling-price field — that would
-  overcharge customers.
-- If your business needs visible was/now pricing, confirm with technical
-  support how compare-at prices should be entered (see Chapter 29).
+- Leave it empty when there is no sale. Enter it only when you want
+  customers to see a crossed-out was/now price (e.g. selling price `2500`,
+  previous price `3200`).
+- It follows the same KES rules as the selling price (valid number, at most
+  two decimals, never negative).
+- The storefront shows the crossed-out price only when the saved previous
+  price is higher than the selling price. Never type the original price into
+  the selling-price field — that would overcharge customers.
+- If your business has not agreed a discount policy, leave previous prices
+  empty and set only the price customers actually pay (see Chapter 29).
 
 ### 15.3. Avoiding price mistakes
 
@@ -722,13 +760,21 @@ consequences:
   (restock, adjustment, reservation, release, sale, return) with who, what,
   and why. History is never edited or deleted.
 
-### 16.2. Why new variants start at zero
+### 16.2. Why new items start at zero
 
-Variant creation starts each variant at **zero on hand** (a deliberate
-safety rule: nothing is sellable before you confirm real stock). After
-generating variants, add opening stock as follows.
+Item creation starts each item at **zero on hand** (a deliberate safety
+rule: nothing is sellable before you confirm real stock). For a single item,
+enter the opening quantity directly in **Pricing & Stock** — saving writes
+an audited restock movement, never a silent overwrite. For option items,
+enter per-row stock in the item table or add it afterwards in Inventory
+(§16.3).
 
 ### 16.3. Adding and correcting stock
+
+Prefer the product page for product setup stock (single item:
+**Pricing & Stock**; option items: the item table's per-row **"Set
+stock"** + **"Apply"** or bulk stock). Use **Catalogue → Inventory** for
+everything afterwards:
 
 1. Go to **Catalogue → Inventory** (heading **"Inventory"**, *"Controlled
    stock operations — every change writes a movement record"*).
@@ -775,11 +821,11 @@ generating variants, add opening stock as follows.
 ## 17. SEO and Product Visibility
 
 - **Slug / product URL:** `/products/your-slug`, auto-generated from the
-  name, shown in the SEO panel as `Slug /products/…` with `Title {name} |
-  JB Mercantile` and a 140-character description excerpt. There are **no
-  separate SEO title/description fields** — search presentation derives from
-  name and description, so write both carefully. The slug cannot be changed
-  after draft creation.
+  name, shown under the category field in Product Details (*"Web address:
+  /products/…"*) and beside the storefront preview as `/products/…`.
+  There are **no separate SEO title/description fields** — search
+  presentation derives from name and description, so write both carefully.
+  The slug cannot be changed after draft creation.
 - **Visibility rule:** only **Active** products with at least one purchasable
   variant and one image appear to customers. Draft and Archived products are
   invisible on the storefront (archived variants likewise stop being
@@ -797,30 +843,32 @@ generating variants, add opening stock as follows.
 |---|---|---|
 | Save Draft | Create page, before anything exists | Creates the product as **Draft**; unlocks media/variants/collections |
 | Save changes | Create page (after draft) and Edit page | Saves name/description/category/status (and collections via **"Save collections"**); never publishes by itself on the create page |
-| Publish product | Create page, **"7 · Review & publish"** (and sticky bar) | Flips Draft → **Active** after passing the readiness checklist; then opens the editor |
+| Publish product | Create page, **"Review & publish"** (and sticky bar) | Flips Draft → **Active** after passing the readiness checklist; then opens the editor |
 | Change Status + Save Changes | Edit page status dropdown | Requests a status change (Draft/Active/Archived). Switching to **Active** runs the **same server readiness check** as publishing: an incomplete product is rejected with its issues listed — the edit page cannot bypass publishing rules (see §18.3) |
 | Archive / Restore | Product list row actions; **"Archive"** / **"Restore"** with confirmation | Archive hides from storefront (*"It will disappear from the storefront but historical orders are preserved."*); Restore re-activates |
 
 ### 18.2. The publish checklist (create page)
 
-**"7 · Review & publish"** requires all of:
+**"Review & publish"** requires all of:
 
 1. Product name (min 2 characters).
-2. URL slug present.
+2. URL slug present (automatic — always present once a name is entered).
 3. Category assigned.
 4. Description (min 12 characters).
-5. At least one purchasable variant — real SKU, price above zero, and at
-   least one attribute mapping (*"Add the first variant after the draft is
-   created."*).
+5. At least one priced item — real SKU, selling price above zero, and at
+   least one attribute mapping (for a single item: set it in **Pricing &
+   Stock**; for options: generate items in **Options & Variants**).
 6. At least one product image, including a primary image (*"Upload images
-   with the signed Cloudinary workflow after the draft is created."*).
+   after the draft is created."*).
 
-The **"Publish product"** button is disabled until variants and images exist
-(*"Add at least one variant and one image before publishing"*). If the server
-still refuses, you get **"Publishing was rejected by the server. Review the
-issues below."** plus a **"Server readiness issues"** list — fix each item
-and retry. Success: **"Product published."** and the editor opens; use
-**"View storefront"** to confirm visibility.
+The **"Publish product"** button is disabled until a price and images exist
+(*"Set a price and add at least one image before publishing"*). When it is
+not ready, the review panel explains why: *"Publishing unlocks when the
+product has a price (Pricing & Stock) and at least one image (Images)."*
+If the server still refuses, you get **"Publishing was rejected by the
+server. Review the issues below."** plus a **"Server readiness issues"**
+list — fix each item and retry. Success: **"Product published."** and the
+editor opens; use **"View storefront"** to confirm visibility.
 
 ### 18.3. Archiving, restoring, and status notes
 
@@ -859,42 +907,42 @@ and retry. Success: **"Product published."** and the editor opens; use
 500W, KSh 8,500 (illustrative price), 20 units opening stock.
 
 1. **Name.** Catalogue → Products → **"New Product"**. Product name:
-   `Philips 1.5L Electric Blender`. Leave slug blank (auto-address).
+   `Philips 1.5L Electric Blender` (the web address is automatic).
 2. **Description.** Write ≥12 characters, e.g. *"1.5-litre electric blender
    with 500W motor, two speeds plus pulse, detachable stainless-steel blades,
    and a 1-litre grinding attachment. Ideal for fruit, vegetables, and
    spices. Wipe-clean base."*
 3. **Category.** Choose the blender category (illustrative:
-   Kitchen & Home → Kitchen Appliances → Blenders). Leave Status on Draft.
+   Kitchen & Home → Kitchen Appliances → Blenders).
 4. **Save Draft.** Select **"Save Draft"**, wait for *"Draft created. Add
-   images and the first variant below."*
-5. **Images.** In Product media, upload 3–4 JPG photos (front, side, jug
+   images, then set the price and stock."*
+5. **Images.** In **2 · Images**, upload 3–4 JPG photos (front, side, jug
    detail, in-use). Confirm each shows **"Saved"** and the media count grows.
    Keep the best front shot first (primary), then **"Set primary"** if
    needed. Add alt text (*"White 1.5L countertop blender"*).
-6. **Collections.** Tick an illustrative collection such as New Arrivals (if
-   your store has one; otherwise skip — collections are optional), then
-   **"Save collections"** → *"Collection assignments saved."*
-7. **Attributes.** If Capacity/Power/Colour values are missing, create them
-   under Catalogue → Attributes first (e.g. value `1.5L` under Capacity).
-8. **Variants.** In Variants/SKUs/pricing: add dimensions (illustrative:
-   Colour, Capacity), tick White × 1.5L (plus any real options), complete
-   brand, review the SKU preview, then **"Create 1 variant"** (or N) and
-   confirm. If the panel complains about a missing category code, set it
-   yourself under Catalogue → Categories → Edit (**"SKU code"** field,
-   §12.1), then **"Refresh preview"** and continue.
-9. **Price.** Enter `8500` in the variant's price field and **"Save price
-   changes"** → *"Price updated for 1 variant(s)."*
-10. **Stock.** Catalogue → Inventory → select the variant SKU → Restock,
-    quantity `20`, reason `opening stock` → **"Apply Stock Change"**,
-    confirm → *"Restocked and recorded as an IN movement."*
-11. **Review.** Check Setup progress (all complete), Storefront preview
-    (photo, name, `KSh 8,500`, `/products/philips-1-5l-electric-blender`),
-    and the Review & publish checklist (all ticked).
-12. **Publish.** Select **"Publish product"** → *"Product published."*
-13. **Verify.** Select **"View storefront"**: correct name, photo, price,
-    options, and add-to-cart availability. If anything is wrong, edit
+6. **Price & stock.** In **3 · Pricing & Stock**, enter selling price `8500`
+   and quantity `20`, choose the brand, then **"Save price & create item"**
+   → *"Price … saved for …."* The single item (SKU shown read-only) now
+   reads **In stock — 20 available**. Skip **4 · Options & Variants**
+   entirely — this blender has no customer-facing versions.
+7. **Collections.** In **5 · Organisation & Visibility**, tick an
+   illustrative collection such as New Arrivals (if your store has one;
+   otherwise skip — collections are optional), then **"Save collections"**
+   → *"Collection assignments saved."*
+8. **Review.** Check Setup progress (all complete), Storefront preview
+   (photo, name, `KSh 8,500`, `/products/philips-1-5l-electric-blender`),
+   and the Review & publish checklist (all ticked).
+9. **Publish.** Select **"Publish product"** → *"Product published."*
+10. **Verify.** Select **"View storefront"**: correct name, photo, price,
+    and add-to-cart availability. If anything is wrong, edit
     (Chapter 20) — do not recreate the product.
+
+> **With options?** If the product had versions (e.g. colours × sizes), you
+> would additionally tick **"This product has options or variations"** in
+> **4 · Options & Variants**, select the option dimensions and values,
+> review the SKU preview, **"Create {N} variant(s)"**, and set each item's
+> selling price in the item table (a common price can be staged with
+> **"Bulk price (KES)"** + **"Apply to {N} selected"**) — see Chapter 13.
 
 ## 20. Editing Existing Products
 
@@ -905,17 +953,22 @@ and retry. Success: **"Product published."** and the editor opens; use
    ACTIVE, ARCHIVED**) and **Category**, page with **"Previous"** /
    **"Next"** (*"Page X of Y (Z records)"*).
 3. Select the product **name** or **"Edit"**. The editor shows
-   *"{slug} • [status] • {N} variant(s) • {M} image(s)"* with
+   *"{slug} • [status] • {N} item(s) • {M} image(s)"* with
    **"← Back to Products"** (returns without saving) and **"View
-   storefront"**.
+   storefront"**. The editor follows the same five sections as creation:
+   **1 · Product Details**, **2 · Images**, **3 · Pricing & Stock**,
+   **4 · Options & Variants**, **5 · Organisation & Visibility**, plus a
+   **Stock summary** sidebar.
 
 ### 20.2. What you can change
 
-- **Name, description, category, status** in **"Product information"**, then
-  **"Save Changes"** (with check icon). Success: *"Product updated"*.
-  Name ≥2, description ≥12 characters, same as creation. Category may be set
-  to **"No category"**, but the product then fails publish-readiness until a
-  category is restored. Slug cannot be changed here.
+- **Name, description, category, status** in **"1 · Product Details"**, then
+  **"Save Changes"** (with check icon) or **"Cancel"**. Success:
+  *"Product updated"*. Name ≥2, description ≥12 characters, same as
+  creation. Category may be set to **"No category"**, but the product then
+  fails publish-readiness until a category is restored. The web address
+  (`/products/…`) and item SKUs are shown read-only and cannot be changed
+  here.
 - **Status** changes to Draft or Archived take effect on save immediately.
   Switching to **Active** is a publish request: the server runs the same
   readiness check as the create-page **"Publish product"** flow and rejects
@@ -925,15 +978,26 @@ and retry. Success: **"Product published."** and the editor opens; use
   requirement before you attempt it.
 - **Images:** same tools as Chapter 11 (upload/reorder/primary/alt/replace/
   delete), except archived products are read-only.
-- **Collections:** tick/untick (first 20 shown) and **"Save collections"**
-  (*"Collection assignments saved."*); **"Open Collections"** manages the
-  dictionary.
-- **Variants & pricing:** the same VariantManager as Chapter 13 (generate
-  more combinations, batch prices, stock, archive/restore, barcodes); changes
-  reload the page data automatically.
-- **Inventory:** managed from **Catalogue → Inventory** (see §16.3), reachable
-  via **"Open Inventory"**. **"Manage Attributes"** jumps to the attribute
-  dictionary.
+- **Price:** single item — **"3 · Pricing & Stock"** (**"Selling price
+  (KES)"**, optional **"Previous price (KES)"**, **"Quantity in stock"**,
+  then **"Save price & stock"**); several items — the item table in
+  **"4 · Options & Variants"** (per-row prices, **"Save price changes"**
+  with confirmation, bulk staging). Failed saves keep your entries and say
+  so — success messages appear only after the server confirms.
+- **Stock:** single item — the same **Pricing & Stock** quantity (an audited
+  correction movement); option items — per-row **"Set stock"** +
+  **"Apply"**; the **Stock summary** sidebar shows each item's price and
+  plain-language availability (**In stock** / **Low stock** / **Out of
+  stock**). Larger corrections belong in **Catalogue → Inventory**
+  (see §16.3), reachable via **"Open Inventory"**.
+- **Collections:** in **"5 · Organisation & Visibility"**, tick/untick (first
+  20 shown) and **"Save collections"** (*"Collection assignments saved."*);
+  **"Open Collections"** manages the dictionary.
+- **Options:** tick **"This product has options or variations"** in
+  **"4 · Options & Variants"** only when customers choose between versions;
+  the same generator as Chapter 13 appears (generate more combinations,
+  batch prices, stock, archive/restore, barcodes); changes reload the page
+  data automatically.
 
 ### 20.3. Effects on orders and history
 
@@ -1118,12 +1182,15 @@ from the dashboard.
 **Can I change a SKU later?** No — SKUs are permanent. Archive the wrong
 variant and create the right combination.
 
-**Can I offer a discount?** Set the actual selling price per variant. A
-separate compare-at/original price field is not available in the dashboard
-(Chapter 15).
+**Can I offer a discount?** Yes — enter the price customers pay in
+**"Selling price (KES)"** and the original price in **"Previous price
+(KES)"** (Chapter 15). The shop shows the crossed-out was/now price only
+when the previous price is higher. If your business has no agreed discount
+policy, leave the previous price empty.
 
-**Why is stock zero on my new variants?** By design — new variants start at
-zero until you record real stock in Inventory (Chapter 16).
+**Why is stock zero on my new items?** By design — new items start at
+zero until you record real stock: enter the quantity in **Pricing & Stock**
+(single item) or the item table, or in Inventory (Chapter 16).
 
 **Why can't my colleague see Users/Roles?** Only super-admins see those
 pages. Granting roles requires a super-admin (Chapter 7/22).
@@ -1147,8 +1214,8 @@ pages. Granting roles requires a super-admin (Chapter 7/22).
 - **Cloudinary:** the image-hosting service storing product photos.
 - **Collection:** a merchandising group of products (e.g. New Arrivals —
   illustrative).
-- **Compare-at price:** optional original price for was/now display;
-  supported by the backend but not enterable in the dashboard.
+- **Compare-at price:** optional previous (original) price per item for
+  was/now display; leave empty when there is no sale (Chapter 15).
 - **Draft:** an invisible, unpublished product state.
 - **Inventory movement:** an immutable record of one stock change.
 - **Primary image:** the main product photo used in listings.
@@ -1175,22 +1242,24 @@ Copy/use per product. All boxes must be ticked before publishing.
 
 - [ ] Signed in with an operations account; **Products** visible.
 - [ ] **"New Product"** → **"Create Product"** page open.
-- [ ] Name ≥2 chars (specific, customer-facing).
+- [ ] Name ≥2 chars (specific, customer-facing); web address automatic.
 - [ ] Description ≥12 chars (accurate, no false claims).
 - [ ] Correct existing category chosen (or created first under Categories).
-- [ ] Status left as Draft; **"Save Draft"** → *"Draft created…"* confirmed.
+- [ ] **"Save Draft"** → *"Draft created. Add images, then set the price
+      and stock."* confirmed.
 - [ ] Images uploaded (JPG/PNG/WebP), each **"Saved"**, count increased.
-- [ ] Primary image set (**"PRIMARY"** badge correct).
+- [ ] Primary image correct (first photo is primary).
 - [ ] Alt text added (≤200 chars).
+- [ ] **Pricing & Stock:** selling price (KES) above zero + quantity entered
+      → save confirmed (*"Price … saved…"* / *"Pricing & stock saved…"*);
+      previous price entered only for a genuine sale.
+- [ ] Options needed? If yes: dimensions + values selected, brand completed,
+      SKU preview sane → **"Create {N} variant(s)"** confirmed → success
+      message; table shows all combinations, no duplicates; every item has a
+      real price > 0 → **"Save price changes"** confirmed (bulk staging
+      confirmed where used). If no: skipped — single item covers it.
 - [ ] Collections ticked (if any) → **"Save collections"** → *"saved"*
       confirmed.
-- [ ] Attributes/values exist; dimensions + values selected; brand completed.
-- [ ] SKU preview sane → **"Create {N} variant(s)"** confirmed → success
-      message; table shows all combinations, no duplicates.
-- [ ] Every variant has a real price > 0 → **"Save price changes"**
-      confirmed.
-- [ ] Opening stock added in Inventory with a ≥3-char reason; success
-      message confirmed.
 - [ ] Setup progress complete; storefront preview correct (name, photo,
       price, URL).
 - [ ] Review & publish checklist all ticked; **"Publish product"** →
@@ -1201,9 +1270,9 @@ Copy/use per product. All boxes must be ticked before publishing.
 
 Contact technical support when: access/roles are wrong; a category code
 must be removed or fundamentally redefined (setting codes is
-self-service — §12.1); compare-at pricing is required; shipping/tax
-configuration must change; any server error persists after one careful
-retry; image cleanup warnings appear; or the UI contradicts this manual.
+self-service — §12.1); shipping/tax configuration must change; any server
+error persists after one careful retry; image cleanup warnings appear; or
+the UI contradicts this manual.
 
 Always include: your account email (never your password), exact page/URL,
 product name and SKU (for catalogue issues), the exact on-screen message,
@@ -1231,8 +1300,12 @@ Evidence labels: **VERIFIED** (confirmed in code), **PARTIALLY VERIFIED**
   v1.1). Business must still confirm who in the organisation may set or
   change codes and confirm the intended SKU format policy
   (`docs/BUSINESS-DECISIONS.md` BD-002, BD-003).
-- Compare-at/discount display: backend field exists, dashboard field
-  **NOT IMPLEMENTED** — confirm whether was/now pricing is wanted (BD-005).
+- Compare-at/previous-price display: backend field plus dashboard entry
+  (**"Previous price (KES)"** single-item field, item-table column, bulk
+  staging) **VERIFIED** against source; crossed-out display renders only
+  when the saved previous price exceeds the selling price. Business should
+  still confirm the discount policy before advertising was/now prices
+  (`docs/BUSINESS-DECISIONS.md` BD-005 remains open).
 - Product-level base price: present in the data model as a display fallback
   but not settable from the dashboard: **VERIFIED** — confirm the
   variant-price-only model is intentional (BD-004).
