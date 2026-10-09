@@ -5,10 +5,10 @@
 | Item | Detail |
 |---|---|
 | Title | JB Mercantile Admin Dashboard User Manual |
-| Version | 1.1 |
-| Date | 2026-10-07 |
+| Version | 1.2 |
+| Date | 2026-10-09 |
 | Reader | Non-technical administrators (basic computer skills assumed) |
-| Basis | Source-code reconciliation of the JB Mercantile repository (no live browser testing was available, so all navigation is described in words; no screenshots are included and none are fabricated). Reconciles v1.0 against the implementation; supersedes the audit in `JB-MERCANTILE-ADMIN-MANUAL-AUDIT.md` where they differ (see `JB-MERCANTILE-MANUAL-IMPLEMENTATION-RECONCILIATION.md`; open business questions live in `BUSINESS-DECISIONS.md`) |
+| Basis | Source-code reconciliation of the JB Mercantile repository (no live browser testing was available, so all navigation is described in words; no screenshots are included and none are fabricated). Reconciles v1.0 against the implementation; supersedes the audit in `JB-MERCANTILE-ADMIN-MANUAL-AUDIT.md` where they differ (see `JB-MERCANTILE-MANUAL-IMPLEMENTATION-RECONCILIATION.md`; open business questions live in `BUSINESS-DECISIONS.md`). v1.2 documents the simplified product-creation flow with the dedicated Pricing & Stock section (see `JB-PRODUCT-CREATION-AND-PRICING-UX-REPORT.md`) |
 | Scope | Admin dashboard operation with emphasis on creating, publishing, editing, and managing products |
 
 > **How to use this manual.** Chapters 2–7 get you signed in and oriented.
@@ -246,22 +246,27 @@ Attributes, Inventory**) is where all of this is managed.
 
 ## 9. Product Creation at a Glance
 
-Creating a sellable product always follows the same five stages, in order:
+Creating a sellable product always follows the same stages, in order:
 
-1. **Save a draft** — enter name, description, and category; select
+1. **Describe the product** — enter name, description, and category; select
    **"Save Draft"**. This creates the product record and unlocks everything
    else. (Chapter 10.)
-2. **Upload images** — add photos and choose the primary (main) image.
-   (Chapter 11.)
-3. **Generate variants** — define the options (for example colours × sizes),
-   generate the combinations, and set each variant's price. (Chapters 13–15.)
-4. **Assign collections** (optional) — attach merchandising groups.
-   (Chapter 12.)
-5. **Review and publish** — check the readiness checklist, then select
+2. **Add photos** — upload images; the first photo is the primary (main)
+   image. (Chapter 11.)
+3. **Set the price and stock** — in **Pricing & Stock**, enter the selling
+   price (KES) and quantity. For a single item this creates the buyable item
+   automatically — no variant table needed. (Chapters 15–16.)
+4. **Add options only if needed** — if customers choose between versions
+   (for example colours × sizes), tick **"This product has options or
+   variations"** and configure them, setting each item's price.
+   (Chapters 13–15.) Skip this entirely for single-item products.
+5. **Organise (optional)** — attach collections. (Chapter 12.)
+6. **Review and publish** — check the readiness checklist, then select
    **"Publish product"**. Only published (**active**) products with at least
-   one variant and one image can be bought by customers. (Chapters 17–18.)
+   one priced item and one image can be bought by customers.
+   (Chapters 17–18).
 
-> **Warning.** Do not try to publish before variants and images exist: the
+> **Warning.** Do not try to publish before the price and images exist: the
 > **"Publish product"** button is disabled until then, and the server rejects
 > premature publishing. Follow the stages in order and you will not get
 > stuck.
@@ -277,9 +282,9 @@ Creating a sellable product always follows the same five stages, in order:
 3. Select the **"New Product"** button (top of the list). If the list is
    empty you will see **"No products"** with the message *"No products match
    the current filters."* and another **"New Product"** button — use it.
-4. The **"Create Product"** page opens with the hint *"Draft-first
-   workspace: save a draft to unlock signed Cloudinary uploads and variants,
-   then review and publish."* A **"← Back to Products"** link returns to the
+4. The **"Create Product"** page opens with the hint *"Three quick steps:
+   describe the product, add photos, set the price and stock. Save a draft
+   first to unlock photos and pricing."* A **"← Back to Products"** link returns to the
    list without saving.
 5. If **"Products"** or **"New Product"** is missing, your role lacks catalogue
    access: ask your administrator. If you get **"403 — Not authorized"**, see

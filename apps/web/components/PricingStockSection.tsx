@@ -36,7 +36,7 @@ import {
   type AdminCategory,
   type AdminProductDetailVariant,
 } from '../lib/admin-api';
-import { formatKES, validatePriceInput, validateStockInput } from '../lib/variant-matrix';
+import { formatKES, availabilityLabel, validatePriceInput, validateStockInput } from '../lib/variant-matrix';
 
 export type PricingStockSectionProps = {
   productId: string;
@@ -66,14 +66,8 @@ export type PricingStockSectionProps = {
 function normalizeSlug(slug: string): string {
   return slug.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
-
-/** Plain-language availability from authoritative inventory numbers. */
-export function availabilityLabel(onHand: number | null, reserved: number, threshold: number): string {  if (onHand === null) return 'Not stocked yet';
-  const available = onHand - reserved;
-  if (available <= 0) return 'Out of stock';
-  if (available <= threshold) return 'Low stock';
-  return 'In stock';
-}
+/** Plain-language availability (re-exported from the pure matrix helper for page sidebars). */
+export { availabilityLabel };
 
 export function PricingStockSection({
   productId,

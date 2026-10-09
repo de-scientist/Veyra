@@ -125,6 +125,19 @@ export function formatStock(value: number | null | undefined, reserved = 0): str
   return `${available.toLocaleString('en-KE')} available`;
 }
 
+/**
+ * Plain-language availability from authoritative inventory numbers.
+ * Available = on hand − reservations (never edited directly). Thresholds
+ * come from the variant's lowStockThreshold (default 5).
+ */
+export function availabilityLabel(onHand: number | null | undefined, reserved: number, threshold: number): string {
+  if (onHand === null || onHand === undefined) return 'Not stocked yet';
+  const available = onHand - reserved;
+  if (available <= 0) return 'Out of stock';
+  if (available <= threshold) return 'Low stock';
+  return 'In stock';
+}
+
 export type MatrixPair = { attributeId: string; attributeName: string; valueId: string; value: string };
 
 export type MatrixRow = {

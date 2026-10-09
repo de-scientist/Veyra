@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  availabilityLabel,
   buildAllowList,
   existingVariantRows,
   formatKES,
@@ -102,6 +103,57 @@ describe('price and stock validation', () => {
   it('formats KES amounts for Kenyan admins', () => {
     expect(formatKES(2500)).toContain('2,500');
     expect(formatKES(null)).toBe('—');
+  });
+
+  it('never silently converts or rounds entered prices', () => {
+    // Two decimals preserved exactly; a third decimal is rejected, not rounded.
+    expect(validatePriceInput('2500.50')).toEqual({ ok: true, value: 2500.5 });
+    expect(validatePriceInput('2500.55')).toEqual({ ok: true, value: 2500.55 });
+    expect(validatePriceInput('10.999').ok).toBe(false);
+    expect(validatePriceInput('0.00')).toEqual({ ok: true, value: 0 });
+  });
+
+  it('treats a previous (compare-at) price as optional input with the same precision rules', () => {
+    // Empty means "no sale" — valid. When present it follows KES rules.
+    expect(validatePriceInput('')).toEqual({ ok: true, value: null });
+    expect(validatePriceInput('3200.00')).toEqual({ ok: true, value: 3200 });
+    expect(validatePriceInput('-100').ok).toBe(false);
+    expect(validatePriceInput('99.999').ok).toBe(false);
+  });
+});
+
+describe('pricing & stock section rules', () => {
+  it('describes availability in plain language from on-hand minus reservations', () => {
+    expect(availabilityLabel(null, 0, 5)).toBe('Not stocked yet');
+    expect(availabilityLabel(0, 0, 5)).toBe('Out of stock');
+    expect(availabilityLabel(10, 10, 5)).toBe('Out of stock');
+    expect(availabilityLabel(3, 0, 5)).toBe('Low stock');
+    expect(availabilityLabel(10, 8, 5)).toBe('Low stock');
+    expect(availabilityLabel(20, 2, 5)).toBe('In stock');
+  });
+
+  it('carries compare-at prices through existing and preview rows without fabrication', () => {
+    const rows = mergePreviewRows({
+      created: [{ id: null, sku: 'NEW-1', attributes: { Color: 'White' } }],
+      existing: [{ id: 'v1', sku: 'EX-1', attributes: { Color: 'Black' } }],
+      skipped: [],
+      existingDetails: [
+        { id: 'v1', status: 'ACTIVE', barcode: null, priceOverride: 2500, compareAtPrice: 3200, quantityOnHand: 8, quantityReserved: 2, pairs: [] },
+      ],
+      resolvePair,
+    });
+    const existing = rows.find((row) => row.sku === 'EX-1');
+    const created = rows.find((row) => row.sku === 'NEW-1');
+    expect(existing?.compareAtPrice).toBe(3200);
+    // New/preview rows never invent a previous price.
+    expect(created?.compareAtPrice).toBeNull();
+  });
+
+  it('lists compare-at prices for persisted variants in edit mode', () => {
+    const rows = existingVariantRows([
+      { id: 'v1', sku: 'SNK-RED-42', barcode: null, status: 'ACTIVE', priceOverride: 6500, compareAtPrice: null, quantityOnHand: 14, quantityReserved: 0, pairs: [] },
+    ]);
+    expect(rows[0]?.compareAtPrice).toBeNull();
   });
 });
 
