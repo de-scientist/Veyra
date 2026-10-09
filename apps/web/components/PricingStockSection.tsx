@@ -196,18 +196,19 @@ export function PricingStockSection({
         if (quantity > 0) {
           // New variants start at zero on hand; initial stock is an audited
           // IN movement, never a silent overwrite.
-          const targetId = createdId ?? (await Promise.resolve(null) as null);
-          if (targetId) {
-            await restockVariantsBatch({ reason: 'Initial product stock', items: [{ variantId: targetId, quantity }] });
-          } else {
-            // Fallback: resolve the freshly created default variant by reload.
-            // Parent refresh runs below; stock retry happens from the edit
-            // page if this path is ever hit without an id.
-            setFormError('Price saved, but stock needs a retry — the variant id was not returned. Reload and set stock again.');
+          let targetId = createdId;
+          if (!targetId) {
+            const detail = await getAdminProduct(productId);
+            targetId = detail.variants[0]?.id ?? null;
+          }
+          if (!targetId) {
+            // Price saved; stock retry happens after reload from the edit page.
+            setFormError('Price saved, but stock needs a retry — reload and set the stock again.');
             notify('error', 'Price saved, but stock needs a retry.');
             await onChanged();
             return;
           }
+          await restockVariantsBatch({ reason: 'Initial product stock', items: [{ variantId: targetId, quantity }] });
         }
         notify('success', `Price ${formatKES(sellPrice)} saved for ${productName || 'this product'}.`);
       } else {
