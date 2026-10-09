@@ -30,6 +30,7 @@ import {
   adjustVariant,
   batchUpdateVariants,
   generateProductVariants,
+  getAdminProduct,
   restockVariantsBatch,
   type AdminAttribute,
   type AdminCategory,
