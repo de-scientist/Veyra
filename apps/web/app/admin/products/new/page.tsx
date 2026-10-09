@@ -8,6 +8,7 @@ import { ProductMediaManager } from '../../../../components/ProductMediaManager'
 import { AdminStatusBadge } from '../../../../components/admin';
 import { useConfirm } from '../../../../components/ConfirmDialog';
 import { JBIcon } from '../../../../components/JBIcons';
+import { OptionsToggle, PricingStockSection } from '../../../../components/PricingStockSection';
 import { useToast } from '../../../../components/Toast';
 import { VariantManager } from '../../../../components/VariantManager';
 import {
@@ -22,6 +23,7 @@ import {
   updateAdminProduct,
   type AdminAttribute,
   type AdminCategory,
+  type AdminProductDetailVariant,
   type AdminProductImage,
 } from '../../../../lib/admin-api';
 import { cloudinaryDisplayUrl } from '../../../../lib/cloudinary-display';
@@ -46,19 +48,23 @@ function fieldError(errors: Record<string, string>, key: string): string | null 
 
 const FIELD_IDS: Record<string, string> = {
   name: 'field-name',
-  slug: 'field-slug',
   description: 'field-description',
   categoryId: 'field-category',
-  status: 'field-status',
 };
 
 /**
- * Product creation workspace.
+ * Product creation workspace (simplified guided flow).
+ *
+ * Sections: 1 Product Details · 2 Images · 3 Pricing & Stock ·
+ * 4 Options & Variants (only when needed) · 5 Organisation & Visibility.
+ *
  * Backend reality: ProductImage rows require an existing productId, so the
- * flow is draft-first (obtain ID) → signed Cloudinary media → variants →
- * review/publish. No orphan temporaries, no second upload path. Publishing
- * is a status flip the UI gates on real readiness (variant + image); the
- * backend re-validates every write and audit-logs creation/updates.
+ * flow is draft-first (obtain ID) → images → price/stock → review/publish.
+ * The selling price lives on the purchasable item (ProductVariant.priceOverride,
+ * BD-004); a product without options gets its single item automatically from
+ * the Pricing & Stock section — no variant table needed. Publishing is a
+ * status flip the UI gates on real readiness; the backend re-validates every
+ * write and audit-logs creation/updates.
  */
 export default function NewAdminProductPage() {
   const router = useRouter();
@@ -72,8 +78,9 @@ export default function NewAdminProductPage() {
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<BasicSnapshot | null>(null);
   const [gallery, setGallery] = useState<AdminProductImage[]>([]);
-  const [variantCount, setVariantCount] = useState(0);
+  const [variants, setVariants] = useState<AdminProductDetailVariant[]>([]);
   const [variantPrices, setVariantPrices] = useState<Array<number | null>>([]);
+  const [hasOptions, setHasOptions] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -88,7 +95,9 @@ export default function NewAdminProductPage() {
   const [collectionsSaving, setCollectionsSaving] = useState(false);
   const [collectionsError, setCollectionsError] = useState<string | null>(null);
 
-  const [form, setForm] = useState({ name: '', slug: '', description: '', categoryId: '', status: 'DRAFT' });
+  // The web address (slug) is generated automatically from the name and
+  // cannot be changed after creation; status always starts as DRAFT.
+  const [form, setForm] = useState({ name: '', description: '', categoryId: '', status: 'DRAFT' });
 
   useEffect(() => {
     getAdminCategories().then(setCategories).catch(() => undefined);
@@ -108,8 +117,11 @@ export default function NewAdminProductPage() {
   }, [dirty, phase]);
 
   const autoSlug = useMemo(() => slugify(form.name), [form.name]);
-  const effectiveSlug = form.slug.trim() || autoSlug;
+  const effectiveSlug = autoSlug;
   const imageCount = gallery.length;
+  const variantCount = variants.length;
+  const multiVariant = variantCount > 1;
+  const optionsOn = hasOptions || multiVariant;
   const checklist = publishChecklist({
     name: form.name,
     slug: effectiveSlug,
@@ -120,7 +132,7 @@ export default function NewAdminProductPage() {
   });
   const progress = checklistProgress(checklist);
   const publishReady = canPublishNow(variantCount, imageCount);
-  const postDraftDirty = basicFieldsDirty(snapshot, form);
+  const postDraftDirty = basicFieldsDirty(snapshot, { ...form, slug: snapshot?.slug ?? '' });
   const prices = useMemo(() => priceRange(variantPrices), [variantPrices]);
   const primaryImage = useMemo(
     () => gallery.find((image) => image.isPrimary) ?? gallery[0] ?? null,
@@ -131,21 +143,25 @@ export default function NewAdminProductPage() {
   const basicValid = useMemo(
     () =>
       productDraftSchema.safeParse({
-        ...form,
-        slug: form.slug.trim() ? slugify(form.slug) : undefined,
+        name: form.name,
+        description: form.description,
+        categoryId: form.categoryId,
+        status: 'DRAFT',
+        slug: undefined,
       }).success,
     [form],
   );
 
   const sections = useMemo(
     () => [
-      { id: 'ws-basic', label: 'Basic information', ok: basicValid },
-      { id: 'ws-media', label: 'Product media', ok: imageCount > 0, detail: imageCount === 0 ? 'No images yet' : `${imageCount} image${imageCount === 1 ? '' : 's'}` },
-      { id: 'ws-variant', label: 'Variants, SKUs & pricing', ok: variantCount > 0, detail: variantCount === 0 ? 'No variants yet' : `${variantCount} variant${variantCount === 1 ? '' : 's'}` },
-      { id: 'ws-taxonomy', label: 'Categories & collections', ok: form.categoryId.length > 0 },
+      { id: 'ws-details', label: 'Product details', ok: basicValid },
+      { id: 'ws-media', label: 'Images', ok: imageCount > 0, detail: imageCount === 0 ? 'No images yet' : `${imageCount} image${imageCount === 1 ? '' : 's'}` },
+      { id: 'ws-pricing', label: 'Pricing & Stock', ok: variantCount > 0, detail: variantCount === 0 ? 'No price yet' : `${variantCount} item${variantCount === 1 ? '' : 's'} priced` },
+      { id: 'ws-variant', label: 'Options & Variants', ok: true, detail: optionsOn ? 'Options on' : 'Single item' },
+      { id: 'ws-organisation', label: 'Organisation & Visibility', ok: form.categoryId.length > 0 },
       { id: 'ws-review', label: 'Review & publish', ok: publishReady },
     ],
-    [basicValid, imageCount, variantCount, form.categoryId, publishReady],
+    [basicValid, imageCount, variantCount, optionsOn, form.categoryId, publishReady],
   );
 
   const set = (key: string, value: string) => {
@@ -158,12 +174,32 @@ export default function NewAdminProductPage() {
     if (id) document.getElementById(id)?.focus({ preventScroll: false });
   };
 
+  const handleOptionsChange = async (value: boolean) => {
+    if (multiVariant && !value) {
+      notify('info', 'This product already has multiple items — options stay on. Archive extra items to return to a single item.');
+      return;
+    }
+    if (value && !hasOptions && variants.length > 0) {
+      const proceed = await confirm({
+        title: 'Add options or variations?',
+        description: 'Your current price and stock stay on the single item. You can then add options such as Size or Colour and set a price per item.',
+        confirmLabel: 'Show options',
+        onConfirm: () => undefined,
+      });
+      if (!proceed) return;
+    }
+    setHasOptions(value);
+  };
+
   const createDraft = async (): Promise<string | null> => {
     setFormError(null);
     setPublishIssues([]);
     const parsed = productDraftSchema.safeParse({
-      ...form,
-      slug: form.slug.trim() ? slugify(form.slug) : undefined,
+      name: form.name,
+      description: form.description,
+      categoryId: form.categoryId,
+      status: 'DRAFT',
+      slug: undefined,
     });
     if (!parsed.success) {
       const next: Record<string, string> = {};
@@ -179,8 +215,8 @@ export default function NewAdminProductPage() {
         name: parsed.data.name,
         description: parsed.data.description,
         categoryId: parsed.data.categoryId,
-        slug: parsed.data.slug || undefined,
-        status: parsed.data.status,
+        slug: undefined,
+        status: 'DRAFT',
       });
       const created = product as { id: string; slug: string; updatedAt: string };
       setCreatedId(created.id);
@@ -188,10 +224,10 @@ export default function NewAdminProductPage() {
       setServerUpdatedAt(created.updatedAt);
       setSnapshot({
         name: parsed.data.name,
-        slug: parsed.data.slug ?? '',
+        slug: created.slug,
         description: parsed.data.description,
         categoryId: parsed.data.categoryId,
-        status: parsed.data.status,
+        status: 'DRAFT',
       });
       setPhase('complete');
       setDirty(false);
@@ -202,7 +238,7 @@ export default function NewAdminProductPage() {
       } catch {
         // Collection panel shows its own error state; draft creation stands.
       }
-      notify('success', 'Draft created. Add images and the first variant below.');
+      notify('success', 'Draft created. Add images, then set the price and stock.');
       return created.id;
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not create product';
@@ -218,8 +254,11 @@ export default function NewAdminProductPage() {
     if (!createdId) return;
     setFormError(null);
     const parsed = productDraftSchema.safeParse({
-      ...form,
-      slug: form.slug.trim() ? slugify(form.slug) : undefined,
+      name: form.name,
+      description: form.description,
+      categoryId: form.categoryId,
+      status: 'DRAFT',
+      slug: undefined,
     });
     if (!parsed.success) {
       const next: Record<string, string> = {};
@@ -235,14 +274,13 @@ export default function NewAdminProductPage() {
         name: parsed.data.name,
         description: parsed.data.description,
         categoryId: parsed.data.categoryId,
-        status: parsed.data.status,
       });
       setSnapshot({
         name: parsed.data.name,
-        slug: parsed.data.slug ?? '',
+        slug: snapshot?.slug ?? createdSlug ?? '',
         description: parsed.data.description,
         categoryId: parsed.data.categoryId,
-        status: parsed.data.status,
+        status: snapshot?.status ?? 'DRAFT',
       });
       setDirty(false);
       notify('success', 'Product information saved.');
@@ -287,18 +325,22 @@ export default function NewAdminProductPage() {
   const refreshVariantState = async (productId: string) => {
     try {
       const detail = await getAdminProduct(productId);
-      setVariantCount(detail.variants.length);
-      const base = detail.basePrice === null || detail.basePrice === undefined ? null : Number(detail.basePrice);
-      setVariantPrices(detail.variants.map((v) => (v.priceOverride === null || v.priceOverride === undefined ? base : Number(v.priceOverride))));
+      setVariants(detail.variants);
+      setVariantCountFallback(detail);
     } catch {
       // Checklist stays conservative; the matrix shows its own errors.
     }
   };
 
+  const setVariantCountFallback = (detail: { basePrice?: number | null; variants: Array<{ priceOverride?: number | null }> }) => {
+    const base = detail.basePrice === null || detail.basePrice === undefined ? null : Number(detail.basePrice);
+    setVariantPrices(detail.variants.map((v) => (v.priceOverride === null || v.priceOverride === undefined ? base : Number(v.priceOverride))));
+  };
+
   const publishNow = async () => {
     if (!createdId) return;
     if (!publishReady) {
-      notify('error', 'Add at least one variant and one image before publishing.');
+      notify('error', 'Add a price and at least one image before publishing.');
       return;
     }
     setSaving(true);
@@ -331,7 +373,7 @@ export default function NewAdminProductPage() {
       name: formRef.current.name,
       description: formRef.current.description,
       categoryId: formRef.current.categoryId,
-      status: formRef.current.status,
+      status: 'DRAFT',
       slug: undefined,
     });
     if (!parsed.success) {
@@ -373,17 +415,16 @@ export default function NewAdminProductPage() {
         const canonical = details.product as { name?: string; description?: string; categoryId?: string | null; updatedAt?: string };
         const nextForm = {
           name: typeof canonical.name === 'string' ? canonical.name : formRef.current.name,
-          slug: formRef.current.slug,
           description: typeof canonical.description === 'string' ? canonical.description : formRef.current.description,
           categoryId: typeof canonical.categoryId === 'string' ? canonical.categoryId : formRef.current.categoryId,
-          status: formRef.current.status,
+          status: 'DRAFT',
         };
         setForm(nextForm);
         if (typeof canonical.updatedAt === 'string') {
           serverUpdatedAtRef.current = canonical.updatedAt;
           setServerUpdatedAt(canonical.updatedAt);
         }
-        setSnapshot({ name: nextForm.name, slug: snapshotRef.current?.slug ?? '', description: nextForm.description, categoryId: nextForm.categoryId, status: nextForm.status });
+        setSnapshot({ name: nextForm.name, slug: snapshotRef.current?.slug ?? '', description: nextForm.description, categoryId: nextForm.categoryId, status: 'DRAFT' });
         setAutosaveState({ status: 'error', at: null, message: 'Changed elsewhere — reloaded the latest version.' });
         notify('error', 'This draft changed elsewhere. Reloaded the latest version — please re-apply your edit.');
         return;
@@ -409,7 +450,7 @@ export default function NewAdminProductPage() {
 
   useEffect(() => {
     if (phase !== 'complete' || !createdId || saving) return;
-    if (!basicFieldsDirty(snapshot, form)) return;
+    if (!basicFieldsDirty(snapshot, { ...form, slug: snapshot?.slug ?? '' })) return;
     const timer = setTimeout(() => {
       persistDraft(false);
     }, 1500);
@@ -453,7 +494,7 @@ export default function NewAdminProductPage() {
           <Link href="/admin/products" className="text-button">← Back to Products</Link>
           <h1 style={{ marginTop: '0.5rem' }}>Create Product</h1>
           <p className="muted-copy">
-            Draft-first workspace: save a draft to unlock signed Cloudinary uploads and variants, then review and publish.
+            Three quick steps: describe the product, add photos, set the price and stock. Save a draft first to unlock photos and pricing.
           </p>
         </div>
         <div className="account-page__actions">
@@ -467,7 +508,7 @@ export default function NewAdminProductPage() {
                 disabled={saving || !publishReady}
                 onClick={publishNow}
                 aria-busy={saving}
-                title={!publishReady ? 'Add at least one variant and one image before publishing' : 'Publish product'}
+                title={!publishReady ? 'Set a price and add at least one image before publishing' : 'Publish product'}
               >
                 {saving ? 'Publishing…' : 'Publish product'}
               </button>
@@ -514,10 +555,13 @@ export default function NewAdminProductPage() {
 
       <div className="product-workspace__layout">
         <div className="product-workspace__main">
-          <section className="workspace-card" aria-labelledby="ws-basic" id="ws-basic">
-            <h2 id="ws-basic-heading">1 · Basic information</h2>
+          <section className="workspace-card" aria-labelledby="ws-details-heading" id="ws-details">
+            <h2 id="ws-details-heading">1 · Product Details</h2>
+            <p className="muted-copy workspace-card__hint">
+              Just the basics. The web address is created automatically from the name and cannot be changed afterwards.
+            </p>
             <div className="form-grid">
-              <label htmlFor="field-name">
+              <label htmlFor="field-name" className="form-field-full">
                 <span>Product name *</span>
                 <input
                   id="field-name"
@@ -525,21 +569,12 @@ export default function NewAdminProductPage() {
                   value={form.name}
                   maxLength={200}
                   autoComplete="off"
+                  placeholder="e.g. Leather Ankle Boots"
                   aria-invalid={Boolean(fieldError(errors, 'name'))}
                   aria-describedby={fieldError(errors, 'name') ? 'err-name' : undefined}
                   onChange={(e) => set('name', e.currentTarget.value)}
                 />
                 {fieldError(errors, 'name') && <span id="err-name" className="field-error" role="alert">{fieldError(errors, 'name')}</span>}
-              </label>
-              <label htmlFor="field-slug">
-                <span>Slug {form.slug ? '' : `(auto: ${autoSlug || '—'})`}</span>
-                <input id="field-slug" type="text" value={form.slug} maxLength={220} autoComplete="off" placeholder="auto-generated from name" onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('slug', e.currentTarget.value)} />
-                {fieldError(errors, 'slug') && <span className="field-error" role="alert">{fieldError(errors, 'slug')}</span>}
-              </label>
-              <label htmlFor="field-description" className="form-field-full">
-                <span>Description * (min 12 characters)</span>
-                <textarea id="field-description" value={form.description} rows={4} maxLength={10000} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => set('description', e.currentTarget.value)} aria-invalid={Boolean(fieldError(errors, 'description'))} />
-                {fieldError(errors, 'description') && <span className="field-error" role="alert">{fieldError(errors, 'description')}</span>}
               </label>
               <label htmlFor="field-category">
                 <span>Category *</span>
@@ -551,15 +586,13 @@ export default function NewAdminProductPage() {
                 </select>
                 {fieldError(errors, 'categoryId') && <span className="field-error" role="alert">{fieldError(errors, 'categoryId')}</span>}
               </label>
-              <label htmlFor="field-status">
-                <span>Status</span>
-                <select id="field-status" value={form.status} onChange={(e) => set('status', e.currentTarget.value)}>
-                  <option value="DRAFT">Draft — not purchasable</option>
-                  {/* ACTIVE is intentionally absent here: publishing is a gated
-                      transition after variants + media exist (see Review). The
-                      backend rejects direct-ACTIVE creation. */}
-                  <option value="ARCHIVED">Archived — hidden from storefront</option>
-                </select>
+              <div className="form-field-full" role="note" aria-label="Web address preview">
+                <span className="muted-copy">Web address: /products/{createdSlug ?? effectiveSlug ?? '…'}</span>
+              </div>
+              <label htmlFor="field-description" className="form-field-full">
+                <span>Description * (min 12 characters)</span>
+                <textarea id="field-description" value={form.description} rows={4} maxLength={10000} placeholder="What is it, what is it made of, who is it for?" onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => set('description', e.currentTarget.value)} aria-invalid={Boolean(fieldError(errors, 'description'))} />
+                {fieldError(errors, 'description') && <span className="field-error" role="alert">{fieldError(errors, 'description')}</span>}
               </label>
             </div>
             {phase === 'complete' && createdId ? (
@@ -588,10 +621,10 @@ export default function NewAdminProductPage() {
           </section>
 
           <section className="workspace-card" aria-labelledby="ws-media-heading" id="ws-media">
-            <h2 id="ws-media-heading">2 · Product media</h2>
+            <h2 id="ws-media-heading">2 · Images</h2>
             <p className="muted-copy workspace-card__hint">
-              Signed direct-to-Cloudinary uploads — the same workflow as the product editor. Media needs a product record
-              first, so this unlocks as soon as the draft is created.
+              JPEG, PNG, or WebP photos. At least one photo is needed before publishing, and the first photo is shown
+              as the primary image in the shop.
             </p>
             {phase === 'complete' && createdId ? (
               <ProductMediaManager productId={createdId} editable onChanged={handleGalleryChanged} />
@@ -603,42 +636,86 @@ export default function NewAdminProductPage() {
             )}
           </section>
 
-          <section className="workspace-card" aria-labelledby="ws-variant-heading" id="ws-variant">
-            <h2 id="ws-variant-heading">3 · Variants, SKUs &amp; pricing</h2>
-            <p className="muted-copy workspace-card__hint">
-              Select variant options (e.g. Color × Size) to preview server-generated SKUs, then set per-variant prices
-              and stock. Existing combinations are never duplicated. Variant creation starts each variant at zero on hand;
-              stock up from <Link href="/admin/inventory">Inventory</Link> afterwards.
-            </p>
+          <section className="workspace-card" aria-labelledby="ws-pricing-heading" id="ws-pricing">
+            <h2 id="ws-pricing-heading">3 · Pricing &amp; Stock</h2>
             {phase === 'complete' && createdId ? (
-              <VariantManager
+              <PricingStockSection
                 productId={createdId}
                 productName={form.name || 'New product'}
                 categoryId={form.categoryId || null}
-                basePrice={null}
                 categories={categories}
                 attributes={attributes}
-                existingVariants={[]}
+                existingVariants={variants}
+                hasOptions={optionsOn}
+                onHasOptionsChange={(v) => void handleOptionsChange(v)}
                 onChanged={() => refreshVariantState(createdId)}
+                hideToggle
+                variantTable="external"
+                variantSectionId="ws-variant"
               />
             ) : (
-              <p className="muted-copy" role="note">Create the draft above to configure variants with live SKU preview.</p>
+              <p className="muted-copy" role="note">Save a draft first — then enter the selling price (KES) and stock here.</p>
             )}
           </section>
 
-          <section className="workspace-card" aria-labelledby="ws-taxonomy-heading" id="ws-taxonomy">
-            <h2 id="ws-taxonomy-heading">4 · Categories &amp; collections</h2>
+          <section className="workspace-card" aria-labelledby="ws-variant-heading" id="ws-variant">
+            <h2 id="ws-variant-heading">4 · Options &amp; Variants</h2>
+            {phase === 'complete' && createdId ? (
+              <>
+                <OptionsToggle
+                  id="new-has-options"
+                  checked={optionsOn}
+                  locked={multiVariant}
+                  lockedCount={variantCount}
+                  onChange={(v) => void handleOptionsChange(v)}
+                />
+                {optionsOn ? (
+                  <>
+                    <p className="muted-copy workspace-card__hint">
+                      Choose what varies (e.g. Size, Colour, Shoe size, Capacity, Material) — options come from the
+                      catalogue attributes, nothing is hard-coded. Each combination becomes a shop item with its own
+                      price and stock. Existing combinations are never duplicated.
+                    </p>
+                    <VariantManager
+                      productId={createdId}
+                      productName={form.name || 'New product'}
+                      categoryId={form.categoryId || null}
+                      basePrice={null}
+                      categories={categories}
+                      attributes={attributes}
+                      existingVariants={variants}
+                      onChanged={() => refreshVariantState(createdId)}
+                    />
+                  </>
+                ) : (
+                  <p className="muted-copy" role="note">
+                    Not needed for a single item — the price and stock above cover it. Turn options on only when
+                    customers choose between versions of this product.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="muted-copy" role="note">Create the draft above to configure options.</p>
+            )}
+          </section>
+
+          <section className="workspace-card" aria-labelledby="ws-organisation-heading" id="ws-organisation">
+            <h2 id="ws-organisation-heading">5 · Organisation &amp; Visibility</h2>
             <p className="muted-copy workspace-card__hint">
-              Category is chosen in Basic information and required before publishing. Collections attach after the
-              draft exists and persist through the assignment API.
+              Category is chosen in Product Details and required before publishing. Collections are optional groupings
+              (e.g. Featured). New products start as drafts — invisible to shoppers until published.
             </p>
             {phase === 'complete' && createdId ? (
               <>
+                <dl className="media-meta">
+                  <dt>Status</dt>
+                  <dd>Draft — not purchasable until published</dd>
+                </dl>
                 {collections.length === 0 ? (
                   <p className="muted-copy" role="note">No collections available yet.</p>
                 ) : (
                   <fieldset className="workspace-fieldset">
-                    <legend>Collections</legend>
+                    <legend>Collections (optional)</legend>
                     {collections.slice(0, 20).map((c) => (
                       <label key={c.id} className="facet-option" htmlFor={`collection-${c.id}`}>
                         <input
@@ -658,34 +735,12 @@ export default function NewAdminProductPage() {
                     {collectionsSaving ? 'Saving…' : 'Save collections'}
                   </button>
                   {!collectionsDirty ? <span className="muted-copy">Assignments saved.</span> : null}
+                  <Link href="/admin/collections" className="button button--secondary">Manage Collections</Link>
                 </div>
               </>
             ) : (
               <p className="muted-copy" role="note">Save a draft first — collection assignment unlocks with the product record.</p>
             )}
-            <div className="form-actions">
-              <Link href="/admin/collections" className="button button--secondary">Manage Collections</Link>
-            </div>
-          </section>
-
-          <section className="workspace-card" aria-labelledby="ws-attrs-heading" id="ws-attrs">
-            <h2 id="ws-attrs-heading">5 · Attributes</h2>
-            <p className="muted-copy workspace-card__hint">
-              Dynamic attribute system — variant values attach per variant (Fashion: Size/Color/Material · Footwear:
-              Shoe Size/Color/Material · Kitchen: Capacity/Power/Material/Color). Nothing is hard-coded per category.
-            </p>
-            {attributes.length === 0 ? (
-              <p className="muted-copy" role="note">No attributes configured yet.</p>
-            ) : (
-              <ul className="pill-nav" aria-label="Available attributes">
-                {attributes.map((a) => (
-                  <li key={a.id}><span>{a.name}</span></li>
-                ))}
-              </ul>
-            )}
-            <div className="form-actions">
-              <Link href="/admin/attributes" className="button button--secondary">Manage Attributes</Link>
-            </div>
           </section>
         </div>
 
@@ -721,7 +776,7 @@ export default function NewAdminProductPage() {
                 <p className="eyebrow">{categoryName ?? 'Uncategorized'}</p>
                 <p className="workspace-preview__name">{form.name || 'Untitled product'}</p>
                 <p className="workspace-preview__price">
-                  {prices ? (prices.min === prices.max ? formatKES(prices.min) : `${formatKES(prices.min)} – ${formatKES(prices.max)}`) : 'Price set per variant'}
+                  {prices ? (prices.min === prices.max ? formatKES(prices.min) : `${formatKES(prices.min)} – ${formatKES(prices.max)}`) : 'Price set per item'}
                 </p>
                 <p className="muted-copy">/products/{createdSlug ?? effectiveSlug ?? '…'}</p>
               </div>
@@ -730,21 +785,8 @@ export default function NewAdminProductPage() {
             )}
           </section>
 
-          <section className="workspace-card" aria-labelledby="ws-seo-heading">
-            <h2 id="ws-seo-heading">6 · SEO</h2>
-            <dl className="media-meta">
-              <dt>Slug</dt>
-              <dd>/products/{createdSlug ?? effectiveSlug ?? '…'}</dd>
-              <dt>Title</dt>
-              <dd>{form.name ? `${form.name} | JB Mercantile` : '—'}</dd>
-              <dt>Description</dt>
-              <dd>{form.description ? form.description.slice(0, 140) : '—'}</dd>
-            </dl>
-            <p className="muted-copy workspace-card__hint">SEO is derived from the product name and description — the catalogue model has no separate SEO fields.</p>
-          </section>
-
           <section className="workspace-card" aria-labelledby="ws-review-heading" id="ws-review">
-            <h2 id="ws-review-heading">7 · Review &amp; publish</h2>
+            <h2 id="ws-review-heading">Review &amp; publish</h2>
             <ul className="validation-list">
               {checklist.map((c) => (
                 <li key={c.key} className={c.ok ? 'is-ok' : 'is-missing'}>
@@ -753,6 +795,12 @@ export default function NewAdminProductPage() {
                 </li>
               ))}
             </ul>
+            {!publishReady && phase === 'complete' ? (
+              <p className="muted-copy" role="note">
+                Publishing unlocks when the product has a price (<a href="#ws-pricing">Pricing &amp; Stock</a>) and at
+                least one image (<a href="#ws-media">Images</a>).
+              </p>
+            ) : null}
             {publishIssues.length > 0 ? (
               <div className="error-message" role="alert">
                 <strong>Server readiness issues</strong>
@@ -765,14 +813,14 @@ export default function NewAdminProductPage() {
             ) : null}
             {phase === 'complete' && createdId ? (
               <div className="form-actions">
-                <button type="button" className="button" disabled={saving || !publishReady} onClick={publishNow} title={!publishReady ? 'Add at least one variant and one image before publishing' : 'Publish product'}>
+                <button type="button" className="button" disabled={saving || !publishReady} onClick={publishNow} title={!publishReady ? 'Set a price and add at least one image before publishing' : 'Publish product'}>
                   Publish product
                 </button>
                 <Link href={`/admin/products/${createdId}`} className="button button--secondary">Open product editor</Link>
                 {createdSlug ? <Link href={`/products/${createdSlug}`} className="button button--secondary">View storefront</Link> : null}
               </div>
             ) : (
-              <p className="muted-copy">Save a draft to unlock media, variants, and publishing.</p>
+              <p className="muted-copy">Save a draft to unlock media, pricing, and publishing.</p>
             )}
           </section>
         </div>
@@ -783,7 +831,7 @@ export default function NewAdminProductPage() {
           {phase === 'complete' && createdId ? (
             <>
               <Link href="/admin/products" className="button button--secondary">Back to Products</Link>
-              <button type="button" className="button" disabled={saving || !publishReady} onClick={publishNow} title={!publishReady ? 'Add at least one variant and one image before publishing' : 'Publish product'}>
+              <button type="button" className="button" disabled={saving || !publishReady} onClick={publishNow} title={!publishReady ? 'Set a price and add at least one image before publishing' : 'Publish product'}>
                 {saving ? 'Publishing…' : 'Publish product'}
               </button>
             </>
