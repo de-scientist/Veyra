@@ -535,75 +535,43 @@ function RegisterPasswordPair({
   clearPassword: () => void;
   clearConfirm: () => void;
 }) {
-  const [showPw, setShowPw] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const pwId = `${scopeId}-password`;
-  const confirmId = `${scopeId}-confirm`;
-  const pwErrorId = `${pwId}-error`;
-  const confirmErrorId = `${confirmId}-error`;
-  const reqId = `${pwId}-requirements`;
+  const reqId = `${scopeId}-password-requirements`;
   return (
     <>
-      <div className="auth-field">
-        <label htmlFor={pwId}>Password</label>
-        <div className="auth-password-wrap">
-          <input
-            id={pwId}
-            type={showPw ? 'text' : 'password'}
-            autoComplete="new-password"
-            placeholder="Minimum 8 characters"
-            aria-invalid={passwordError ? true : undefined}
-            aria-describedby={`${reqId}${passwordError ? ` ${pwErrorId}` : ''}`}
-            {...passwordReg}
-            onChange={(e) => {
-              passwordReg.onChange(e);
-              clearPassword();
-            }}
-          />
-          <button
-            type="button"
-            className="auth-password-toggle"
-            aria-label={showPw ? 'Hide password' : 'Show password'}
-            aria-pressed={showPw}
-            onClick={() => setShowPw((v) => !v)}
-          >
-            <ShowHideIcon visible={showPw} />
-          </button>
-        </div>
-        <p className="auth-hint" id={reqId}>
-          {requirements}
-          {hint ? ` ${hint}` : ''}
-        </p>
-        <FieldError id={pwErrorId} message={passwordError} />
-      </div>
-      <div className="auth-field">
-        <label htmlFor={confirmId}>Confirm password</label>
-        <div className="auth-password-wrap">
-          <input
-            id={confirmId}
-            type={showConfirm ? 'text' : 'password'}
-            autoComplete="new-password"
-            placeholder="Repeat your password"
-            aria-invalid={confirmError ? true : undefined}
-            aria-describedby={confirmError ? confirmErrorId : undefined}
-            {...confirmReg}
-            onChange={(e) => {
-              confirmReg.onChange(e);
-              clearConfirm();
-            }}
-          />
-          <button
-            type="button"
-            className="auth-password-toggle"
-            aria-label={showConfirm ? 'Hide confirmation password' : 'Show confirmation password'}
-            aria-pressed={showConfirm}
-            onClick={() => setShowConfirm((v) => !v)}
-          >
-            <ShowHideIcon visible={showConfirm} />
-          </button>
-        </div>
-        <FieldError id={confirmErrorId} message={confirmError} />
-      </div>
+      <PasswordField
+        id={`${scopeId}-password`}
+        name="password"
+        label="Password"
+        autoComplete="new-password"
+        error={passwordError}
+        requirementsId={reqId}
+        inputProps={{
+          ...passwordReg,
+          onChange: (e) => {
+            passwordReg.onChange(e);
+            clearPassword();
+          },
+        }}
+      />
+      <p className="auth-hint" id={reqId}>
+        {requirements}
+        {hint ? ` ${hint}` : ''}
+      </p>
+      <PasswordField
+        id={`${scopeId}-confirm`}
+        name="confirm"
+        label="Confirm password"
+        autoComplete="new-password"
+        placeholder="Repeat your password"
+        error={confirmError}
+        inputProps={{
+          ...confirmReg,
+          onChange: (e) => {
+            confirmReg.onChange(e);
+            clearConfirm();
+          },
+        }}
+      />
     </>
   );
 }

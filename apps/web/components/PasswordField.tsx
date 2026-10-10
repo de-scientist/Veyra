@@ -1,6 +1,6 @@
 'use client';
 
-import type { InputHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, Ref } from 'react';
 import { useId, useState } from 'react';
 
 import { JBIcon } from './JBIcons';
@@ -8,7 +8,10 @@ import { JBIcon } from './JBIcons';
 type InputProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
   'id' | 'type' | 'aria-invalid' | 'aria-describedby'
->;
+> & {
+  /** Preserved so react-hook-form's register() ref survives the spread. */
+  ref?: Ref<HTMLInputElement>;
+};
 
 /**
  * Labelled password input with an accessible show/hide toggle.
