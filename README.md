@@ -1,4 +1,4 @@
-# JB Mercantile ONLINE
+# JB Mercantile Online Shop
 
 **Fashion • Footwear • Kitchen & Home**
 
