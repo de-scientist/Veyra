@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import type { Route } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
-import { useForm, type FieldErrors } from 'react-hook-form';
+import { useForm, type FieldErrors, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 
 import { getSessionUser } from '../lib/admin-api';
@@ -59,16 +60,16 @@ async function authRequest(path: string, body: Record<string, string>) {
 }
 
 /** Minimal zod→react-hook-form resolver (avoids a new @hookform/resolvers dep). */
-function zodResolver<T extends z.ZodTypeAny>(schema: T) {
-  return async (values: Record<string, unknown>) => {
+function zodResolver<TFieldValues extends Record<string, unknown>>(schema: z.ZodTypeAny): Resolver<TFieldValues> {
+  return async (values) => {
     const parsed = schema.safeParse(values);
-    if (parsed.success) return { values: parsed.data, errors: {} };
+    if (parsed.success) return { values: parsed.data as TFieldValues, errors: {} };
     const errors: Record<string, { type: string; message: string }> = {};
     for (const issue of parsed.error.issues) {
       const key = issue.path.join('.') || 'root';
       if (!errors[key]) errors[key] = { type: issue.code, message: issue.message };
     }
-    return { values: {}, errors };
+    return { values: {} as TFieldValues, errors: errors as FieldErrors<TFieldValues> };
   };
 }
 
@@ -115,7 +116,7 @@ export function LoginForm() {
   });
 
   useEffect(() => {
-    if (status === 'authenticated') router.replace(target as '/account');
+    if (status === 'authenticated') router.replace(target as Route);
   }, [status, router, target]);
 
   async function onValid(values: LoginInput) {
@@ -136,7 +137,7 @@ export function LoginForm() {
       await refresh().catch(() => undefined);
       setFormAlert({ tone: 'success', title: 'You are signed in successfully.', message: 'Taking you to your account…' });
       window.setTimeout(() => {
-        router.push(target as '/account');
+        router.push(target as Route);
         router.refresh();
       }, 650);
     } catch (reason) {
@@ -240,8 +241,6 @@ export function LoginForm() {
   );
 }
 
-
-
 export function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -270,7 +269,7 @@ export function RegisterForm() {
   const passwordValue = watch('password') ?? '';
 
   useEffect(() => {
-    if (status === 'authenticated') router.replace(target as '/account');
+    if (status === 'authenticated') router.replace(target as Route);
   }, [status, router, target]);
 
   async function onValid(values: RegisterInput) {
@@ -303,7 +302,7 @@ export function RegisterForm() {
         message: 'You are signed in. Taking you to your account…',
       });
       window.setTimeout(() => {
-        router.push(target as '/account');
+        router.push(target as Route);
         router.refresh();
       }, 850);
     } catch (reason) {
