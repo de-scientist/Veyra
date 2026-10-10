@@ -2,183 +2,683 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import type { Route } from 'next';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { useForm, type FieldErrors } from 'react-hook-form';
+import { z } from 'zod';
 
+import { getSessionUser } from '../lib/admin-api';
+import {
+  PASSWORD_REQUIREMENTS_TEXT,
+  loginSchema,
+  mapAuthServerError,
+  normalizeEmail,
+  passwordHint,
+  registerSchema,
+  safeRedirectTarget as safeTarget,
+  type LoginInput,
+  type RegisterInput,
+} from '../lib/auth-validation';
+import { JB_CONTACT_PHONE_DISPLAY, JB_CONTACT_PHONE_TEL } from '../lib/business-contact';
 import { notifySessionUpdated, useSession } from '../lib/session';
-import { JBLoading } from './JBLoading';
+import { AuthAlert } from './AuthAlert';
+import { JBButtonLoader, JBLoading } from './JBLoading';
+import { PasswordField } from './PasswordField';
+
+/** Re-exported for backward compatibility with existing imports/tests. */
+export function safeRedirectTarget(raw: string | null): string {
+  return safeTarget(raw);
+}
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+type ApiEnvelope = {
+  data?: unknown;
+  error?: { message?: string; code?: string; details?: unknown };
+};
+
 async function authRequest(path: string, body: Record<string, string>) {
-  const response = await fetch(`${apiBaseUrl}/api/v1${path}`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await response.json().catch(() => null)) as { data?: unknown; error?: { message?: string } } | null;
-  if (!response.ok) throw new Error(data?.error?.message ?? 'Something went wrong. Please try again.');
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}/api/v1${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error('Connection problem. Check your internet connection and try again.');
+  }
+  const data = (await response.json().catch(() => null)) as ApiEnvelope | null;
+  if (!response.ok) {
+    const error = new Error(data?.error?.message ?? 'Something went wrong. Please try again.');
+    (error as Error & { code?: string }).code = data?.error?.code;
+    (error as Error & { details?: unknown }).details = data?.error?.details;
+    throw error;
+  }
   return data?.data;
 }
 
-/** Same-origin path only: must start with a single `/` (blocks `//evil`, `http:`, `javascript:`). */
-export function safeRedirectTarget(raw: string | null): Route {
-  if (!raw) return '/account';
-  try {
-    const decoded = decodeURIComponent(raw);
-    if (decoded.startsWith('/') && !decoded.startsWith('//') && !decoded.includes(':')) {
-      return decoded as Route;
+/** Minimal zod→react-hook-form resolver (avoids a new @hookform/resolvers dep). */
+function zodResolver<T extends z.ZodTypeAny>(schema: T) {
+  return async (values: Record<string, unknown>) => {
+    const parsed = schema.safeParse(values);
+    if (parsed.success) return { values: parsed.data, errors: {} };
+    const errors: Record<string, { type: string; message: string }> = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.') || 'root';
+      if (!errors[key]) errors[key] = { type: issue.code, message: issue.message };
     }
-  } catch {
-    // Fall through to the default below.
-  }
-  return '/account';
+    return { values: {}, errors };
+  };
+}
+
+function focusFirstInvalid<T extends Record<string, unknown>>(errors: FieldErrors<T>, scopeId: string) {
+  const first = Object.keys(errors)[0];
+  if (!first) return;
+  const scope = document.getElementById(scopeId);
+  const target = scope?.querySelector<HTMLElement>(`[name="${first}"]`);
+  target?.focus({ preventScroll: false });
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="auth-field-error" id={id} role="alert">
+      {message}
+    </p>
+  );
 }
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status } = useSession();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const target = safeRedirectTarget(searchParams.get('redirect'));
+  const { status, refresh } = useSession();
+  const formId = useId();
+  const scopeId = `login-${formId}`;
+  const emailErrorId = `login-email-error-${formId}`;
+  const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(null);
+  const inFlight = useRef(false);
 
-  // Already signed in: never strand an authenticated customer on /login
-  // (and never loop) — send them to the safe return path instead.
+  const target = safeTarget(searchParams.get('redirect'));
+
+  const {
+    register,
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting, touchedFields },
+  } = useForm<LoginInput>({
+    mode: 'onTouched',
+    reValidateMode: 'onChange',
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
+
   useEffect(() => {
-    if (status === 'authenticated') router.replace(target);
+    if (status === 'authenticated') router.replace(target as '/account');
   }, [status, router, target]);
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError('');
+  async function onValid(values: LoginInput) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setFormAlert(null);
     try {
-      await authRequest('/auth/login', { email: email.trim(), password });
-      // The layout-level SessionProvider does not remount on client
-      // navigation, so explicitly revalidate: navbar flips guest → avatar.
+      await authRequest('/auth/login', { email: normalizeEmail(values.email), password: values.password });
+      // Verify the session was actually established — never redirect on HTTP alone.
+      try {
+        await getSessionUser();
+      } catch {
+        const mapped = { title: 'Your session could not be established', message: 'Please try signing in again.' };
+        setFormAlert({ tone: 'error', ...mapped });
+        return;
+      }
       notifySessionUpdated();
-      router.push(target);
-      router.refresh();
+      await refresh().catch(() => undefined);
+      setFormAlert({ tone: 'success', title: 'You are signed in successfully.', message: 'Taking you to your account…' });
+      window.setTimeout(() => {
+        router.push(target as '/account');
+        router.refresh();
+      }, 650);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to sign in.');
+      const mapped = mapAuthServerError(reason);
+      if (mapped.fieldErrors) {
+        for (const [field, message] of Object.entries(mapped.fieldErrors)) {
+          setError(field as keyof LoginInput, { type: 'server', message });
+        }
+      }
+      setFormAlert({ tone: 'error', title: mapped.formError.title, message: mapped.formError.message });
     } finally {
-      setBusy(false);
+      inFlight.current = false;
     }
   }
 
+  function onInvalid(formErrors: FieldErrors<LoginInput>) {
+    setFormAlert({
+      tone: 'error',
+      title: 'Check the highlighted fields',
+      message: 'Enter your details below to continue.',
+    });
+    focusFirstInvalid(formErrors, scopeId);
+  }
+
   if (status === 'authenticated') return <JBLoading context="account" />;
+  if (status === 'loading') return <JBLoading context="account" />;
+
+  const busy = isSubmitting || inFlight.current;
+  const emailReg = register('email');
+  const passwordReg = register('password');
 
   return (
-    <form className="auth-form" onSubmit={submit} noValidate={false}>
-      {error ? <p className="auth-error" role="alert">{error}</p> : null}
-      <label>
-        Email address
-        <input type="email" name="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-      </label>
-      <label>
-        Password
-        <input type={showPassword ? 'text' : 'password'} name="password" autoComplete="current-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimum 8 characters" />
-      </label>
-      <label className="confirm-price" style={{ fontWeight: 500 }}>
-        <input type="checkbox" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)} /> Show password
-      </label>
-      <button type="submit" className="button" disabled={busy} aria-busy={busy}>
-        {busy ? 'Signing in…' : 'Sign in'}
+    <form
+      id={scopeId}
+      className="auth-form"
+      onSubmit={handleSubmit(onValid, onInvalid)}
+      noValidate
+      aria-busy={busy || undefined}
+    >
+      {formAlert ? (
+        <AuthAlert
+          tone={formAlert.tone}
+          title={formAlert.title}
+          message={formAlert.message}
+          dismissible={formAlert.tone === 'error'}
+          onDismiss={() => setFormAlert(null)}
+        />
+      ) : null}
+
+      <div className="auth-field">
+        <label htmlFor={`${scopeId}-email`}>Email address</label>
+        <input
+          id={`${scopeId}-email`}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="you@example.com"
+          aria-invalid={errors.email ? true : undefined}
+          aria-describedby={errors.email ? emailErrorId : undefined}
+          {...emailReg}
+          onChange={(e) => {
+            emailReg.onChange(e);
+            if (touchedFields.email || errors.email) clearErrors('email');
+          }}
+        />
+        <FieldError id={emailErrorId} message={errors.email?.message} />
+      </div>
+
+      <ControlledLoginPassword
+        scopeId={scopeId}
+        register={passwordReg}
+        error={errors.password?.message}
+        touched={Boolean(touchedFields.password)}
+        clear={() => clearErrors('password')}
+      />
+
+      <div className="auth-form__meta">
+        <p className="muted-copy auth-form__reset-note">
+          Password reset is not available yet. Need help signing in? Call{' '}
+          <a href={JB_CONTACT_PHONE_TEL}>{JB_CONTACT_PHONE_DISPLAY}</a>.
+        </p>
+      </div>
+
+      <button type="submit" className="button auth-submit" disabled={busy} aria-busy={busy || undefined}>
+        {busy ? <JBButtonLoader label="Signing in…" /> : 'Sign in'}
       </button>
-      <p className="auth-switch">New to JB Mercantile? <Link href="/register">Create an account</Link></p>
+      <p className="auth-switch">
+        New to JB Mercantile? <Link href="/register">Create an account</Link>
+      </p>
     </form>
+  );
+}
+
+/**
+ * RHF-bound password input with local visibility state. Split out so the
+ * eye toggle does not re-register the field or steal focus on each render.
+ */
+function ControlledLoginPassword({
+  scopeId,
+  register,
+  error,
+  touched,
+  clear,
+}: {
+  scopeId: string;
+  register: ReturnType<typeof useLoginPasswordRegister> extends never ? never : {
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
+    name: string;
+    ref: React.Ref<HTMLInputElement>;
+  };
+  error?: string;
+  touched: boolean;
+  clear: () => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const errorId = `${scopeId}-password-error`;
+  return (
+    <div className="auth-field" style={{ marginTop: '-0.9rem' }}>
+      <span className="visually-hidden" id={`${scopeId}-password-label`}>
+        Password
+      </span>
+      <div className="auth-password-wrap">
+        <input
+          id={`${scopeId}-password`}
+          type={visible ? 'text' : 'password'}
+          autoComplete="current-password"
+          placeholder="Minimum 8 characters"
+          aria-label="Password"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          {...register}
+          onChange={(e) => {
+            register.onChange(e);
+            if (touched || error) clear();
+          }}
+        />
+        <button
+          type="button"
+          className="auth-password-toggle"
+          aria-label={visible ? 'Hide password' : 'Show password'}
+          aria-pressed={visible}
+          onClick={() => setVisible((v) => !v)}
+        >
+          <ShowHideIcon visible={visible} />
+        </button>
+      </div>
+      <FieldError id={errorId} message={error} />
+    </div>
+  );
+}
+
+// Helper indirection keeps the prop type above honest without importing RHF internals elsewhere.
+function useLoginPasswordRegister(): never {
+  throw new Error('type-only helper');
+}
+
+function ShowHideIcon({ visible }: { visible: boolean }) {
+  return (
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {visible ? (
+        <>
+          <path d="M9.9 4.24A9.5 9.5 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19" />
+          <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.39-1.61" />
+          <path d="M2 2l20 20" />
+          <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+        </>
+      ) : (
+        <>
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+        </>
+      )}
+    </svg>
   );
 }
 
 export function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status } = useSession();
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', confirm: '' });
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const target = safeRedirectTarget(searchParams.get('redirect'));
+  const { status, refresh } = useSession();
+  const formId = useId();
+  const scopeId = `register-${formId}`;
+  const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(null);
+  const inFlight = useRef(false);
 
-  // Same no-loop rule as login: an authenticated customer never stays on
-  // /register — they continue to the safe return path (e.g. /checkout).
+  const target = safeTarget(searchParams.get('redirect'));
+
+  const {
+    register,
+    handleSubmit,
+    setError,
+    clearErrors,
+    watch,
+    formState: { errors, isSubmitting, touchedFields },
+  } = useForm<RegisterInput>({
+    mode: 'onTouched',
+    reValidateMode: 'onChange',
+    resolver: zodResolver(registerSchema),
+    defaultValues: { firstName: '', lastName: '', email: '', phone: '', password: '', confirm: '' },
+  });
+
+  const passwordValue = watch('password') ?? '';
+
   useEffect(() => {
-    if (status === 'authenticated') router.replace(target);
+    if (status === 'authenticated') router.replace(target as '/account');
   }, [status, router, target]);
 
-  function update(field: keyof typeof form, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
-  }
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setError('');
-    if (form.password !== form.confirm) {
-      setError('Passwords do not match.');
-      return;
-    }
-    setBusy(true);
+  async function onValid(values: RegisterInput) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setFormAlert(null);
     try {
       await authRequest('/auth/register', {
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        email: form.email.trim(),
-        ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
-        password: form.password,
+        firstName: values.firstName.trim(),
+        lastName: values.lastName.trim(),
+        email: normalizeEmail(values.email),
+        ...(values.phone?.trim() ? { phone: values.phone.trim() } : {}),
+        password: values.password,
       });
+      try {
+        await getSessionUser();
+      } catch {
+        setFormAlert({
+          tone: 'error',
+          title: 'Your session could not be established',
+          message: 'Your account may have been created. Try signing in.',
+        });
+        return;
+      }
       notifySessionUpdated();
-      router.push(target);
-      router.refresh();
+      await refresh().catch(() => undefined);
+      setFormAlert({
+        tone: 'success',
+        title: 'Your account has been created.',
+        message: 'You are signed in. Taking you to your account…',
+      });
+      window.setTimeout(() => {
+        router.push(target as '/account');
+        router.refresh();
+      }, 850);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to create your account.');
+      const mapped = mapAuthServerError(reason);
+      if (mapped.fieldErrors) {
+        for (const [field, message] of Object.entries(mapped.fieldErrors)) {
+          setError(field as keyof RegisterInput, { type: 'server', message });
+        }
+      }
+      setFormAlert({ tone: 'error', title: mapped.formError.title, message: mapped.formError.message });
     } finally {
-      setBusy(false);
+      inFlight.current = false;
     }
+  }
+
+  function onInvalid(formErrors: FieldErrors<RegisterInput>) {
+    setFormAlert({
+      tone: 'error',
+      title: 'Check the highlighted fields',
+      message: 'Some details need attention before we can create your account.',
+    });
+    focusFirstInvalid(formErrors, scopeId);
   }
 
   if (status === 'authenticated') return <JBLoading context="account" />;
+  if (status === 'loading') return <JBLoading context="account" />;
+
+  const busy = isSubmitting || inFlight.current;
+  const hint = passwordHint(passwordValue);
 
   return (
-    <form className="auth-form" onSubmit={submit}>
-      {error ? <p className="auth-error" role="alert">{error}</p> : null}
+    <form
+      id={scopeId}
+      className="auth-form"
+      onSubmit={handleSubmit(onValid, onInvalid)}
+      noValidate
+      aria-busy={busy || undefined}
+    >
+      {formAlert ? (
+        <AuthAlert
+          tone={formAlert.tone}
+          title={formAlert.title}
+          message={formAlert.message}
+          dismissible={formAlert.tone === 'error'}
+          onDismiss={() => setFormAlert(null)}
+        />
+      ) : null}
+
       <div className="form-grid">
-        <label>
-          First name
-          <input name="firstName" autoComplete="given-name" required value={form.firstName} onChange={(e) => update('firstName', e.target.value)} />
-        </label>
-        <label>
-          Last name
-          <input name="lastName" autoComplete="family-name" required value={form.lastName} onChange={(e) => update('lastName', e.target.value)} />
-        </label>
+        <TextField
+          scopeId={scopeId}
+          name="firstName"
+          label="First name"
+          autoComplete="given-name"
+          placeholder="Amina"
+          registration={register('firstName')}
+          error={errors.firstName?.message}
+          described={`Enter your first name.`}
+          onFix={() => clearErrors('firstName')}
+          showFix={Boolean(touchedFields.firstName || errors.firstName)}
+        />
+        <TextField
+          scopeId={scopeId}
+          name="lastName"
+          label="Last name"
+          autoComplete="family-name"
+          placeholder="Otieno"
+          registration={register('lastName')}
+          error={errors.lastName?.message}
+          described={`Enter your last name.`}
+          onFix={() => clearErrors('lastName')}
+          showFix={Boolean(touchedFields.lastName || errors.lastName)}
+        />
       </div>
-      <label>
-        Email address
-        <input type="email" name="email" autoComplete="email" required value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="you@example.com" />
-      </label>
-      <label>
-        Phone <span className="muted-copy">(optional, for delivery updates)</span>
-        <input type="tel" name="phone" autoComplete="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="0712 345 678" />
-      </label>
-      <label>
-        Password
-        <input type={showPassword ? 'text' : 'password'} name="password" autoComplete="new-password" required minLength={8} value={form.password} onChange={(e) => update('password', e.target.value)} placeholder="Minimum 8 characters" />
-      </label>
-      <label>
-        Confirm password
-        <input type={showPassword ? 'text' : 'password'} name="confirm" autoComplete="new-password" required minLength={8} value={form.confirm} onChange={(e) => update('confirm', e.target.value)} />
-      </label>
-      <label className="confirm-price" style={{ fontWeight: 500 }}>
-        <input type="checkbox" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)} /> Show passwords
-      </label>
-      <button type="submit" className="button" disabled={busy} aria-busy={busy}>
-        {busy ? 'Creating account…' : 'Create account'}
+
+      <TextField
+        scopeId={scopeId}
+        name="email"
+        label="Email address"
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        placeholder="you@example.com"
+        registration={register('email')}
+        error={errors.email?.message}
+        onFix={() => clearErrors('email')}
+        showFix={Boolean(touchedFields.email || errors.email)}
+        switchTo="/login"
+        switchLabel="Already have an account? Sign in"
+      />
+
+      <TextField
+        scopeId={scopeId}
+        name="phone"
+        label="Phone (optional, for delivery updates)"
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel"
+        placeholder="0712 345 678"
+        registration={register('phone')}
+        error={errors.phone?.message}
+        hint="Kenyan mobile format, e.g. 0712 345 678."
+        onFix={() => clearErrors('phone')}
+        showFix={Boolean(touchedFields.phone || errors.phone)}
+      />
+
+      <RegisterPasswordPair
+        scopeId={scopeId}
+        passwordReg={register('password')}
+        confirmReg={register('confirm')}
+        passwordError={errors.password?.message}
+        confirmError={errors.confirm?.message}
+        hint={hint}
+        requirements={PASSWORD_REQUIREMENTS_TEXT}
+        clearPassword={() => clearErrors('password')}
+        clearConfirm={() => clearErrors('confirm')}
+      />
+
+      <button type="submit" className="button auth-submit" disabled={busy} aria-busy={busy || undefined}>
+        {busy ? <JBButtonLoader label="Creating account…" /> : 'Create account'}
       </button>
-      <p className="auth-switch">Already have an account? <Link href="/login">Sign in</Link></p>
+      <p className="auth-switch">
+        Already have an account? <Link href="/login">Sign in</Link>
+      </p>
     </form>
+  );
+}
+
+function TextField({
+  scopeId,
+  name,
+  label,
+  registration,
+  error,
+  hint,
+  described,
+  type = 'text',
+  inputMode,
+  autoComplete,
+  placeholder,
+  onFix,
+  showFix,
+  switchTo,
+  switchLabel,
+}: {
+  scopeId: string;
+  name: string;
+  label: string;
+  registration: {
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
+    name: string;
+    ref: React.Ref<HTMLInputElement>;
+  };
+  error?: string;
+  hint?: string;
+  described?: string;
+  type?: string;
+  inputMode?: 'email' | 'tel' | 'text';
+  autoComplete?: string;
+  placeholder?: string;
+  onFix: () => void;
+  showFix: boolean;
+  switchTo?: string;
+  switchLabel?: string;
+}) {
+  const fieldId = `${scopeId}-${name}`;
+  const errorId = `${fieldId}-error`;
+  const hintId = `${fieldId}-hint`;
+  const describedBy = [error ? errorId : null, hint || described ? hintId : null].filter(Boolean).join(' ') || undefined;
+  return (
+    <div className="auth-field">
+      <label htmlFor={fieldId}>{label}</label>
+      <input
+        id={fieldId}
+        type={type}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        autoCapitalize={type === 'email' ? 'none' : undefined}
+        autoCorrect={type === 'email' ? 'off' : undefined}
+        spellCheck={false}
+        placeholder={placeholder}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        {...registration}
+        onChange={(e) => {
+          registration.onChange(e);
+          if (showFix || error) onFix();
+        }}
+      />
+      {hint && !error ? (
+        <p className="auth-hint" id={hintId}>
+          {hint}
+        </p>
+      ) : null}
+      {described && !error && !hint ? (
+        <span className="visually-hidden" id={hintId}>
+          {described}
+        </span>
+      ) : null}
+      <FieldError id={errorId} message={error} />
+      {switchTo && error && switchLabel ? (
+        <p className="auth-field-switch">
+          <Link href={switchTo as '/login'}>{switchLabel}</Link>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function RegisterPasswordPair({
+  scopeId,
+  passwordReg,
+  confirmReg,
+  passwordError,
+  confirmError,
+  hint,
+  requirements,
+  clearPassword,
+  clearConfirm,
+}: {
+  scopeId: string;
+  passwordReg: { onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; onBlur: (e: React.FocusEvent<HTMLInputElement>) => void; name: string; ref: React.Ref<HTMLInputElement> };
+  confirmReg: { onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; onBlur: (e: React.FocusEvent<HTMLInputElement>) => void; name: string; ref: React.Ref<HTMLInputElement> };
+  passwordError?: string;
+  confirmError?: string;
+  hint: string | null;
+  requirements: string;
+  clearPassword: () => void;
+  clearConfirm: () => void;
+}) {
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const pwId = `${scopeId}-password`;
+  const confirmId = `${scopeId}-confirm`;
+  const pwErrorId = `${pwId}-error`;
+  const confirmErrorId = `${confirmId}-error`;
+  const reqId = `${pwId}-requirements`;
+  return (
+    <>
+      <div className="auth-field">
+        <label htmlFor={pwId}>Password</label>
+        <div className="auth-password-wrap">
+          <input
+            id={pwId}
+            type={showPw ? 'text' : 'password'}
+            autoComplete="new-password"
+            placeholder="Minimum 8 characters"
+            aria-invalid={passwordError ? true : undefined}
+            aria-describedby={`${reqId}${passwordError ? ` ${pwErrorId}` : ''}`}
+            {...passwordReg}
+            onChange={(e) => {
+              passwordReg.onChange(e);
+              clearPassword();
+            }}
+          />
+          <button
+            type="button"
+            className="auth-password-toggle"
+            aria-label={showPw ? 'Hide password' : 'Show password'}
+            aria-pressed={showPw}
+            onClick={() => setShowPw((v) => !v)}
+          >
+            <ShowHideIcon visible={showPw} />
+          </button>
+        </div>
+        <p className="auth-hint" id={reqId}>
+          {requirements}
+          {hint ? ` ${hint}` : ''}
+        </p>
+        <FieldError id={pwErrorId} message={passwordError} />
+      </div>
+      <div className="auth-field">
+        <label htmlFor={confirmId}>Confirm password</label>
+        <div className="auth-password-wrap">
+          <input
+            id={confirmId}
+            type={showConfirm ? 'text' : 'password'}
+            autoComplete="new-password"
+            placeholder="Repeat your password"
+            aria-invalid={confirmError ? true : undefined}
+            aria-describedby={confirmError ? confirmErrorId : undefined}
+            {...confirmReg}
+            onChange={(e) => {
+              confirmReg.onChange(e);
+              clearConfirm();
+            }}
+          />
+          <button
+            type="button"
+            className="auth-password-toggle"
+            aria-label={showConfirm ? 'Hide confirmation password' : 'Show confirmation password'}
+            aria-pressed={showConfirm}
+            onClick={() => setShowConfirm((v) => !v)}
+          >
+            <ShowHideIcon visible={showConfirm} />
+          </button>
+        </div>
+        <FieldError id={confirmErrorId} message={confirmError} />
+      </div>
+    </>
   );
 }
