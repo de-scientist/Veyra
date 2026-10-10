@@ -208,12 +208,19 @@ export function LoginForm() {
         <FieldError id={emailErrorId} message={errors.email?.message} />
       </div>
 
-      <ControlledLoginPassword
-        scopeId={scopeId}
-        register={passwordReg}
+      <PasswordField
+        id={`${scopeId}-password`}
+        name="password"
+        label="Password"
+        autoComplete="current-password"
         error={errors.password?.message}
-        touched={Boolean(touchedFields.password)}
-        clear={() => clearErrors('password')}
+        inputProps={{
+          ...passwordReg,
+          onChange: (e) => {
+            passwordReg.onChange(e);
+            if (touchedFields.password || errors.password) clearErrors('password');
+          },
+        }}
       />
 
       <div className="auth-form__meta">
@@ -233,89 +240,7 @@ export function LoginForm() {
   );
 }
 
-/**
- * RHF-bound password input with local visibility state. Split out so the
- * eye toggle does not re-register the field or steal focus on each render.
- */
-function ControlledLoginPassword({
-  scopeId,
-  register,
-  error,
-  touched,
-  clear,
-}: {
-  scopeId: string;
-  register: ReturnType<typeof useLoginPasswordRegister> extends never ? never : {
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
-    name: string;
-    ref: React.Ref<HTMLInputElement>;
-  };
-  error?: string;
-  touched: boolean;
-  clear: () => void;
-}) {
-  const [visible, setVisible] = useState(false);
-  const errorId = `${scopeId}-password-error`;
-  return (
-    <div className="auth-field" style={{ marginTop: '-0.9rem' }}>
-      <span className="visually-hidden" id={`${scopeId}-password-label`}>
-        Password
-      </span>
-      <div className="auth-password-wrap">
-        <input
-          id={`${scopeId}-password`}
-          type={visible ? 'text' : 'password'}
-          autoComplete="current-password"
-          placeholder="Minimum 8 characters"
-          aria-label="Password"
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
-          {...register}
-          onChange={(e) => {
-            register.onChange(e);
-            if (touched || error) clear();
-          }}
-        />
-        <button
-          type="button"
-          className="auth-password-toggle"
-          aria-label={visible ? 'Hide password' : 'Show password'}
-          aria-pressed={visible}
-          onClick={() => setVisible((v) => !v)}
-        >
-          <ShowHideIcon visible={visible} />
-        </button>
-      </div>
-      <FieldError id={errorId} message={error} />
-    </div>
-  );
-}
 
-// Helper indirection keeps the prop type above honest without importing RHF internals elsewhere.
-function useLoginPasswordRegister(): never {
-  throw new Error('type-only helper');
-}
-
-function ShowHideIcon({ visible }: { visible: boolean }) {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      {visible ? (
-        <>
-          <path d="M9.9 4.24A9.5 9.5 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19" />
-          <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.39-1.61" />
-          <path d="M2 2l20 20" />
-          <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-        </>
-      ) : (
-        <>
-          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-        </>
-      )}
-    </svg>
-  );
-}
 
 export function RegisterForm() {
   const router = useRouter();
