@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
-import { useForm, type FieldErrors, type Resolver } from 'react-hook-form';
+import { useForm, type FieldErrors, type Resolver, type ResolverResult } from 'react-hook-form';
 import { z } from 'zod';
 
 import { getSessionUser } from '../lib/admin-api';
@@ -61,7 +61,7 @@ async function authRequest(path: string, body: Record<string, string>) {
 
 /** Minimal zod→react-hook-form resolver (avoids a new @hookform/resolvers dep). */
 function zodResolver<TFieldValues extends Record<string, unknown>>(schema: z.ZodTypeAny): Resolver<TFieldValues> {
-  return async (values) => {
+  return async (values): Promise<ResolverResult<TFieldValues>> => {
     const parsed = schema.safeParse(values);
     if (parsed.success) return { values: parsed.data as TFieldValues, errors: {} };
     const errors: Record<string, { type: string; message: string }> = {};
@@ -69,7 +69,7 @@ function zodResolver<TFieldValues extends Record<string, unknown>>(schema: z.Zod
       const key = issue.path.join('.') || 'root';
       if (!errors[key]) errors[key] = { type: issue.code, message: issue.message };
     }
-    return { values: {} as TFieldValues, errors: errors as FieldErrors<TFieldValues> };
+    return { values: {}, errors: errors as FieldErrors<TFieldValues> };
   };
 }
 
@@ -99,6 +99,19 @@ export function LoginForm() {
   const emailErrorId = `login-email-error-${formId}`;
   const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(null);
   const inFlight = useRef(false);
+  // Render-driving submission lock. The `inFlight` ref above is the synchronous
+  // double-click/Enter guard; this state drives `disabled` + the loading label
+  // and stays held through the post-success redirect window (when RHF already
+  // clears `isSubmitting`), so the button cannot re-enable before navigation.
+  const [locked, setLocked] = useState(false);
+  const redirectTimer = useRef<number | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      if (redirectTimer.current !== undefined) window.clearTimeout(redirectTimer.current);
+    },
+    [],
+  );
 
   const target = safeTarget(searchParams.get('redirect'));
 
@@ -122,7 +135,9 @@ export function LoginForm() {
   async function onValid(values: LoginInput) {
     if (inFlight.current) return;
     inFlight.current = true;
+    setLocked(true);
     setFormAlert(null);
+    let succeeded = false;
     try {
       await authRequest('/auth/login', { email: normalizeEmail(values.email), password: values.password });
       // Verify the session was actually established — never redirect on HTTP alone.
@@ -136,7 +151,8 @@ export function LoginForm() {
       notifySessionUpdated();
       await refresh().catch(() => undefined);
       setFormAlert({ tone: 'success', title: 'You are signed in successfully.', message: 'Taking you to your account…' });
-      window.setTimeout(() => {
+      succeeded = true;
+      redirectTimer.current = window.setTimeout(() => {
         router.push(target as Route);
         router.refresh();
       }, 650);
@@ -150,6 +166,10 @@ export function LoginForm() {
       setFormAlert({ tone: 'error', title: mapped.formError.title, message: mapped.formError.message });
     } finally {
       inFlight.current = false;
+      // On success the lock is held until navigation so the form cannot be
+      // re-submitted during the redirect window; on any recoverable failure
+      // the button is restored.
+      if (!succeeded) setLocked(false);
     }
   }
 
@@ -165,7 +185,7 @@ export function LoginForm() {
   if (status === 'authenticated') return <JBLoading context="account" />;
   if (status === 'loading') return <JBLoading context="account" />;
 
-  const busy = isSubmitting || inFlight.current;
+  const busy = isSubmitting || locked;
   const emailReg = register('email');
   const passwordReg = register('password');
 
@@ -249,6 +269,17 @@ export function RegisterForm() {
   const scopeId = `register-${formId}`;
   const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(null);
   const inFlight = useRef(false);
+  // Render-driving submission lock (see LoginForm): held through the
+  // post-success redirect window so the button cannot re-enable early.
+  const [locked, setLocked] = useState(false);
+  const redirectTimer = useRef<number | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      if (redirectTimer.current !== undefined) window.clearTimeout(redirectTimer.current);
+    },
+    [],
+  );
 
   const target = safeTarget(searchParams.get('redirect'));
 
@@ -275,7 +306,9 @@ export function RegisterForm() {
   async function onValid(values: RegisterInput) {
     if (inFlight.current) return;
     inFlight.current = true;
+    setLocked(true);
     setFormAlert(null);
+    let succeeded = false;
     try {
       await authRequest('/auth/register', {
         firstName: values.firstName.trim(),
@@ -301,7 +334,8 @@ export function RegisterForm() {
         title: 'Your account has been created.',
         message: 'You are signed in. Taking you to your account…',
       });
-      window.setTimeout(() => {
+      succeeded = true;
+      redirectTimer.current = window.setTimeout(() => {
         router.push(target as Route);
         router.refresh();
       }, 850);
@@ -315,6 +349,8 @@ export function RegisterForm() {
       setFormAlert({ tone: 'error', title: mapped.formError.title, message: mapped.formError.message });
     } finally {
       inFlight.current = false;
+      // Held on success until navigation; restored on recoverable failure.
+      if (!succeeded) setLocked(false);
     }
   }
 
@@ -330,7 +366,7 @@ export function RegisterForm() {
   if (status === 'authenticated') return <JBLoading context="account" />;
   if (status === 'loading') return <JBLoading context="account" />;
 
-  const busy = isSubmitting || inFlight.current;
+  const busy = isSubmitting || locked;
   const hint = passwordHint(passwordValue);
 
   return (
