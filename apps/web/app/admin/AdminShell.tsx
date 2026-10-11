@@ -9,9 +9,13 @@ import { useModalFocus } from '../../components/a11y';
 import { JBIcon } from '../../components/JBIcons';
 import { JBLogo } from '../../components/JBLogo';
 import { useConfirm } from '../../components/ConfirmDialog';
+import { ThemeToggle } from '../../components/ThemeProvider';
 import { UserAvatar } from '../../components/UserAvatar';
+import { Breadcrumb } from '../../components/ui/breadcrumb';
+import { Tooltip } from '../../components/ui/tooltip';
 import { isOperationsRole, logout } from '../../lib/admin-api';
 import { isNavActive, primaryRoleLabel, visibleNavSections } from '../../lib/admin-nav';
+import { buildAdminBreadcrumbs } from '../../lib/breadcrumbs';
 import { getDisplayName } from '../../lib/avatar';
 import { useSession } from '../../lib/session';
 
@@ -255,7 +259,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             )}
             {!collapsed && <JBIcon name="chevron" size={14} />}
           </button>
-          {identityOpen && !collapsed ? (
+          {identityOpen ? (
             <div className="jb-sidebar__identity-menu" role="menu" aria-label={`Account menu for ${displayName}`}>
               <div className="jb-sidebar__identity-meta" aria-hidden="true">
                 <strong>{displayName}</strong>
@@ -298,21 +302,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   <ul className="account-nav-list jb-sidebar__list" id={`jb-section-${section.id}`}>
                     {section.items.map((item) => {
                       const active = isNavActive(pathname, item.href);
-                      return (
-                        <li key={item.href}>
-                          <Link
-                            href={item.href as Route}
-                            className={`account-nav-link jb-sidebar__link ${active ? 'active' : ''}`}
-                            aria-current={active ? 'page' : undefined}
-                            aria-label={collapsed ? item.label : undefined}
-                            title={collapsed ? item.label : undefined}
-                            onClick={() => setMobileOpen(false)}
-                          >
-                            <span className="account-nav-icon" aria-hidden="true"><JBIcon name={item.icon} /></span>
-                            {!collapsed && <span className="jb-sidebar__link-label">{item.label}</span>}
-                          </Link>
-                        </li>
+                      const link = (
+                        <Link
+                          href={item.href as Route}
+                          className={`account-nav-link jb-sidebar__link ${active ? 'active' : ''}`}
+                          aria-current={active ? 'page' : undefined}
+                          aria-label={collapsed ? item.label : undefined}
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          <span className="account-nav-icon" aria-hidden="true"><JBIcon name={item.icon} /></span>
+                          {!collapsed && <span className="jb-sidebar__link-label">{item.label}</span>}
+                        </Link>
                       );
+                      // Icon-only links expose their name through a tooltip;
+                      // the bubble is decorative next to the aria-label.
+                      return <li key={item.href}>{collapsed ? <Tooltip label={item.label}>{link}</Tooltip> : link}</li>;
                     })}
                   </ul>
                 ) : null}
@@ -345,6 +349,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </nav>
       {mobileOpen && <div className="account-nav-overlay" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
       <main className="account-main admin-main">
+        <div className="admin-topbar">
+          <div className="container admin-topbar__inner">
+            <div className="admin-topbar__crumbs">
+              <Breadcrumb items={buildAdminBreadcrumbs(pathname)} />
+            </div>
+            <ThemeToggle compact />
+          </div>
+        </div>
         <div className="container page-shell">{children}</div>
       </main>
     </div>

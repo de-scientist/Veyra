@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { Route } from 'next';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 
@@ -256,7 +257,7 @@ export function Header() {
                 </div>
               </details>
             ))}
-            <Link href={collectionsHref} onClick={() => setMenuOpen(false)}>Collections</Link>
+            <Link href={collectionsHref as Route} onClick={() => setMenuOpen(false)}>Collections</Link>
             <Link href="/search" onClick={() => setMenuOpen(false)}>Search</Link>
             {status === 'authenticated' && session ? (
               <>
