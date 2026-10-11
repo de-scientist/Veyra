@@ -1662,6 +1662,41 @@ a.visually-hidden:focus-visible {
 .site-footer__contact a { color: var(--jb-primary); text-decoration: underline; text-underline-offset: 3px; min-height: 44px; display: inline-flex; align-items: center; }
 .site-footer__bottom-inner { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; width: 100%; }
 
+/* ---------- shadcn-compatible navigation primitives (JB tokens, both themes) --- */
+.ui-sheet { position: fixed; top: 0; bottom: 0; left: 0; z-index: 90; width: min(340px, 88vw); overflow-y: auto; background: var(--jb-surface); border-right: 1px solid var(--jb-border); box-shadow: var(--jb-shadow-md); animation: jb-drawer-in 0.2s ease; }
+.ui-sheet--right { left: auto; right: 0; border-right: 0; border-left: 1px solid var(--jb-border); }
+.ui-nav__list { display: flex; align-items: center; gap: 0.25rem; list-style: none; margin: 0; padding: 0; }
+.ui-nav__link { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 44px; padding: 0 0.75rem; border-radius: var(--jb-radius-pill); font-weight: 600; color: var(--jb-text); white-space: nowrap; position: relative; }
+.ui-nav__link:hover { background: var(--jb-primary-soft); color: var(--jb-primary); }
+.ui-nav__link.is-active { background: var(--jb-primary-soft); color: var(--jb-primary); }
+.ui-nav__link.is-active::after { content: ""; position: absolute; left: 0.75rem; right: 0.75rem; bottom: 6px; height: 3px; border-radius: 999px; background: var(--jb-primary); }
+[data-theme="dark"] .ui-nav__link.is-active { color: var(--jb-primary-strong); }
+.ui-breadcrumbs ol { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; font-size: 0.88rem; }
+.ui-breadcrumbs li { display: inline-flex; align-items: center; gap: 0.35rem; min-width: 0; }
+.ui-breadcrumbs a { color: var(--jb-primary); font-weight: 600; }
+.ui-breadcrumbs [aria-current="page"] { color: var(--jb-text-muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 32ch; }
+.ui-breadcrumbs__separator { display: inline-flex; color: var(--jb-text-muted); }
+.ui-tooltip { position: relative; display: inline-flex; }
+.ui-tooltip__bubble { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%) translateY(-4px); z-index: 80; padding: 0.4rem 0.7rem; border-radius: 10px; background: var(--jb-surface-elevated, var(--jb-surface)); border: 1px solid var(--jb-border); box-shadow: var(--jb-shadow-md); color: var(--jb-text); font-size: 0.8rem; font-weight: 600; white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.12s ease, transform 0.12s ease; pointer-events: none; }
+.ui-tooltip:hover > .ui-tooltip__bubble, .ui-tooltip:focus-within > .ui-tooltip__bubble { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+.ui-separator { border: 0; border-top: 1px solid var(--jb-border); }
+.ui-separator--vertical { border-top: 0; border-left: 1px solid var(--jb-border); align-self: stretch; }
+.ui-skeleton { display: block; }
+
+/* ---------- Header inline search panel ---------- */
+.header-search-panel { border-top: 1px solid var(--jb-border); background: var(--jb-surface); }
+.header-search-panel__inner { padding-top: 0.75rem; padding-bottom: 0.75rem; max-width: 720px; }
+.header-search-panel .search-form { margin-bottom: 0; }
+
+/* ---------- Admin topbar (breadcrumbs + theme) ---------- */
+.admin-topbar { border-bottom: 1px solid var(--jb-border); background: var(--jb-surface); }
+.admin-topbar__inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 56px; padding-top: 0.4rem; padding-bottom: 0.4rem; }
+.admin-topbar__crumbs { min-width: 0; overflow: hidden; }
+@media (max-width: 640px) {
+  .admin-topbar__inner { min-height: 52px; }
+}
+[data-collapsed="true"] .jb-sidebar__identity-menu { position: absolute; left: calc(100% + 10px); right: auto; top: 0; min-width: 250px; }
+
 @media (max-width: 640px) {
   .product-summary__price { font-size: 1.15rem; }
   .cart-item__line-total { margin-left: 0; }
