@@ -15,17 +15,27 @@ export function SearchBar({ initialQuery = '', autoFocus = false }: { initialQue
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // Debounced live suggestions from the public catalogue API.
+  // Debounced live suggestions from the public catalogue API. The sequence
+  // guard drops stale responses so a slow earlier request never replaces
+  // newer results.
   useEffect(() => {
     const query = value.trim();
     if (query.length < 2) {
       setSuggestions([]);
       return;
     }
+    let current = true;
     const timer = window.setTimeout(() => {
-      getSuggestions(query).then(setSuggestions).catch(() => setSuggestions([]));
+      getSuggestions(query).then((next) => {
+        if (current) setSuggestions(next);
+      }).catch(() => {
+        if (current) setSuggestions([]);
+      });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
   }, [value]);
 
   useEffect(() => {
