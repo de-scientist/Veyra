@@ -49,6 +49,14 @@ export async function getNavCategories(): Promise<NavCategory[]> {
   return out;
 }
 
+export type NavCollection = { slug: string; name: string };
+
+/** Live collections for navigation (names + slugs only; no secrets). */
+export async function getNavCollections(): Promise<NavCollection[]> {
+  const rows = await get<Array<{ slug: string; name: string }>>('/catalog/collections');
+  return (rows ?? []).map((row) => ({ slug: row.slug, name: row.name }));
+}
+
 export type Suggestion = { type: 'product' | 'category' | 'collection'; label: string; href: string };
 
 export async function getSuggestions(query: string): Promise<Suggestion[]> {
