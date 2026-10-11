@@ -217,9 +217,14 @@ describe('storefront header contract', () => {
     expect(headerSrc.match(/'\/collections\/weekend-edit'/g)?.length ?? 0).toBe(1);
   });
 
-  it('wraps query-param navigation in Suspense (no prerender failure)', () => {
-    expect(headerSrc).toContain('<Suspense');
-    expect(headerSrc).toContain('useSearchParams');
+  it('reads the query param without useSearchParams (no prerender failure)', () => {
+    // useSearchParams in the root-layout header breaks static prerendering of
+    // this app (verified by build bisect); the department is read from
+    // window.location.search in an effect instead — active styling is a
+    // progressive enhancement.
+    expect(headerSrc).not.toContain('useSearchParams');
+    expect(headerSrc).toContain('window.location.search');
+    expect(headerSrc).toContain("get('department')");
   });
 
   it('announces the cart accessibly and preserves session sync', () => {

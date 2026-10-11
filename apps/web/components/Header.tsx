@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import type { Route } from 'next';
-import { Suspense, useEffect, useRef, useState } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 import { AccountMenu, AccountMenuSkeleton } from './AccountMenu';
 import { JBIcon } from './JBIcons';
@@ -170,14 +170,12 @@ export function Header() {
             <JBLogo variant="compact" alt="" />
           </Link>
 
-          <Suspense fallback={<nav aria-label="Main navigation" className="main-nav" aria-busy="true" />}>
-            <HeaderDeptNav
-              pathname={pathname}
-              navCategories={navCategories}
-              departmentCategories={departmentCategories}
-              collectionsHref={collectionsHref}
-            />
-          </Suspense>
+          <HeaderDeptNav
+            pathname={pathname}
+            navCategories={navCategories}
+            departmentCategories={departmentCategories}
+            collectionsHref={collectionsHref}
+          />
 
           <div className="header-actions">
             {/* Single primary search control: expanding panel (mobile uses the drawer link). */}
@@ -289,8 +287,8 @@ export function Header() {
 }
 
 /**
- * Department navigation with active states. Split out (inside Suspense) because
- * the active department reads the `?department=` query parameter.
+ * Department navigation with active states. The active department is read from
+ * the query string in an effect (see above) so static prerendering is unaffected.
  */
 function HeaderDeptNav({
   pathname,
@@ -303,11 +301,27 @@ function HeaderDeptNav({
   departmentCategories: (pillar: string) => NavCategory[];
   collectionsHref: string;
 }) {
-  const searchParams = useSearchParams();
   const [megaOpen, setMegaOpen] = useState(false);
   const megaRef = useRef<HTMLLIElement>(null);
+  // The active department reads `?department=` client-side in an effect:
+  // `useSearchParams` (even inside Suspense) breaks this app's static
+  // prerender from the root layout, while the query string is only ever a
+  // progressive enhancement for active-link styling.
+  const [activeDept, setActiveDept] = useState<string | null>(null);
 
-  const activeDept = searchParams.get('department');
+  useEffect(() => {
+    const read = () => {
+      try {
+        setActiveDept(new URLSearchParams(window.location.search).get('department'));
+      } catch {
+        setActiveDept(null);
+      }
+    };
+    read();
+    window.addEventListener('popstate', read);
+    return () => window.removeEventListener('popstate', read);
+  }, [pathname]);
+
   const onShop = pathname === '/shop';
   // A category page also lights up its department pillar.
   const categorySlug = pathname?.startsWith('/categories/') ? pathname.split('/')[2] : null;
