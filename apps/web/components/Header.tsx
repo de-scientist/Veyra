@@ -303,8 +303,8 @@ function HeaderDeptNav({
 }) {
   const [megaOpen, setMegaOpen] = useState(false);
   const megaRef = useRef<HTMLLIElement>(null);
-  // The active department reads `?department=` client-side in an effect:
-  // `useSearchParams` (even inside Suspense) breaks this app's static
+  // The active department reads `?department=` client-side in an effect: the
+  // router query hook (even inside Suspense) breaks this app's static
   // prerender from the root layout, while the query string is only ever a
   // progressive enhancement for active-link styling.
   const [activeDept, setActiveDept] = useState<string | null>(null);
