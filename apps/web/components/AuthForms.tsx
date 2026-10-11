@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -24,6 +25,16 @@ import { notifySessionUpdated, useSession } from '../lib/session';
 import { AuthAlert } from './AuthAlert';
 import { JBButtonLoader, JBLoading } from './JBLoading';
 import { PasswordField } from './PasswordField';
+
+/**
+ * Code-split: the strength meter (and, transitively, the zxcvbn dictionaries
+ * loaded inside it) only enters the bundle/routes that render it. The login
+ * form never mounts it, so signing in never pays for estimation.
+ */
+const PasswordStrengthMeter = dynamic(
+  () => import('./PasswordStrengthMeter').then((m) => m.PasswordStrengthMeter),
+  { ssr: false },
+);
 
 /** Re-exported for backward compatibility with existing imports/tests. */
 export function safeRedirectTarget(raw: string | null): string {
@@ -287,6 +298,7 @@ export function RegisterForm() {
     register,
     handleSubmit,
     setError,
+    setValue,
     clearErrors,
     watch,
     formState: { errors, isSubmitting, touchedFields },
@@ -298,6 +310,20 @@ export function RegisterForm() {
   });
 
   const passwordValue = watch('password') ?? '';
+  const [firstNameValue, lastNameValue, emailValue] = watch(['firstName', 'lastName', 'email']);
+
+  /**
+   * Form-state rule for suggested passwords: an explicit "Use this password"
+   * action populates BOTH password and confirmation (a random 16-character
+   * password cannot be retyped), marks both dirty/touched, and revalidates.
+   * Any later manual edit validates the two fields independently again.
+   * All other form values are preserved.
+   */
+  function applySuggestedPassword(suggestion: string) {
+    const options = { shouldValidate: true, shouldDirty: true, shouldTouch: true } as const;
+    setValue('password', suggestion, options);
+    setValue('confirm', suggestion, options);
+  }
 
   useEffect(() => {
     if (status === 'authenticated') router.replace(target as Route);
@@ -455,6 +481,12 @@ export function RegisterForm() {
         requirements={PASSWORD_REQUIREMENTS_TEXT}
         clearPassword={() => clearErrors('password')}
         clearConfirm={() => clearErrors('confirm')}
+      />
+
+      <PasswordStrengthMeter
+        password={passwordValue}
+        userInputs={[firstNameValue ?? '', lastNameValue ?? '', emailValue ?? '']}
+        onUseSuggestion={applySuggestedPassword}
       />
 
       <button type="submit" className="button auth-submit" disabled={busy} aria-busy={busy || undefined}>

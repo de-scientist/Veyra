@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSessions, changePassword, revokeSession, revokeOtherSessions, deactivateAccount, deleteAccount, type AccountSession } from '../../../lib/shopping-api';
 import { useConfirm } from '../../../components/ConfirmDialog';
+import { PasswordStrengthMeter } from '../../../components/PasswordStrengthMeter';
 import { useToast } from '../../../components/Toast';
 
 export default function SecurityPage() {
@@ -41,6 +42,18 @@ export default function SecurityPage() {
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.currentTarget;
     setPasswordForm((prev) => ({ ...prev, [name]: value }));
+    setError(null);
+    setSuccess(null);
+  };
+
+  /**
+   * Same rule as registration: an explicit "Use this password" action fills
+   * both new-password fields (a random password cannot be retyped). The current
+   * password is untouched and still verified by the backend; other sessions are
+   * revoked server-side on success as before.
+   */
+  const applySuggestedPassword = (suggestion: string) => {
+    setPasswordForm((prev) => ({ ...prev, newPassword: suggestion, confirmPassword: suggestion }));
     setError(null);
     setSuccess(null);
   };
@@ -189,6 +202,7 @@ export default function SecurityPage() {
               />
             </label>
           </div>
+          <PasswordStrengthMeter password={passwordForm.newPassword} onUseSuggestion={applySuggestedPassword} />
           <div className="form-actions">
             <button type="submit" className="button" disabled={changingPassword}>
               {changingPassword ? 'Changing…' : 'Change Password'}

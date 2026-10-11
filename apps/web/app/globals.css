@@ -1813,3 +1813,40 @@ a.visually-hidden:focus-visible {
   .auth-shell--split { padding: 1.25rem 0.75rem; }
   .auth-panel__title { font-size: 1.3rem; }
 }
+
+/* ---------- Password strength meter + suggestions (JB tokens, both themes) --- */
+.pw-strength { display: grid; gap: 0.5rem; }
+.pw-strength__head { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+.pw-strength__label { font-weight: 700; font-size: 0.85rem; color: var(--jb-text-muted); }
+.pw-strength__value { font-weight: 700; font-size: 0.85rem; color: var(--jb-text-muted); }
+.pw-strength__value[data-score="0"], .pw-strength__value[data-score="1"] { color: var(--jb-error); }
+.pw-strength__value[data-score="2"] { color: var(--jb-warning); }
+.pw-strength__value[data-score="3"] { color: var(--jb-info); }
+.pw-strength__value[data-score="4"] { color: var(--jb-success); }
+.pw-meter { display: flex; gap: 4px; }
+.pw-meter__segment { flex: 1; height: 6px; border-radius: 999px; background: var(--jb-surface-muted); border: 1px solid var(--jb-border); }
+.pw-meter__segment[data-filled="true"][data-score="0"], .pw-meter__segment[data-filled="true"][data-score="1"] { background: var(--jb-error); border-color: var(--jb-error); }
+.pw-meter__segment[data-filled="true"][data-score="2"] { background: var(--jb-warning); border-color: var(--jb-warning); }
+.pw-meter__segment[data-filled="true"][data-score="3"] { background: var(--jb-info); border-color: var(--jb-info); }
+.pw-meter__segment[data-filled="true"][data-score="4"] { background: var(--jb-success); border-color: var(--jb-success); }
+.pw-strength__feedback { display: grid; gap: 0.25rem; }
+.pw-strength__warning { margin: 0; font-size: 0.88rem; font-weight: 600; color: var(--jb-text); }
+.pw-strength__details { font-size: 0.85rem; color: var(--jb-text-muted); }
+.pw-strength__details summary { cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; color: var(--jb-primary); font-weight: 600; }
+.pw-strength__details p { margin: 0.25rem 0 0; line-height: 1.5; }
+.pw-suggest { display: grid; gap: 0.5rem; justify-items: start; }
+.pw-suggest__toggle { padding-left: 0; text-align: left; }
+.pw-suggest__panel { width: 100%; display: grid; gap: 0.6rem; border: 1px solid var(--jb-border); border-radius: var(--jb-radius-sm); padding: 0.8rem; background: var(--jb-surface); }
+.pw-suggest__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+.pw-suggest__item { display: grid; gap: 0.5rem; border-top: 1px solid var(--jb-border); padding-top: 0.6rem; }
+.pw-suggest__item:first-child { border-top: 0; padding-top: 0; }
+.pw-suggest__candidate { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
+.pw-suggest__candidate code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.95rem; overflow-wrap: anywhere; }
+.pw-suggest__score { font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+.pw-suggest__score[data-score="0"], .pw-suggest__score[data-score="1"], .pw-suggest__score[data-score="2"] { color: var(--jb-warning); }
+.pw-suggest__score[data-score="3"], .pw-suggest__score[data-score="4"] { color: var(--jb-success); }
+.pw-suggest__actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.pw-suggest__actions .button { min-height: 44px; }
+@media (max-width: 640px) {
+  .pw-suggest__actions .button { flex: 1; }
+}
