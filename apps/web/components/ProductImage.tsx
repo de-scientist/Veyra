@@ -31,6 +31,7 @@ export function ProductImage({
   preset?: DisplayPreset;
 }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   // Derive once per render: null only when src itself is empty (handled
   // below); legacy URLs return unchanged by the helper.
   const displaySrc = src ? (cloudinaryDisplayUrl(src, preset) ?? src) : null;
@@ -42,15 +43,20 @@ export function ProductImage({
     );
   }
   return (
-    <Image
-      src={displaySrc}
-      alt={alt}
-      width={width}
-      height={height}
-      priority={eager}
-      loading={eager ? undefined : 'lazy'}
-      className={className}
-      onError={() => setFailed(true)}
-    />
+    <>
+      {!loaded ? <div className="skeleton product-card__img-skeleton" aria-hidden="true" /> : null}
+      <Image
+        src={displaySrc}
+        alt={alt}
+        width={width}
+        height={height}
+        priority={eager}
+        loading={eager ? undefined : 'lazy'}
+        className={className}
+        style={loaded ? undefined : { visibility: 'hidden', position: 'absolute', inset: 0 }}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    </>
   );
 }

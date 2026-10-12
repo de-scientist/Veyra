@@ -26,6 +26,26 @@ const SIZE_CLASSES: Record<UIButtonSize, string> = {
   lg: "min-h-[48px] px-6 text-base",
 };
 
+export function uiButtonClasses({
+  variant = 'primary',
+  size = 'md',
+  className,
+}: {
+  variant?: UIButtonVariant;
+  size?: UIButtonSize;
+  className?: string;
+} = {}): string {
+  return cn(
+    'inline-flex items-center justify-center gap-2 rounded-pill font-semibold',
+    'transition-colors motion-reduce:transition-none',
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]',
+    'disabled:cursor-not-allowed disabled:opacity-60',
+    VARIANT_CLASSES[variant],
+    SIZE_CLASSES[size],
+    className,
+  );
+}
+
 export interface UIButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: UIButtonVariant;
   size?: UIButtonSize;
@@ -47,15 +67,7 @@ export function UIButton({
       type={rest.type ?? "button"}
       disabled={disabled ?? loading}
       aria-busy={loading || undefined}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-pill font-semibold",
-        "transition-colors motion-reduce:transition-none",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]",
-        "disabled:cursor-not-allowed disabled:opacity-60",
-        VARIANT_CLASSES[variant],
-        SIZE_CLASSES[size],
-        className,
-      )}
+      className={uiButtonClasses({ variant, size, className })}
       {...rest}
     >
       {children}
