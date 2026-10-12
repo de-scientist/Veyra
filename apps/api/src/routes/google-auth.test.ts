@@ -99,10 +99,16 @@ describe('google authentication', () => {
   afterAll(async () => {
     __setGoogleExchangeHook(null);
     __setGoogleTestConfig(null);
-    await prisma.oAuthTransaction.deleteMany({ where: { user: { id: { in: createdUserIds } } } });
-    await prisma.oAuthAccount.deleteMany({ where: { userId: { in: createdUserIds } } });
-    await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
-    await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    // Stamp-scoped cleanup: every fixture email in this file ends with
+    // `-${stamp}@example.com`, including users auto-created by callbacks.
+    const stamped = { email: { endsWith: `-${stamp}@example.com` } };
+    const users = await prisma.user.findMany({ where: stamped, select: { id: true } });
+    const ids = [...users.map((u) => u.id), ...createdUserIds];
+    await prisma.auditLog.deleteMany({ where: { entityId: { in: ids } } });
+    await prisma.oAuthTransaction.deleteMany({ where: { userId: { in: ids } } });
+    await prisma.oAuthAccount.deleteMany({ where: { userId: { in: ids } } });
+    await prisma.session.deleteMany({ where: { userId: { in: ids } } });
+    await prisma.user.deleteMany({ where: { id: { in: ids } } });
     await app.close();
   });
 
@@ -288,8 +294,7 @@ describe('google authentication', () => {
       remoteAddress: ip(),
     });
     expect(started.statusCode).toBe(200);
-    const { url } = started.json() as { data: { url: string } };
-    const linkState = stateFromLocation(url);
+    const linkState = stateFromLocation((started.json() as { data: { url: string } }).data.url);
 
     mockError = null;
     mockIdentity = { sub: `sub-link-${stamp}`, email: `linker-alt-${stamp}@example.com` };
@@ -301,19 +306,6 @@ describe('google authentication', () => {
     });
     expect(String(noSession.headers.location)).toContain('google_error=link_failed');
     expect(await prisma.oAuthAccount.findFirst({ where: { userId: id } })).toBeNull();
-
-    // A SIGN_IN transaction can never be reused as a LINK transaction: craft
-    // the link callback on a sign-in state while authenticated.
-    const signInState = await startSignIn();
-    const misuse = await app.inject({
-      method: 'GET',
-      url: `/api/v1/auth/google/callback?code=x&state=${encodeURIComponent(signInState)}`,
-      headers: { cookie },
-      remoteAddress: ip(),
-    });
-    // SIGN_IN operations sign in (or fail closed) — they never bind a link.
-    expect(await prisma.oAuthAccount.findFirst({ where: { userId: id } })).toBeNull();
-    expect(String(misuse.headers.location)).toMatch(/google=success|google_error=/);
 
     // Correct flow: fresh LINK transaction + bound session completes.
     const started2 = await app.inject({
@@ -334,6 +326,20 @@ describe('google authentication', () => {
     expect(String(done.headers.location)).toContain('google=linked');
     const link = await prisma.oAuthAccount.findFirst({ where: { userId: id, provider: 'google' } });
     expect(link?.providerSub).toBe(`sub-link-${stamp}`);
+
+    // A SIGN_IN transaction can never bind a link: consuming one while
+    // authenticated signs in (or fails closed) without touching link rows.
+    const signInState = await startSignIn();
+    const misuse = await app.inject({
+      method: 'GET',
+      url: `/api/v1/auth/google/callback?code=x&state=${encodeURIComponent(signInState)}`,
+      headers: { cookie },
+      remoteAddress: ip(),
+    });
+    expect(String(misuse.headers.location)).toMatch(/google=success|google_error=/);
+    const linksAfter = await prisma.oAuthAccount.findMany({ where: { userId: id, provider: 'google' } });
+    expect(linksAfter).toHaveLength(1);
+    expect(linksAfter[0].providerSub).toBe(`sub-link-${stamp}`);
 
     const status = await app.inject({ method: 'GET', url: '/api/v1/auth/google/link/status', headers: { cookie }, remoteAddress: ip() });
     expect((status.json() as { data: { linked: boolean; hasPassword: boolean } }).data).toMatchObject({ linked: true, hasPassword: true });
