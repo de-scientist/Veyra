@@ -223,6 +223,8 @@ enum AuditAction {
   USER_DELETED
   PROFILE_UPDATED
   PASSWORD_CHANGED
+  GOOGLE_LINKED
+  GOOGLE_UNLINKED
   ADDRESS_CREATED
   ADDRESS_UPDATED
   ADDRESS_DELETED
@@ -270,7 +272,10 @@ enum AuditAction {
 model User {
   id                String     @id @default(uuid())
   email             String     @unique
-  passwordHash      String
+  // Nullable: Google-only customer accounts have no password. A NULL hash
+  // can never authenticate via email/password (login treats it as invalid
+  // credentials). Never store placeholder passwords here.
+  passwordHash      String?
   firstName         String
   lastName          String
   phone             String?
@@ -287,6 +292,8 @@ model User {
 
   roles               UserRole[]
   sessions            Session[]
+  oauthAccounts       OAuthAccount[]
+  oauthTransactions   OAuthTransaction[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
   addresses           Address[]
@@ -347,6 +354,48 @@ model EmailVerificationToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// External provider identity (Google sign-in). Keyed by the provider's
+// stable subject (`sub`); email is an attribute, never the identity key.
+// One provider identity links to at most one user (unique provider+sub).
+model OAuthAccount {
+  id            String   @id @default(uuid())
+  userId        String
+  provider      String
+  providerSub   String
+  email         String?
+  emailVerified Boolean  @default(false)
+  linkedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSub])
+  @@index([userId])
+}
+
+// Short-lived, single-use OAuth transaction (state + PKCE + nonce +
+// operation binding). Rows are consumed (consumedAt) or expire after
+// 10 minutes; a cleanup pass deletes stale rows. `state` is stored hashed
+// (it travels through the browser); the PKCE verifier and nonce stay
+// server-side and are never logged.
+model OAuthTransaction {
+  id           String    @id @default(uuid())
+  stateHash    String    @unique
+  operation    String
+  userId       String?
+  codeVerifier String
+  nonce        String
+  redirect     String    @default("/account")
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 model Role {

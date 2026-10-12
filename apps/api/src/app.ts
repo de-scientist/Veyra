@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { env } from './lib/env.js';
 import { logger } from './lib/logger.js';
 import { authRoutes } from './routes/auth.js';
+import { googleAuthRoutes } from './routes/google-auth.js';
 import { catalogueRoutes } from './routes/catalogue.js';
 import { healthRoute } from './routes/health.js';
 import { shoppingRoutes } from './routes/shopping.js';
@@ -155,6 +156,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     healthRoute(instance);
     await authRoutes(instance);
+    await googleAuthRoutes(instance);
     await catalogueRoutes(instance);
     await shoppingRoutes(instance);
     await checkoutRoutes(instance);

@@ -43,6 +43,15 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().min(1).max(120).optional(),
   CLOUDINARY_API_SECRET: z.string().min(1).max(256).optional(),
   CLOUDINARY_UPLOAD_FOLDER: z.string().min(1).max(120).default('jb-mercantile'),
+  // Google sign-in (customer auth-code + PKCE flow). All optional: absent
+  // credentials leave password authentication untouched and Google initiation
+  // fails with GOOGLE_NOT_CONFIGURED instead of a fake button flow.
+  // GOOGLE_CLIENT_SECRET is backend-only — never NEXT_PUBLIC_ prefixed.
+  GOOGLE_CLIENT_ID: z.string().min(1).max(256).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).max(256).optional(),
+  // Exact redirect URI registered in Google Cloud. Defaults to the local API
+  // callback; production MUST set the exact registered https value.
+  GOOGLE_REDIRECT_URI: z.string().url().optional(),
 });
 
 export const env = envSchema.parse(process.env);

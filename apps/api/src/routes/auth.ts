@@ -25,7 +25,7 @@ const loginSchema = z.object({
   password: z.string().min(8),
 });
 
-function getCookieOptions() {
+export function getCookieOptions() {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
@@ -35,7 +35,7 @@ function getCookieOptions() {
   };
 }
 
-function serializeUser(user: {
+export function serializeUser(user: {
   id: string;
   email: string;
   firstName: string;
@@ -63,7 +63,7 @@ function serializeUser(user: {
   };
 }
 
-function parseSessionTokenFromRequest(request: FastifyRequest): string | undefined {
+export function parseSessionTokenFromRequest(request: FastifyRequest): string | undefined {
   const rawCookieHeader = request.headers.cookie;
 
   if (!rawCookieHeader) {
@@ -80,7 +80,7 @@ function parseSessionTokenFromRequest(request: FastifyRequest): string | undefin
   return decodeURIComponent(sessionCookie.slice(`${authCookieName}=`.length));
 }
 
-async function createSession(userId: string, userAgent: string | undefined, ipAddress: string | undefined) {
+export async function createSession(userId: string, userAgent: string | undefined, ipAddress: string | undefined) {
   const sessionToken = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
 
@@ -171,7 +171,9 @@ export async function authRoutes(app: FastifyInstance) {
       },
     });
 
-    if (!user || !(await verifyPassword(payload.password, user.passwordHash))) {
+    // External-only (Google) accounts store a NULL hash, which can never
+    // satisfy password verification — they must use Google sign-in.
+    if (!user || !user.passwordHash || !(await verifyPassword(payload.password, user.passwordHash))) {
       throw new HttpError(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
     }
 

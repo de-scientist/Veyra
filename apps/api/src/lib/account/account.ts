@@ -587,6 +587,10 @@ export async function getWishlistSummary(userId: string) {
 
 export async function changePassword(userId: string, currentSessionId: string | undefined, input: { currentPassword: string; newPassword: string; confirmPassword: string }) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { passwordHash: true } });
+  // Google-only accounts have no password: there is no current password to
+  // verify, so changing (setting) one is rejected here until a dedicated
+  // set-password flow exists. Never fall through to bcrypt with a null hash.
+  if (!user.passwordHash) throw new HttpError(400, 'NO_PASSWORD_SET', 'This account signs in with Google and has no password to change.');
   const valid = await verifyPassword(input.currentPassword, user.passwordHash);
   if (!valid) throw new HttpError(400, 'INVALID_PASSWORD', 'Current password is incorrect.');
   if (input.newPassword.length < 8 || input.newPassword.length > 128) throw new HttpError(400, 'WEAK_PASSWORD', 'New password must be between 8 and 128 characters.');
