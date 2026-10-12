@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSessions, changePassword, revokeSession, revokeOtherSessions, deactivateAccount, deleteAccount, type AccountSession } from '../../../lib/shopping-api';
+import { getGoogleLinkStatus, googleCallbackMessage, startGoogleLink, unlinkGoogle, type GoogleLinkStatus } from '../../../lib/google-auth';
 import { useConfirm } from '../../../components/ConfirmDialog';
+import { GoogleBrandMark } from '../../../components/GoogleSignInButton';
 import { PasswordStrengthMeter } from '../../../components/PasswordStrengthMeter';
 import { useToast } from '../../../components/Toast';
 
@@ -24,8 +26,23 @@ export default function SecurityPage() {
   });
   const [changingPassword, setChangingPassword] = useState(false);
 
+  // Google linking (backend-owned OAuth; no tokens in frontend state).
+  const [googleStatus, setGoogleStatus] = useState<GoogleLinkStatus | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(true);
+  const [googlePassword, setGooglePassword] = useState('');
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+
   useEffect(() => {
     loadSessions();
+    loadGoogleStatus();
+    // Surface the link-callback outcome (`?google=linked` / `?google_error=`
+    // set by the backend). Read from window to avoid a Suspense boundary.
+    const params = new URLSearchParams(window.location.search);
+    const arrival = googleCallbackMessage({ google: params.get('google'), google_error: params.get('google_error') });
+    if (arrival) {
+      if (arrival.tone === 'success') setSuccess(arrival.message);
+      else setError(arrival.message);
+    }
   }, []);
 
   const loadSessions = async () => {
@@ -37,6 +54,57 @@ export default function SecurityPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadGoogleStatus = async () => {
+    try {
+      setGoogleStatus(await getGoogleLinkStatus());
+    } catch {
+      // Google status is auxiliary: a failure here must not mask the rest
+      // of the security page. Linking simply stays unavailable.
+      setGoogleStatus(null);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (linkingGoogle) return;
+    setLinkingGoogle(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { url } = await startGoogleLink({
+        ...(googlePassword ? { currentPassword: googlePassword } : {}),
+        redirect: '/account/security',
+      });
+      // Backend-owned transaction: the callback returns here with the link
+      // recorded server-side. Never reuse this URL (single-use transaction).
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start Google linking');
+      setLinkingGoogle(false);
+    }
+  };
+
+  const handleGoogleUnlink = async () => {
+    if (!googlePassword) {
+      setError('Enter your current password to unlink Google.');
+      return;
+    }
+    const confirmed = await confirm({
+      title: 'Unlink your Google account?',
+      description: 'You will sign in with your password only. This cannot be undone automatically.',
+      confirmLabel: 'Unlink Google',
+      variant: 'destructive',
+      onConfirm: () => unlinkGoogle({ currentPassword: googlePassword }),
+    });
+    if (!confirmed) return;
+    setError(null);
+    setSuccess('Google account unlinked. You can still sign in with your password.');
+    setGooglePassword('');
+    await loadGoogleStatus();
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,6 +277,66 @@ export default function SecurityPage() {
             </button>
           </div>
         </form>
+      </section>
+
+      <section className="account-section account-security-section">
+        <h2>Google sign-in</h2>
+        {googleLoading ? (
+          <div className="empty-state"><p>Loading Google sign-in status…</p></div>
+        ) : googleStatus?.linked ? (
+          <div>
+            <p className="muted-copy">
+              <span className="google-link-mark" aria-hidden="true"><GoogleBrandMark /></span>{' '}
+              Linked to <strong>{googleStatus.email ?? 'your Google account'}</strong>. You can sign in with Google or your password.
+            </p>
+            {googleStatus.hasPassword ? (
+              <form onSubmit={(e) => { e.preventDefault(); void handleGoogleUnlink(); }} className="account-form">
+                <label>
+                  <span>Current password (required to unlink)</span>
+                  <input
+                    type="password"
+                    name="googleUnlinkPassword"
+                    value={googlePassword}
+                    onChange={(e) => setGooglePassword(e.currentTarget.value)}
+                    autoComplete="current-password"
+                  />
+                </label>
+                <div className="form-actions">
+                  <button type="submit" className="button button--secondary button--danger">
+                    Unlink Google account
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <p className="muted-copy">Unlinking is unavailable because Google is your only sign-in method.</p>
+            )}
+          </div>
+        ) : googleStatus ? (
+          <div>
+            <p className="muted-copy">Link a Google account to sign in faster. Your orders, addresses, and password sign-in stay exactly as they are.</p>
+            <form onSubmit={handleGoogleLink} className="account-form">
+              {googleStatus.hasPassword ? (
+                <label>
+                  <span>Current password (required to link)</span>
+                  <input
+                    type="password"
+                    name="googleLinkPassword"
+                    value={googlePassword}
+                    onChange={(e) => setGooglePassword(e.currentTarget.value)}
+                    autoComplete="current-password"
+                  />
+                </label>
+              ) : null}
+              <div className="form-actions">
+                <button type="submit" className="button button--secondary" disabled={linkingGoogle}>
+                  {linkingGoogle ? 'Starting Google linking…' : 'Link Google account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <p className="muted-copy">Google sign-in status is unavailable right now. Password sign-in and sessions below are unaffected.</p>
+        )}
       </section>
 
       <section className="account-section account-security-section">
