@@ -38,7 +38,7 @@ export function ProductGrid({
 export function ProductCardSkeletonCard() {
   return (
     <UICard className="product-card flex h-full flex-col overflow-hidden" aria-hidden="true">
-      <Skeleton label="Loading product image" className="product-card__media-skeleton" style={{ aspectRatio: '4 / 5' }} />
+      <div className="skeleton product-card__media-skeleton" style={{ aspectRatio: '4 / 5' }} />
       <UICardBody className="product-card__body">
         <Skeleton label="Loading product details" />
       </UICardBody>
