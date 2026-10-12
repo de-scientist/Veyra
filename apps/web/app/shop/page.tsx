@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import type { Route } from 'next';
 
-import { ProductCard } from '../../components/ProductCard';
+import { ProductEmptyState, ProductGrid } from '../../components/ProductGrid';
 import { JBIcon } from '../../components/JBIcons';
 import { FilterPanel, FilterSheetHost, SortControl } from '../../components/DiscoveryFilters';
 import { discoveryQueryString, getDepartmentBySlug, parseDiscoveryQuery } from '../../lib/catalog';
@@ -129,17 +129,14 @@ export default async function ShopPage({ searchParams }: { searchParams?: Search
         </aside>
         <section aria-label="Products">
           {items.length > 0 ? (
-            <div className="product-grid">
-              {items.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
+            <ProductGrid products={items} label="Products" />
           ) : (
-            <div className="empty-state">
-              <h2>No products found</h2>
-              <p>Try removing some filters or explore another department.</p>
-              <Link href="/shop" className="button">Browse all products</Link>
-            </div>
+            <ProductEmptyState
+              title="No products found"
+              description="Try changing your search or adjusting your filters."
+              actionHref="/shop"
+              actionLabel="Browse all products"
+            />
           )}
 
           {totalPages > 1 ? (

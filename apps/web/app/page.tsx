@@ -115,11 +115,7 @@ export default async function HomePage() {
             <h2 id="jb-kitchen-heading">Kitchen &amp; home essentials</h2>
             <Link href="/shop?department=kitchen-home">All kitchen &amp; home</Link>
           </div>
-          <div className="product-grid">
-            {kitchenPicks.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <ProductGrid products={kitchenPicks} label="Kitchen and home essentials" />
         </section>
       ) : null}
 
@@ -144,11 +140,7 @@ export default async function HomePage() {
             <h2 id="jb-new-heading">New arrivals</h2>
             <Link href="/shop?sort=newest">View all</Link>
           </div>
-          <div className="product-grid">
-            {newArrivals.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <ProductGrid products={newArrivals} label="New arrivals" />
         </section>
       ) : null}
 

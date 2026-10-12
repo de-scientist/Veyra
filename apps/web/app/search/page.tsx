@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { ProductCard } from '../../components/ProductCard';
+import { ProductEmptyState, ProductFetchError, ProductGrid } from '../../components/ProductGrid';
 import { SearchBar } from '../../components/SearchBar';
 import { FilterPanel, FilterSheetHost, SortControl } from '../../components/DiscoveryFilters';
 import { discoveryQueryString, parseDiscoveryQuery } from '../../lib/catalog';
@@ -62,8 +62,11 @@ export default async function SearchPage({ searchParams }: { searchParams?: Sear
       {hasQuery ? (
         <>
           {result === null ? (
-            <div className="inline-message" role="alert" style={{ marginTop: '1.5rem' }}>
-              Search is temporarily unavailable. Please try again in a moment.
+            <div style={{ marginTop: '1.5rem' }}>
+              <ProductFetchError
+                title="Search unavailable"
+                description="Search is temporarily unavailable. Please try again in a moment."
+              />
             </div>
           ) : (
             <>
@@ -83,17 +86,14 @@ export default async function SearchPage({ searchParams }: { searchParams?: Sear
                 </aside>
                 <section aria-label="Search results">
                   {items.length > 0 ? (
-                    <div className="product-grid">
-                      {items.map((product) => (
-                        <ProductCard key={product.id} product={product} />
-                      ))}
-                    </div>
+                    <ProductGrid products={items} label="Search results" />
                   ) : (
-                    <div className="empty-state">
-                      <h2>No matches found</h2>
-                      <p>Nothing matched “{query.q}”. Try a different keyword — “sneakers”, “kettle” or “shirt” — or remove filters.</p>
-                      <Link className="button" href="/shop">Browse all products</Link>
-                    </div>
+                    <ProductEmptyState
+                      title="No products found"
+                      description={`Nothing matched \u201C${query.q}\u201D. Try changing your search or adjusting your filters.`}
+                      actionHref="/shop"
+                      actionLabel="Browse all products"
+                    />
                   )}
 
                   {totalPages > 1 ? (
