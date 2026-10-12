@@ -1682,6 +1682,16 @@ a.visually-hidden:focus-visible {
 .ui-separator { border: 0; border-top: 1px solid var(--jb-border); }
 .ui-separator--vertical { border-top: 0; border-left: 1px solid var(--jb-border); align-self: stretch; }
 .ui-skeleton { display: block; }
+/* ---------- shadcn product-card redesign: badge, image skeleton, toasts --- */
+.product-card__badge { position: absolute; top: 0.8rem; left: 0.8rem; z-index: 2; }
+.product-card__img-skeleton { position: absolute; inset: 0; border-radius: 0; min-height: 100%; }
+.product-grid__item { min-width: 0; }
+.toast__body { display: grid; gap: 0.1rem; min-width: 0; }
+.toast__title { display: block; font-weight: 800; }
+.toast__message { display: block; color: var(--jb-text-muted); font-size: 0.88rem; }
+@media (prefers-reduced-motion: reduce) {
+  .product-card:hover .product-card__media img, .product-card__hover { transition: none; transform: none; }
+}
 
 /* ---------- Header inline search panel ---------- */
 .header-search-panel { border-top: 1px solid var(--jb-border); background: var(--jb-surface); }

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 
-import { ProductCard } from '../../../components/ProductCard';
+import { ProductEmptyState, ProductGrid } from '../../../components/ProductGrid';
 import { JBIcon } from '../../../components/JBIcons';
 import { FilterPanel, FilterSheetHost, SortControl } from '../../../components/DiscoveryFilters';
 import { discoveryQueryString, parseDiscoveryQuery } from '../../../lib/catalog';
@@ -126,15 +126,14 @@ export default async function CollectionPage({
         </aside>
         <section aria-label="Products">
           {items.length > 0 ? (
-            <div className="product-grid">
-              {items.map((product) => <ProductCard key={product.id} product={product} />)}
-            </div>
+            <ProductGrid products={items} label={`Products in ${collection.name}`} />
           ) : (
-            <div className="empty-state">
-              <h2>No products in {collection.name} yet</h2>
-              <p>Try removing some filters, or browse everything instead.</p>
-              <Link href="/shop" className="button">Browse all products</Link>
-            </div>
+            <ProductEmptyState
+              title={`No products in ${collection.name} yet`}
+              description="Try changing your search or adjusting your filters."
+              actionHref="/shop"
+              actionLabel="Browse all products"
+            />
           )}
 
           {totalPages > 1 ? (

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { PriceDisplay } from '../../../components/PriceDisplay';
-import { ProductCard } from '../../../components/ProductCard';
+import { ProductGrid } from '../../../components/ProductGrid';
 import { ProductActions } from '../../../components/ProductActions';
 import { ProductGallery } from '../../../components/ProductGallery';
 import { ProductRating } from '../../../components/ProductRating';
@@ -181,11 +181,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
             <h2 id="related-heading">You may also like</h2>
             <Link href={department ? `/shop?department=${department.slug}` : '/shop'}>More to explore</Link>
           </div>
-          <div className="product-grid">
-            {relatedProducts.map((item) => (
-              <ProductCard key={item.id} product={item} />
-            ))}
-          </div>
+          <ProductGrid products={relatedProducts} label="Related products" />
         </section>
       ) : null}
     </main>
