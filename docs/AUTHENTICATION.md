@@ -36,6 +36,16 @@ SELECT gen_random_uuid(), '<USER_ID>', "id" FROM "Role" WHERE slug = 'super_admi
 ON CONFLICT ("userId", "roleId") DO NOTHING;
 ```
 
+## Google Sign-In (Customers Only) — IMPLEMENTED
+
+Server-managed OAuth 2.0 / OpenID Connect authorization-code flow with PKCE, terminating in the existing `veyra_session` cookie. Staff/admins keep password auth; Google registration creates `customer`-role accounts only. Full record: [JB-GOOGLE-AUTHENTICATION-IMPLEMENTATION-REPORT.md](JB-GOOGLE-AUTHENTICATION-IMPLEMENTATION-REPORT.md).
+
+- Endpoints (`apps/api/src/routes/google-auth.ts`): `GET /auth/google/status`, `GET /auth/google/start`, `GET /auth/google/callback`, `GET /auth/google/link/status`, `POST /auth/google/link/start`, `POST /auth/google/unlink`.
+- Identity keyed by Google stable `sub` (`OAuthAccount`, unique `provider+sub`); email is an attribute. Email match on an unlinked account never auto-links — the callback redirects with `google_error=email_exists` and no session.
+- Linking requires an authenticated session bound to a server-side `LINK` transaction plus current-password reauth for password accounts (Account → Security). Unlink requires password reauth and is refused when Google is the only sign-in method (lockout prevention).
+- `User.passwordHash` is nullable (Google-only accounts store NULL; login/change-password treat NULL as no-password, never a placeholder). New audit actions `GOOGLE_LINKED` / `GOOGLE_UNLINKED`. Migration: `prisma/migrations/20261012_phase18_google_auth/`.
+- Env: `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (backend-only) / optional `GOOGLE_REDIRECT_URI`; absent credentials fail closed (`GOOGLE_NOT_CONFIGURED`) and the UI hides the Google button.
+
 ## Frontend Wiring
 
 Login/register forms POST with `credentials: include`; login honors a validated same-origin `?redirect=` (see `safeRedirectTarget` in `components/AuthForms.tsx`) and otherwise routes to `/account`. Account pages fetch owner-scoped endpoints; the account navigation shows an **Admin Dashboard** entry only when the session carries `dashboard.read` (`can()` in `lib/admin-api.ts`). The admin shell redirects unauthenticated users to `/login?redirect=/admin/...` and authenticated-but-forbidden users to `/admin/unauthorized` (403 page, no internals leaked). See [ADMIN.md](ADMIN.md).

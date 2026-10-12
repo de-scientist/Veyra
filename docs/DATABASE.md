@@ -1,6 +1,6 @@
 # Database
 
-PostgreSQL via Prisma. Authoritative source: `prisma/schema.prisma` (50 models, 25 enums). Migrations in `prisma/migrations/` are forward-only, additive SQL applied with `psql` — never `prisma migrate reset` (see [DEPLOYMENT](../DEPLOYMENT.md)). Phase 17 (`20260929_phase17_sku_foundation`) added the SKU foundation columns/indexes/audit actions — all nullable/defaulted, existing SKUs preserved verbatim.
+PostgreSQL via Prisma. Authoritative source: `prisma/schema.prisma` (50 models, 25 enums). Migrations in `prisma/migrations/` are forward-only, additive SQL applied with `psql` — never `prisma migrate reset` (see [DEPLOYMENT](../DEPLOYMENT.md)). Phase 17 (`20260929_phase17_sku_foundation`) added the SKU foundation columns/indexes/audit actions — all nullable/defaulted, existing SKUs preserved verbatim. Phase 18 (`20261012_phase18_google_auth`) made `User.passwordHash` nullable and added `OAuthAccount` (unique `provider+providerSub`), `OAuthTransaction`, plus `GOOGLE_LINKED`/`GOOGLE_UNLINKED` audit actions — existing password accounts and sessions untouched.
 
 ## Conventions
 
@@ -15,7 +15,7 @@ PostgreSQL via Prisma. Authoritative source: `prisma/schema.prisma` (50 models, 
 
 | Domain | Models |
 |---|---|
-| Identity | `User`, `Session`, `PasswordResetToken`, `EmailVerificationToken`, `Role`, `Permission`, `UserRole`, `RolePermission` |
+| Identity | `User`, `Session`, `OAuthAccount`, `OAuthTransaction`, `PasswordResetToken`, `EmailVerificationToken`, `Role`, `Permission`, `UserRole`, `RolePermission` |
 | Catalogue | `Category` (self-parented), `Collection`, `ProductCollection`, `Product`, `ProductImage`, `ProductVariant`, `Attribute`, `AttributeValue`, `VariantAttributeValue` |
 | Inventory | `Inventory` (per variant: onHand, reserved, low-stock threshold), `InventoryMovement`, `InventoryReservation` |
 | Shopping | `Cart`, `CartItem`, `Wishlist`, `WishlistItem` |

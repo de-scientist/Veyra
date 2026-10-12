@@ -23,6 +23,7 @@ describe('google authentication', () => {
   let app: FastifyInstance;
   let ipCounter = 21;
   const createdUserIds: string[] = [];
+  let fixturePasswordHash = '';
 
   // Controlled mock provider responses per test.
   let mockIdentity: { sub: string; email: string } | null = null;
@@ -48,9 +49,9 @@ describe('google authentication', () => {
     return state as string;
   }
 
-  async function makePasswordUser(email: string, password: string, status = 'ACTIVE'): Promise<{ id: string; cookie: string }> {
+  async function makePasswordUser(email: string, status = 'ACTIVE'): Promise<{ id: string; cookie: string }> {
     const user = await prisma.user.create({
-      data: { email, passwordHash: await hashPassword(password), firstName: 'Google', lastName: 'Tester', status: status as 'ACTIVE' },
+      data: { email, passwordHash: fixturePasswordHash, firstName: 'Google', lastName: 'Tester', status: status as 'ACTIVE' },
     });
     createdUserIds.push(user.id);
     const rawToken = crypto.randomUUID();
@@ -81,6 +82,10 @@ describe('google authentication', () => {
   beforeAll(async () => {
     app = await buildApp();
     await prisma.role.upsert({ where: { slug: 'customer' }, update: {}, create: { name: 'Customer', slug: 'customer' } });
+    // One fixture hash for every password user (bcrypt cost 12 is
+    // deliberately slow; reusing it keeps the suite stable under parallel
+    // load while every verifyPassword path still runs against a real hash).
+    fixturePasswordHash = await hashPassword('password123');
     __setGoogleTestConfig({ clientId: 'test-client-id', clientSecret: 'test-client-secret' });
     __setGoogleExchangeHook(async (input) => {
       if (mockError) {
@@ -213,7 +218,7 @@ describe('google authentication', () => {
 
   it('never auto-links an existing password account on email match', async () => {
     const email = `existing-${stamp}@example.com`;
-    const { id } = await makePasswordUser(email, 'password123');
+    const { id } = await makePasswordUser(email);
     mockIdentity = { sub: `sub-clash-${stamp}`, email };
     const result = await callback(await startSignIn());
     expect(result.status).toBe(302);
@@ -252,7 +257,7 @@ describe('google authentication', () => {
 
   it('blocks suspended accounts from Google sign-in', async () => {
     const email = `suspended-${stamp}@example.com`;
-    const { id } = await makePasswordUser(email, 'password123', 'SUSPENDED');
+    const { id } = await makePasswordUser(email, 'SUSPENDED');
     await prisma.oAuthAccount.create({
       data: { userId: id, provider: 'google', providerSub: `sub-suspended-${stamp}`, email, emailVerified: true },
     });
@@ -265,7 +270,7 @@ describe('google authentication', () => {
 
   it('links Google from authenticated settings only after password reauth', async () => {
     const email = `linker-${stamp}@example.com`;
-    const { id, cookie } = await makePasswordUser(email, 'password123');
+    const { id, cookie } = await makePasswordUser(email);
 
     // Unauthenticated linking is rejected.
     const anon = await app.inject({
@@ -352,7 +357,7 @@ describe('google authentication', () => {
   });
 
   it('rejects linking an identity that belongs to another account', async () => {
-    const { cookie } = await makePasswordUser(`linker2-${stamp}@example.com`, 'password123');
+    const { cookie } = await makePasswordUser(`linker2-${stamp}@example.com`);
     const started = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/google/link/start',
@@ -375,7 +380,7 @@ describe('google authentication', () => {
   });
 
   it('unlinks only with password reauth and never strands Google-only accounts', async () => {
-    const { cookie } = await makePasswordUser(`unlinker-${stamp}@example.com`, 'password123');
+    const { cookie } = await makePasswordUser(`unlinker-${stamp}@example.com`);
     const me = await app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: { cookie }, remoteAddress: ip() });
     const userId = (me.json() as { data: { user: { id: string } } }).data.user.id;
     await prisma.oAuthAccount.create({
@@ -429,7 +434,7 @@ describe('google authentication', () => {
 
   it('keeps password authentication behavior intact', async () => {
     const email = `regression-${stamp}@example.com`;
-    await makePasswordUser(email, 'password123');
+    await makePasswordUser(email);
 
     const login = await app.inject({
       method: 'POST',
@@ -494,4 +499,5 @@ describe('google authentication', () => {
       expect.objectContaining({ code: 'GOOGLE_EMAIL_UNVERIFIED' }),
     );
   });
-});
+}, 60000);
+

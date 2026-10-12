@@ -11,6 +11,8 @@ Sources: `.env.example` (33 lines) + `apps/api/src/lib/env.ts` (also reads `NODE
 | `APP_URL` | Canonical web URL (deep links, JSON-LD, callbacks) | Yes | No |
 | `CORS_ORIGIN` | Exact allowed origin, no wildcards | Yes (prod) | No |
 | `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` | Media storage — signed direct-upload provider (Phase C wired; absent = `503 MEDIA_NOT_CONFIGURED`) | No | Key/secret yes |
+| `GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET` | Customer Google sign-in (OAuth 2.0/OIDC auth-code + PKCE, backend-owned; absent = `503 GOOGLE_NOT_CONFIGURED`, password auth unaffected) | No | Secret yes — backend-only, never `NEXT_PUBLIC_` |
+| `GOOGLE_REDIRECT_URI` | Exact Google-registered callback (local default `http://localhost:3001/api/v1/auth/google/callback`; production MUST set the exact `https` value) | No (dev default) / Yes (prod) | No |
 | `MPESA_CONSUMER_KEY/SECRET` | Daraja OAuth | Yes for payments | Yes |
 | `MPESA_SHORTCODE`, `MPESA_PASSKEY` | STK push identity | Yes for payments | Passkey yes |
 | `MPESA_CALLBACK_URL` | Must be HTTPS in production | Yes for payments | No |
