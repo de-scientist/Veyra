@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 import { HeroCarousel } from '../components/HeroCarousel';
-import { ProductCard } from '../components/ProductCard';
+import { ProductGrid } from '../components/ProductGrid';
 import { TrustStrip } from '../components/TrustStrip';
 import { departments } from '../lib/catalog';
 import { toJsonLd } from '../lib/json-ld';
@@ -85,11 +85,7 @@ export default async function HomePage() {
             <h2 id="jb-featured-heading">Featured products</h2>
             <Link href="/shop">See more</Link>
           </div>
-          <div className="product-grid">
-            {featuredProducts.map((product, index) => (
-              <ProductCard key={product.id} product={product} eager={index < 2} />
-            ))}
-          </div>
+          <ProductGrid products={featuredProducts} eagerCount={2} label="Featured products" />
         </section>
       ) : null}
 
@@ -99,11 +95,7 @@ export default async function HomePage() {
             <h2 id="jb-fashion-heading">Fashion picks</h2>
             <Link href="/shop?department=fashion">All fashion</Link>
           </div>
-          <div className="product-grid">
-            {fashionPicks.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <ProductGrid products={fashionPicks} label="Fashion picks" />
         </section>
       ) : null}
 
@@ -113,11 +105,7 @@ export default async function HomePage() {
             <h2 id="jb-footwear-heading">Footwear essentials</h2>
             <Link href="/shop?department=footwear">All footwear</Link>
           </div>
-          <div className="product-grid">
-            {footwearPicks.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <ProductGrid products={footwearPicks} label="Footwear essentials" />
         </section>
       ) : null}
 
