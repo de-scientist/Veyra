@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { Route } from 'next';
 
 import type { Product } from '../lib/catalog';
 import { ProductCard } from './ProductCard';
@@ -76,7 +77,7 @@ export function ProductEmptyState({
       <h2>{title}</h2>
       <p>{description}</p>
       {actionHref && actionLabel ? (
-        <Link href={actionHref} className="button">
+        <Link href={actionHref as Route} className="button">
           {actionLabel}
         </Link>
       ) : null}
@@ -113,7 +114,7 @@ export function ProductFetchError({
             {retryLabel}
           </button>
         ) : retryHref ? (
-          <Link href={retryHref} className="button button--secondary button--small">
+          <Link href={retryHref as Route} className="button button--secondary button--small">
             {retryLabel}
           </Link>
         ) : undefined
