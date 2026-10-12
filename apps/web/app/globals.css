@@ -536,6 +536,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .google-button:hover { background: var(--jb-surface-muted); color: var(--jb-text); border-color: var(--jb-text-muted); }
 .google-button:active { background: var(--jb-surface-muted); }
 .google-button__pending { font-weight: 600; }
+.google-link-mark { display: inline-flex; vertical-align: -3px; margin-right: 0.25rem; }
 
 /* ---------- Account ---------- */
 .account-layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; gap: 0; }
