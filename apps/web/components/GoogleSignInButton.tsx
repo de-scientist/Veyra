@@ -1,8 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { googleStartUrl } from '../lib/google-auth';
+import { getGoogleStatus, googleStartUrl } from '../lib/google-auth';
+
+/**
+ * Whether to render the Google entry point. Resolves null until known; the
+ * caller renders nothing until then and hides the button entirely when the
+ * integration is not configured (never a fake working button).
+ */
+export function useGoogleConfigured(): boolean | null {
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    getGoogleStatus().then((status) => {
+      if (live) setConfigured(status.configured);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return configured;
+}
 
 /**
  * Official Google "G" mark (multicolor) + a theme-aware button. Full-page

@@ -20,9 +20,11 @@ import {
   type LoginInput,
   type RegisterInput,
 } from '../lib/auth-validation';
+import { googleCallbackMessage } from '../lib/google-auth';
 import { JB_CONTACT_PHONE_DISPLAY, JB_CONTACT_PHONE_TEL } from '../lib/business-contact';
 import { notifySessionUpdated, useSession } from '../lib/session';
 import { AuthAlert } from './AuthAlert';
+import { GoogleDivider, GoogleSignInButton, useGoogleConfigured } from './GoogleSignInButton';
 import { JBButtonLoader, JBLoading } from './JBLoading';
 import { PasswordField } from './PasswordField';
 
@@ -108,7 +110,12 @@ export function LoginForm() {
   const formId = useId();
   const scopeId = `login-${formId}`;
   const emailErrorId = `login-email-error-${formId}`;
-  const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(null);
+  const googleConfigured = useGoogleConfigured();
+  // Surface a safe, actionable message when returning from Google
+  // (`?google=` / `?google_error=` set by the backend callback).
+  const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(() =>
+    googleCallbackMessage({ google: searchParams.get('google'), google_error: searchParams.get('google_error') }),
+  );
   const inFlight = useRef(false);
   // Render-driving submission lock. The `inFlight` ref above is the synchronous
   // double-click/Enter guard; this state drives `disabled` + the loading label
@@ -218,6 +225,13 @@ export function LoginForm() {
         />
       ) : null}
 
+      {googleConfigured ? (
+        <>
+          <GoogleSignInButton redirect={target} disabled={busy} />
+          <GoogleDivider />
+        </>
+      ) : null}
+
       <div className="auth-field">
         <label htmlFor={`${scopeId}-email`}>Email address</label>
         <input
@@ -278,7 +292,12 @@ export function RegisterForm() {
   const { status, refresh } = useSession();
   const formId = useId();
   const scopeId = `register-${formId}`;
-  const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(null);
+  const googleConfigured = useGoogleConfigured();
+  // Surface a safe, actionable message when returning from Google
+  // (`?google=` / `?google_error=` set by the backend callback).
+  const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(() =>
+    googleCallbackMessage({ google: searchParams.get('google'), google_error: searchParams.get('google_error') }),
+  );
   const inFlight = useRef(false);
   // Render-driving submission lock (see LoginForm): held through the
   // post-success redirect window so the button cannot re-enable early.
@@ -411,6 +430,16 @@ export function RegisterForm() {
           dismissible={formAlert.tone === 'error'}
           onDismiss={() => setFormAlert(null)}
         />
+      ) : null}
+
+      {googleConfigured ? (
+        <>
+          <GoogleSignInButton redirect={target} disabled={busy} />
+          <p className="muted-copy auth-google-note">
+            Continuing with Google creates your JB Mercantile customer account.
+          </p>
+          <GoogleDivider />
+        </>
       ) : null}
 
       <div className="form-grid">
