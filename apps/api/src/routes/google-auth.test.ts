@@ -3,15 +3,15 @@ import crypto from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
-import { buildApp } from './app.js';
-import { hashPassword, hashToken } from './lib/auth.js';
-import { prisma } from './lib/prisma.js';
+import { buildApp } from '../app.js';
+import { hashPassword, hashToken } from '../lib/auth.js';
+import { prisma } from '../lib/prisma.js';
 import {
   __setGoogleExchangeHook,
   __setGoogleTestConfig,
   checkIdentityClaimsForTest,
-} from './lib/googleAuth.js';
-import { HttpError } from './lib/errors.js';
+} from '../lib/googleAuth.js';
+import { HttpError } from '../lib/errors.js';
 
 /**
  * Google sign-in / registration suite (mocked provider — no network, no real
