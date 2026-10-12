@@ -12,6 +12,19 @@ Date: 2026-10-12. Scope: product-card experience + directly contained interactio
 - Gaps found: card used bespoke `.product-card` CSS instead of shadcn `UICard`/`UIBadge`/`UIButton`; no reusable `ProductGrid`/empty/error components (each page hand-rolled `div.product-grid` + `div.empty-state`); no shadcn `Alert`; toasts lacked Title/Description structure; `ProductImage` had no loading skeleton; search fetch-failure used a plain `.inline-message` div.
 - Constraint respected: no Next/React/Tailwind upgrades; no new dependencies added.
 
+## 1b. Phase 0 gap matrix (evidence-based; inspected before implementing)
+
+| Area | Existing implementation | Gap or defect | Required action |
+| ---- | ----------------------- | ------------- | --------------- |
+| Product card | Exactly ONE `components/ProductCard.tsx` (server component + `ProductCardActions`/`WishlistButton` islands); correct data flow, badge priority, quick-add rules, a11y labelling | Used bespoke `.product-card`/`.badge`/`.button` CSS instead of installed shadcn `UICard`/`UIBadge`/`UIButton`; badges/toasts not on shadcn primitives | **Improve** (adopt shadcn foundation; keep logic) |
+| Product grid | No shared grid component — each page hand-rolled `div.product-grid` + `div.empty-state` (6 listing surfaces) | Duplicated grid/empty markup; no shared skeleton/error/retry states for grids | **Create** (`ProductGrid` + skeleton/empty/error; reuse `.product-grid` tokens) |
+| Success/error feedback | Bespoke `Toast.tsx` (`notify(type, message)` single-string, no titles); `.inline-message` divs + `JBAlert`; no Sonner, no shadcn `Alert` | Toasts lacked Title/Description; no shared error mapper (raw backend messages could surface); search failure was a plain div | **Improve** toast (structured, deduped) + **Create** `UIAlert` + `product-feedback` mapper; **Keep** single-toast system (no Sonner — unjustified) |
+| Cart and wishlist | `addToCart` + `jb:cart-updated` + shared-flight wishlist `GET`; busy guards; correct ownership (single notify per action) | Copy inconsistent with spec titles; error messages not normalised | **Improve** (structured copy + mapper; keep APIs, events, guards) |
+| Storefront integration | Home (5 sections), shop, search, categories, collections, PDP related — all on the ONE card; same `storefront.ts` source | Pages used raw `div.product-grid`/custom empty states instead of shared grid | **Consolidate** (migrate 6 surfaces to `ProductGrid`; keep each page's fetching/filter/sort/pagination/SEO) |
+| Tests | 21 `product-card` lib tests; no feedback-mapper tests; vitest covers only `apps/web/lib/**/*.test.ts` (no RTL) | Mapper untested; component JSX not unit-testable without new deps | **Create** `product-feedback.test.ts` (9 tests); no RTL added (deliberate) |
+
+Implementation-plan decisions: **Keep** — data layer, cart/wishlist APIs + events, badge/variant/stock helpers, `PriceDisplay`, `ProductImage` delivery, route-level `DiscoverySkeleton`/`JBLoading`, per-page fetching/pagination/SEO. **Improve** — card (shadcn foundation), toasts, cart/wishlist copy, `ProductImage` loading state, `UIButton` (additive exporter). **Consolidate** — 6 listing surfaces onto `ProductGrid`. **Create** — `ProductGrid`, `UIAlert`, `product-feedback` (+tests). **Investigate** — none remained; wishlist-page rows and PDP `ProductActions` verified as legitimately separate contexts (list rows vs cards; PDP configurator vs card quick-add) and left untouched.
+
 ## 2. Existing components reused
 
 - `UICard`/`UICardBody` (card foundation), `UIBadge` + `badgeToneFor`, `UIButton`, `Skeleton`, `Tooltip`, `cn()`, JB theme tokens (`--jb-*`, light/dark `data-theme`), `.product-grid` responsive layout, `PriceDisplay` (KES), `ProductImage` (Cloudinary presets), `ProductRating`, `JBIcon` (heart/cart/check — no emoji), `ToastProvider`/`useToast`, `addToCart`/`notifyCartUpdated`, wishlist API + `notifyWishlistUpdated`, `cardBadge`/`quickAddVariant`/`lowStockQuantity`/`variantHint`/`cardColors`/`ratingSummary`, `DiscoverySkeleton` route-level loading, pagination/filter/sort per page.
@@ -68,6 +81,7 @@ Date: 2026-10-12. Scope: product-card experience + directly contained interactio
 - `npm test` (full) — first run: 617 passed / 1 failed (`apps/api commerce inventory concurrency` 5s timeout, unrelated API timing test); rerun `npx vitest run apps/api/src/routes/commerce.test.ts` — 16/16 PASS (flaky under full-suite load, NOT a regression from this frontend-only change).
 - `npm run lint --workspace=@veyra/web` — 0 errors; 4 pre-existing `<img>` warnings (account/cart/wishlist, untouched).
 - `npm run build --workspace=@veyra/web` — PASS (all product/shop/search/category/collection routes built).
+- Re-verified on final source (phased-strategy pass, report-only changes since): typecheck PASS, targeted tests 30/30 PASS, lint 0 errors (same 4 pre-existing `<img>` warnings), production build PASS.
 
 ## 10. Test results and build/type-check status
 
@@ -89,7 +103,25 @@ Date: 2026-10-12. Scope: product-card experience + directly contained interactio
 
 None. Zero new packages (Sonner/Radix/CVA deliberately not introduced — bespoke `Toast` + CSS `Tooltip` already satisfy the spec on Next 14/React 18 with no added bundle weight).
 
-## 14. Manual verification steps
+## 14. Phase completion gates (Phase 1–5)
+
+- Phase 1 (shared card): PASS — one canonical `ProductCard` on `UICard`; typing/rendering via typecheck + build; no duplicates remain (grep: single definition; wishlist rows + PDP actions documented as separate contexts).
+- Phase 2 (shared grid): PASS — `ProductGrid` renders real data on all 6 surfaces; loading (route skeletons retained + new `ProductGridSkeleton`), empty (`ProductEmptyState`), failed-fetch (`ProductFetchError` + retry) states present; `DiscoverySkeleton`/`JBLoading` skeletons retained deliberately for route-level loading (not duplicates — different layer).
+- Phase 3 (feedback): PASS — single-owner toasts (dedupe verified by test-adjacent logic + code inspection); success only post-confirmation; errors mapped + leak-guarded (9 tests); rapid-click guards retained; no hook/caller double-notify (sole emitter per action + 500ms collapse).
+- Phase 4 (integration): PASS — home, shop, search, categories, collections, PDP-related all use `ProductGrid`/`ProductCard`; fetching, filters, sort, pagination, SEO, routing, variants, pricing untouched; remaining `product-grid` divs exist only inside skeleton/grid components (layout owners, not duplicates).
+- Phase 5 (regression): PASS except pre-existing/flaky notes in §9 — typecheck, lint (0 errors), production build green; full suite 617/618 then 16/16 on rerun; no backend/schema/architecture changes.
+
+## 15. Final delivery summary
+
+- Already existed: single shared `ProductCard` + islands, catalogue/storefront data layer, cart/wishlist APIs + events, badge/variant/stock/rating helpers (21 tests), KES `PriceDisplay`, Cloudinary `ProductImage`, JB theme tokens, route skeletons, per-page discovery.
+- Reused unchanged: all of the above data/logic/APIs; `UICard`/`UIBadge`/`UIButton`/`Skeleton`/`Tooltip`/`cn`; pagination, filters, sort, SEO per page; wishlist-page rows; PDP `ProductActions`.
+- Improved: card onto shadcn `UICard`/`UIBadge`/`UIButton`; toasts (Title/Description + dedupe); cart/wishlist copy + error mapping; `ProductImage` loading skeleton; `UIButton` additive exporter; search failure → `UIAlert`.
+- Newly created: `ProductGrid` (+skeleton/empty/error), `ui/alert.tsx`, `lib/product-feedback.ts` (+9 tests), report gap matrix (§1b).
+- Pages updated: `/`, `/shop`, `/search`, `/categories/[slug]`, `/collections/[slug]`, `/products/[slug]` related.
+- Verification: typecheck PASS, targeted tests 30/30 PASS, lint 0 errors, build PASS, full suite 617/618 → 16/16 rerun (flaky, unrelated). Browser/E2E: **NOT VERIFIED**.
+- Blockers: none. Limitations: no JSX interaction tests (no RTL by design); visual/device/a11y-walkthrough unverified — see manual steps below.
+
+## 16. Manual verification steps
 
 1. `npm run dev --workspace=@veyra/web` (API running); visit `/`, `/shop`, `/search?q=sneakers`, a category, a collection, a PDP + related row.
 2. Confirm cards show real image/name/KES price/accurate badge (sale only with compare-at, single badge max) and pinned actions align per row.
