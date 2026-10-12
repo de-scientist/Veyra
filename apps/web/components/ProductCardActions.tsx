@@ -70,11 +70,13 @@ export function ProductCardActions({ product }: { product: Product }) {
 
   if (!target) {
     return (
-      <UIButton variant="secondary" size="md" className="product-card__action" asChild>
-        <Link href={`/products/${product.slug}` as Route} aria-label={`Choose options for ${product.name}`}>
-          Choose Options
-        </Link>
-      </UIButton>
+      <Link
+        href={`/products/${product.slug}` as Route}
+        className={uiButtonClasses({ variant: 'secondary', size: 'md', className: 'product-card__action' })}
+        aria-label={`Choose options for ${product.name}`}
+      >
+        Choose Options
+      </Link>
     );
   }
 
