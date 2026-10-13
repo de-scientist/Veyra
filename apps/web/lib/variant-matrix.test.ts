@@ -192,6 +192,64 @@ describe('matrix row merging', () => {
   });
 });
 
+describe('product-level defaults: pricing inheritance', () => {
+  it('populates new variants from product defaults and keeps overrides', () => {
+    // Inheritance is form-level: empty row input = inherited default.
+    const rowEdit = (price: string) => (price === '' ? 2500 : Number(price));
+    expect(rowEdit('')).toBe(2500);
+    expect(rowEdit('2700')).toBe(2700);
+  });
+
+  it('validates the previous-price rule (compare-at must exceed selling price)', () => {
+    expect(validatePricePair(2500, 3000)).toBeNull();
+    expect(validatePricePair(2500, null)).toBeNull();
+    expect(validatePricePair(null, 3000)).toBeNull();
+    expect(validatePricePair(2500, 2500)).toContain('higher');
+    expect(validatePricePair(2700, 2500)).toContain('higher');
+    expect(validatePricePair(2500, 0)).toContain('higher');
+  });
+});
+
+describe('product-level defaults: stock distribution', () => {
+  it('distributes the total evenly across four variants', () => {
+    expect(distributeStockEvenly(24, 4)).toEqual([6, 6, 6, 6]);
+  });
+
+  it('conserves the exact total when not evenly divisible', () => {
+    const shares = distributeStockEvenly(10, 4);
+    expect(shares).toEqual([3, 3, 2, 2]);
+    expect(shares.reduce((a, b) => a + b, 0)).toBe(10);
+  });
+
+  it('deals the remainder deterministically from the first variant', () => {
+    expect(distributeStockEvenly(7, 3)).toEqual([3, 2, 2]);
+    expect(distributeStockEvenly(0, 3)).toEqual([0, 0, 0]);
+    expect(distributeStockEvenly(2, 5)).toEqual([1, 1, 0, 0, 0]);
+  });
+
+  it('preserves overridden quantities and distributes only unallocated stock', () => {
+    const result = distributeUnallocatedStock({
+      total: 24,
+      keysInOrder: ['a', 'b', 'c', 'd'],
+      overridden: new Map([['c', 10]]),
+    });
+    // 14 unallocated across a, b, d -> 5, 5, 4.
+    expect(result.effective.get('a')).toBe(5);
+    expect(result.effective.get('b')).toBe(5);
+    expect(result.effective.get('c')).toBe(10);
+    expect(result.effective.get('d')).toBe(4);
+    expect(result.allocated).toBe(24);
+    expect(result.unallocated).toBe(0);
+  });
+
+  it('summarizes allocated, unallocated and variant counts', () => {
+    expect(summarizeAllocation(24, [6, 6, 6, 6], 4)).toEqual({ total: 24, allocated: 24, unallocated: 0, variantCount: 4 });
+    expect(summarizeAllocation(10, [3, 3, 2, 2], 4).allocated).toBe(10);
+    expect(summarizeAllocation(10, [3, 3], 4)).toEqual({ total: 10, allocated: 6, unallocated: 4, variantCount: 4 });
+    expect(summarizeAllocation(null, [], 0).unallocated).toBeNull();
+  });
+});
+
 describe('allow-list building', () => {
   it('omits the allow-list when every new row is included', () => {
     const rows = existingVariantRows([
