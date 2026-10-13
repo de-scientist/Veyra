@@ -64,7 +64,7 @@ const variantAttributeInputSchema = z.object({
  * valid. Existing rows without this constraint keep working; only
  * incoherent pairs are rejected with INVALID_PRICE.
  */
-function pricePairIssue(price: number | null | undefined, compareAtPrice: number | null | undefined): string | null {
+export function pricePairIssue(price: number | null | undefined, compareAtPrice: number | null | undefined): string | null {
   if (price === null || price === undefined) return null;
   if (compareAtPrice === null || compareAtPrice === undefined) return null;
   if (!(compareAtPrice > price)) return 'Previous price must be higher than the selling price when both are set.';
