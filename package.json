@@ -16,14 +16,23 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:catalogue": "tsx prisma/seed.catalogue.ts",
     "db:studio": "prisma studio",
-    "health": "curl -fsS http://localhost:3001/health || true"
+    "health": "curl -fsS http://localhost:3001/health || true",
+    "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma"
   },
   "devDependencies": {
     "@types/node": "^20.14.12",
     "concurrently": "^9.0.1",
-    "prisma": "^8.0.0-rc.15",
+    "prisma": "^5.22.0",
     "tsx": "^4.17.0",
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true,
+    "esbuild@0.21.5": true,
+    "unrs-resolver@1.12.2": true,
+    "esbuild@0.28.2": true
   }
 }
