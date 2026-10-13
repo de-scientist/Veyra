@@ -224,7 +224,7 @@ export function LoginForm() {
         />
       ) : null}
 
-      <GoogleAuthSection redirect={target} disabled={busy} context="login" />
+      <GoogleAuthSection redirect={target} disabled={busy} context="login" onGoogleError={setFormAlert} />
 
       <div className="auth-field">
       <label htmlFor={`${scopeId}-email`}>Email address</label>
@@ -425,7 +425,7 @@ export function RegisterForm() {
         />
       ) : null}
 
-      <GoogleAuthSection redirect={target} disabled={busy} context="register" />
+      <GoogleAuthSection redirect={target} disabled={busy} context="register" onGoogleError={setFormAlert} />
 
       <div className="form-grid">
         <TextField

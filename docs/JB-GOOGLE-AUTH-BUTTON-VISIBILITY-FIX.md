@@ -2,47 +2,120 @@
 
 Status: **IMPLEMENTED** (verified 2026-10-13 — typecheck, lint, unit + DB tests, web build all executed).
 
-## 1. Root cause
+## 1. Why the button is now always rendered
 
-The buttons were implemented in the correct, mounted components — no orphan components, no wrong page. Two compounding causes hid them:
+Earlier iterations gated the button on a preliminary status request: loading rendered
+nothing, `configured: false` hid it, and *any* request failure was swallowed into
+`{ configured: false }` — silently hiding the button with zero diagnostic. A
+follow-up also showed a developer-facing note naming `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET`, which customers must never see.
 
-1. **Backend reports `configured: false` (primary).** `GET /api/v1/auth/google/status` returns `{ success: true, data: { configured: isGoogleConfigured() } }` (`apps/api/src/routes/google-auth.ts:118-120`), and `isGoogleConfigured()` requires **both** `GOOGLE_CLIENT_ID` **and** `GOOGLE_CLIENT_SECRET` (`apps/api/src/lib/googleAuth.ts:54-60`). The environment sets `GOOGLE_CLIENT_ID` but **no `GOOGLE_CLIENT_SECRET`** (absent from both `.env` and `.env.example`). Verified live: `GET http://localhost:3001/api/v1/auth/google/status` → `{"success":true,"data":{"configured":false}}`. Both forms render the button only under `{googleConfigured ? … : null}` (`apps/web/components/AuthForms.tsx`), so both buttons were correctly-but-silently hidden. The OAuth implementation itself (PKCE + state + nonce, `sub`-keyed identity, customer-only registration, no email auto-link, reauth-gated linking, audit logging) is complete and untouched.
-2. **Frontend failure mode is silent (compounding).** `getGoogleStatus()` caught *every* error and returned `{ configured: false }` (`apps/web/lib/google-auth.ts:44-50`), so a down backend, CORS rejection, or wrong `NEXT_PUBLIC_API_URL` masqueraded as "OAuth unconfigured" with zero diagnostic. Additionally, the loading state (`null`) rendered nothing — no explicit handling, so the button could never appear until the request resolved.
+The button no longer depends on any preliminary request. `GoogleAuthSection`
+(`apps/web/components/GoogleSignInButton.tsx`) renders **Continue with Google**
+unconditionally on both `/login` (`LoginForm`) and `/register`
+(`RegisterForm`), above the email/password fields with the existing "or"
+divider (plus the customer-account note on register). Same shared component,
+label, icon, theme tokens, responsive layout, and keyboard-accessible native
+`<button aria-label="Continue with Google">` on both pages.
 
-No frontend/backend shape mismatch exists (both use `{ configured }` under the standard `{ success, data }` envelope), no CSS clipping (`.google-button` is full-width, theme-token styled, `min-height: 48px`), and no unmounted duplicates (only `LoginForm`/`RegisterForm` in `AuthForms.tsx`, mounted by `app/login/page.tsx` and `app/register/page.tsx`; no auth layout, no `(auth)` group).
+Clicking it runs a lightweight preflight (`checkGoogleStart()` re-reads the
+authoritative `GET /api/v1/auth/google/status`) and then uses the unchanged
+backend-managed flow (`window.location.href = googleStartUrl(redirect)`,
+302 → Google with state/PKCE/nonce, safe redirect preserved). Duplicate
+navigation while a start is in flight is blocked (`starting` + `navigating`
+guards) with a "Connecting to Google…" loading state. Availability never gates
+visibility — it only selects the outcome: navigate, or fail inline.
 
-## 2. Files changed and why
+## 2. What happens when Google OAuth is unavailable
 
-- **`apps/web/lib/google-auth.ts`** — `getGoogleStatus()` now rethrows on network/HTTP failure instead of fail-closing to `{ configured: false }`. Callers distinguish "status unreachable" from "genuinely unconfigured". Success path and `googleStartUrl()` (backend `…/auth/google/start?redirect=`, safe-redirect preserved) unchanged.
-- **`apps/web/components/GoogleSignInButton.tsx`** — new `useGoogleAvailability()` hook with four explicit states (`loading | ready | unconfigured | unreachable`); `useGoogleConfigured()` kept as a backwards-compatible boolean alias. New `GoogleLoadingButton()` (disabled, `aria-busy`, "Checking Google sign-in…") and shared `GoogleAuthSection({ redirect, disabled, context })` rendering identical placement on both pages: real `Continue with Google` button (full-page backend redirect, native `<button>` with `aria-label`, keyboard accessible) above email/password, separated by the existing "or" divider; register keeps its customer-account note. Unreachable → muted `role="note"` diagnostic (email sign-in still works); unconfigured → dev-only hint naming `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, production renders nothing (existing fallback, never a fake button). OAuth flow, session cookie, and security model untouched.
-- **`apps/web/components/AuthForms.tsx`** — `LoginForm` and `RegisterForm` each replaced their `{googleConfigured ? … : null}` block with `<GoogleAuthSection redirect={target} disabled={busy} context="login"|"register" />`. Email/password logic, validation, redirects, and callback alerts unchanged.
-- **`apps/web/lib/google-auth.test.ts`** — added: genuine configured/unconfigured passthrough, and rejection (not `{configured:false}`) on network failure and HTTP 500.
+- **Explicitly unconfigured** (`configured: false`, e.g. backend
+  `GOOGLE_CLIENT_SECRET` unset): no navigation; the form shows its existing
+  `AuthAlert` (`role="alert"`, dismissible): "Google sign-in is temporarily
+  unavailable. Please try again shortly or sign in with your email and
+  password."
+- **Network failure**: "We couldn't connect to Google sign-in. Check your
+  internet connection and try again."
+- **Backend error**: "Something went wrong while starting Google sign-in.
+  Please try again or use email sign-in."
+- **Stale preflight** (configured at click, broken by navigation): the
+  backend's safe `google_error` callback codes render through the existing
+  `googleCallbackMessage` mapping on return (cancelled, email-exists with
+  link-from-security guidance, unverified, inactive, expired, provider,
+  generic fallback) — unchanged.
+- Email/password sign-in and registration stay fully usable throughout;
+  retrying clears the stale alert first (`onStartError(null)`), and at most
+  one alert exists per failure (the form owns a single `formAlert`).
 
-Backend, schema, env files, and styles unchanged (no migration, no new library, no Google browser SDK — the flow remains backend-managed redirect).
+## 3. Customer-facing error mapping
 
-## 3. Confirmation for both active forms
+Centralized in `apps/web/lib/google-auth.ts`:
 
-| State | Login (`/login` → `LoginForm`) | Register (`/register` → `RegisterForm`) |
-|---|---|---|
-| Status loading | Disabled "Checking Google sign-in…" + divider | Same |
-| `configured: true` | Real **Continue with Google** → backend start flow with encoded safe `redirect` + divider | Same + customer-account note |
-| `configured: false` | No button (dev-only config hint) | No button (dev-only config hint) |
-| Request fails | No button + "status couldn't be reached" note | Same |
+- `googleStartErrorMessage(kind)` — `unconfigured | unreachable | server`
+  (start-flow preflight failures).
+- `googleCallbackMessage(params)` — all backend `?google=` /
+  `?google_error=` return codes (cancelled, `email_exists`, `email_unverified`,
+  `account_inactive`, `invalid_request`, `not_configured`, `identity_taken`,
+  `already_linked`, `link_failed`, `provider_error`, `auth_failed`, generic
+  unknown fallback).
+- No success notification is ever shown before success; raw exceptions, API
+  bodies, and backend messages are never rendered.
 
-## 4. Verification results (all executed 2026-10-13)
+## 4. Customer/developer separation & sanitized diagnostics
 
-- `npm run typecheck` (api + web): clean.
-- `npm run lint`: 0 errors (only pre-existing warnings: one unused var in api `storefront.ts`, pre-existing `next/img` notices).
-- `npx vitest run apps/web/lib/google-auth.test.ts`: 8/8 pass (6 pre-existing + 2 new).
-- `npx vitest run apps/web/lib`: 24 files, 259/259 pass (email/password auth suites unaffected).
-- `npx vitest run apps/api/src/routes/google-auth.test.ts`: 14/14 pass (status, start/callback, customer-only registration, no email auto-link, reauth-gated link/unlink, lockout guards, password auth intact).
-- `npm run build --workspace @veyra/web`: compiled successfully, 60/60 static pages (incl. `/login`, `/register`).
-- Live check: backend status endpoint reachable, returns `configured: false` without the secret — matching the fixed UI's unconfigured branch.
+Customer UI never exposes: env var names or setup instructions, stack traces,
+raw fetch errors, API URLs/paths, DB/SQL/Prisma text, OAuth
+transaction/state/nonce/PKCE/cookie/token values, file paths, or status
+codes. (Verified by assertion tests scanning every message, plus a repo grep
+confirming no `GOOGLE_CLIENT*`/endpoint strings remain in `apps/web`.)
 
-Browser verification (Phase 5): no browser tooling in this environment, so live Google redirect was **not** exercised. The button navigates to the existing, test-covered backend start endpoint (`302` to Google with state/PKCE/nonce, covered by the 14 backend tests); only real Google Cloud credentials can prove the provider round-trip.
+`logGoogleDiagnostic({ action, kind, status?, code? })` logs
+`console.info('[google-auth]', …)` **only** when
+`process.env.NODE_ENV === 'development'` — action, failure kind, HTTP status,
+and sanitized app code. Never URLs, secrets, tokens, cookies, OAuth material,
+raw exceptions, or personal data; silent in production; never the sole
+feedback (the form alert always renders alongside).
 
-## 5. Remaining configuration required
+## 5. Security & functionality preserved
 
-1. **Set `GOOGLE_CLIENT_SECRET`** (backend env only — never `NEXT_PUBLIC_` prefixed) alongside the existing `GOOGLE_CLIENT_ID`. Without it the buttons stay hidden by design. `GOOGLE_REDIRECT_URI` defaults to `http://localhost:3001/api/v1/auth/google/callback` locally; production requires the exact URI registered in Google Cloud.
-2. Optional hygiene (not changed, out of scope): `.env.example` contains an unrelated `VITE_GOOGLE_CLIENT_ID` entry (no code references it) and a duplicate `GOOGLE_CLIENT_ID` line — worth a cleanup pass so future readers aren't misled into adding a frontend client ID; the flow needs none.
-3. After setting the secret, reload `/login` and `/register`: the buttons appear once `GET /api/v1/auth/google/status` reports `configured: true`; clicking either must land on Google's consent page and return via the existing callback.
+Untouched: authorization-code + PKCE/state/nonce flow, `GET /auth/google/start`
+and `/callback`, `veyra_session` cookie and session helpers, `sub`-keyed
+identity, customer-only Google registration, no email-match auto-linking,
+reauth-gated link/unlink, rate limits (`authLimit`), account-status checks,
+RBAC, audit logging, safe-redirect validation, and all email/password,
+logout, and session behaviour. The preflight is read-only; it cannot log
+anyone in or bypass configuration checks — without valid server configuration
+the button visibly remains and fails gracefully.
+
+## 6. Tests executed (actual results, 2026-10-13)
+
+- `apps/web/lib/google-auth.test.ts`: **12/12 pass** — callback mapping,
+  genuine configured/unconfigured passthrough, failure-never-masquerades,
+  start-message mapping, preflight outcomes (`ok`, `unconfigured`,
+  `unreachable`, `server` + status/code), customer-safe scan of all messages,
+  dev-only sanitized logging (logs once in development, silent in production).
+- `apps/web/lib` full suite: **24 files, 263/263 pass** (email/password
+  `auth-validation`/`auth-ux` suites unaffected).
+- `apps/api/src/routes/google-auth.test.ts`: **14/14 pass** (status, 302
+  start with PKCE/nonce, safe redirects, callback, customer-only
+  registration, no auto-link, reauth-gated link/unlink, lockout guards,
+  password auth intact).
+- `npm run typecheck` (api + web): clean. `npm run lint`: 0 errors
+  (pre-existing warnings only). `npm run build --workspace @veyra/web`:
+  compiled successfully, 60/60 static pages including `/login`, `/register`.
+- Render-path coverage note: no React testing library in this repo (vitest
+  node env), so branch rendering is verified by construction — both forms
+  mount the same unconditional `GoogleAuthSection`, and all message/decision
+  logic it depends on is unit-covered. No browser tooling here, so live
+  provider redirect was not exercised; the redirect target is the existing,
+  backend-test-covered start endpoint.
+
+## 7. Outstanding live configuration
+
+Set backend `GOOGLE_CLIENT_SECRET` alongside `GOOGLE_CLIENT_ID` (backend env
+only — never `NEXT_PUBLIC_` prefixed). `GOOGLE_REDIRECT_URI` defaults to
+`http://localhost:3001/api/v1/auth/google/callback` locally; production
+needs the exact Google Cloud-registered URI. Until then the button stays
+visible and explains unavailability in customer language. Optional hygiene
+(untouched, out of scope): `.env.example` carries an unreferenced
+`VITE_GOOGLE_CLIENT_ID` line worth removing since the flow needs no frontend
+client ID.

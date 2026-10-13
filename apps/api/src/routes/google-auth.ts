@@ -113,8 +113,9 @@ async function serializeSessionUser(userId: string) {
 }
 
 export async function googleAuthRoutes(app: FastifyInstance) {
-  // Public: lets the login/register UI hide the Google button when the
-  // integration is not configured instead of showing a fake working button.
+  // Public: lets the login/register UI preflight Google availability so a
+  // start failure shows a friendly inline message. The button itself is
+  // always rendered; this status never gates its visibility.
   app.get('/auth/google/status', async () => {
     return { success: true, data: { configured: isGoogleConfigured() } };
   });
