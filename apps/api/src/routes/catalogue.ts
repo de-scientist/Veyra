@@ -57,6 +57,20 @@ const variantAttributeInputSchema = z.object({
   message: 'Each attribute entry must provide attributeValueId, or attributeId with value.',
 });
 
+/**
+ * Previous-price rule: when a previous (compare-at) price is supplied
+ * alongside a selling price, it must be strictly greater — otherwise the
+ * "sale" display would be incoherent. Null/omitted either side = no sale =
+ * valid. Existing rows without this constraint keep working; only
+ * incoherent pairs are rejected with INVALID_PRICE.
+ */
+function pricePairIssue(price: number | null | undefined, compareAtPrice: number | null | undefined): string | null {
+  if (price === null || price === undefined) return null;
+  if (compareAtPrice === null || compareAtPrice === undefined) return null;
+  if (!(compareAtPrice > price)) return 'Previous price must be higher than the selling price when both are set.';
+  return null;
+}
+
 const variantSchema = z.object({
   sku: z.string().min(3).max(64),
   name: z.string().max(200).optional(),
@@ -66,6 +80,9 @@ const variantSchema = z.object({
   barcode: z.string().max(64).optional(),
   weight: z.number().min(0).optional(),
   attributeValues: z.array(variantAttributeInputSchema).default([]),
+}).superRefine((val, ctx) => {
+  const issue = pricePairIssue(val.price, val.compareAtPrice);
+  if (issue) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['compareAtPrice'], message: issue });
 });
 
 const variantUpdateSchema = z.object({
@@ -76,6 +93,9 @@ const variantUpdateSchema = z.object({
   // SKU itself is immutable here (see PATCH handler). Barcode may be
   // attached/cleared explicitly; null clears it.
   barcode: z.string().max(64).nullable().optional(),
+}).superRefine((val, ctx) => {
+  const issue = pricePairIssue(val.price, val.compareAtPrice);
+  if (issue) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['compareAtPrice'], message: issue });
 });
 
 const generateVariantsSchema = z.object({
@@ -93,6 +113,9 @@ const generateVariantsSchema = z.object({
   styleCode: styleCodeField,
   // Dry run validates + previews SKUs without persisting (Phase 3 UI seam).
   dryRun: z.boolean().default(false),
+}).superRefine((val, ctx) => {
+  const issue = pricePairIssue(val.price, val.compareAtPrice);
+  if (issue) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['compareAtPrice'], message: issue });
 });
 
 const variantBatchSchema = z.object({
@@ -110,6 +133,11 @@ const variantBatchSchema = z.object({
     )
     .min(1)
     .max(300),
+}).superRefine((val, ctx) => {
+  val.variants.forEach((item, index) => {
+    const issue = pricePairIssue(item.price, item.compareAtPrice);
+    if (issue) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['variants', index, 'compareAtPrice'], message: issue });
+  });
 });
 
 const barcodeAssignSchema = z.object({
@@ -612,6 +640,19 @@ export async function catalogueRoutes(app: FastifyInstance) {
     const payload = variantUpdateSchema.parse(request.body);
     const existing = await prisma.productVariant.findFirst({ where: { id: variantId, productId } });
     if (!existing) throw new HttpError(404, 'VARIANT_NOT_FOUND', 'Product variant not found.');
+    // Partial-update pair check: a staged price (or compare-at) is validated
+    // against the persisted counterpart, so a price edit cannot strand an
+    // incoherent pair. Established pairs are never rewritten here.
+    {
+      const resultingPrice = payload.price !== undefined
+        ? payload.price
+        : existing.priceOverride === null ? null : Number(existing.priceOverride);
+      const resultingCompare = payload.compareAtPrice !== undefined
+        ? payload.compareAtPrice
+        : existing.compareAtPrice === null ? null : Number(existing.compareAtPrice);
+      const issue = pricePairIssue(resultingPrice, resultingCompare);
+      if (issue) throw new HttpError(400, 'INVALID_PRICE', issue);
+    }
     // SKU immutability: sku is not accepted by variantUpdateSchema, so even a
     // locked variant (orders/movements exist) keeps its SKU here. Only name,
     // status, pricing and barcode may change explicitly.
@@ -671,6 +712,19 @@ export async function catalogueRoutes(app: FastifyInstance) {
       throw new HttpError(404, 'VARIANT_NOT_FOUND', 'One or more variants were not found for this product.');
     }
     const beforeById = new Map(existing.map((row) => [row.id, row]));
+    // Same partial-update pair check per batch row (staged side vs persisted
+    // counterpart). Rejected rows fail the whole transaction — no partial writes.
+    for (const item of payload.variants) {
+      const before = beforeById.get(item.id);
+      const resultingPrice = item.price !== undefined
+        ? item.price
+        : before?.priceOverride === null || before?.priceOverride === undefined ? null : Number(before.priceOverride);
+      const resultingCompare = item.compareAtPrice !== undefined
+        ? item.compareAtPrice
+        : before?.compareAtPrice === null || before?.compareAtPrice === undefined ? null : Number(before.compareAtPrice);
+      const issue = pricePairIssue(resultingPrice, resultingCompare);
+      if (issue) throw new HttpError(400, 'INVALID_PRICE', `Variant ${item.id}: ${issue}`);
+    }
     try {
       // One transaction: all rows update together or none do. SKU and barcode
       // stay immutable here (same boundary as the single-variant PATCH).
