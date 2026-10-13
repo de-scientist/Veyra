@@ -83,6 +83,81 @@ export function summarizeSelection(axes: SelectionAxis[]): { label: string; tota
 
 export const MAX_PRICE = 99999999.99;
 export const MAX_STOCK = 100000;
+export const MAX_TOTAL_STOCK = 100000;
+
+/**
+ * Product-level defaults applied to newly generated variants.
+ * Form-level only: the backend has no inherited/custom column, so
+ * inheritance is tracked by empty per-row inputs (empty = inherited).
+ */
+export type VariantDefaults = {
+  price: number | null;
+  compareAtPrice: number | null;
+  totalStock: number | null;
+};
+
+export type StockStrategy = 'even' | 'manual';
+
+/**
+ * Deterministic even distribution: every variant gets `floor(total/count)`;
+ * the remainder is dealt one unit at a time from the first variant in stable
+ * order. Conserves the exact total (sum === total). Empty when count is 0.
+ */
+export function distributeStockEvenly(total: number, count: number): number[] {
+  if (!Number.isSafeInteger(total) || total < 0) return [];
+  if (!Number.isSafeInteger(count) || count <= 0) return [];
+  const base = Math.floor(total / count);
+  const remainder = total - base * count;
+  return Array.from({ length: count }, (_, i) => base + (i < remainder ? 1 : 0));
+}
+
+/**
+ * Distribute only the unallocated remainder across inherited (non-overridden)
+ * rows in stable order. Overridden rows keep their explicit quantities.
+ * Returns per-key effective quantities plus summary totals.
+ */
+export function distributeUnallocatedStock(options: {
+  total: number | null;
+  keysInOrder: string[];
+  overridden: Map<string, number>;
+}): { effective: Map<string, number>; allocated: number; unallocated: number | null } {
+  const { total, keysInOrder, overridden } = options;
+  const inherited = keysInOrder.filter((key) => !overridden.has(key));
+  const overrideSum = [...overridden.values()].reduce((acc, v) => acc + v, 0);
+  if (total === null || total === undefined) {
+    return { effective: new Map(overridden), allocated: overrideSum, unallocated: null };
+  }
+  const remaining = Math.max(total - overrideSum, 0);
+  const shares = distributeStockEvenly(remaining, inherited.length);
+  const effective = new Map<string, number>(overridden);
+  inherited.forEach((key, i) => effective.set(key, shares[i] ?? 0));
+  const allocated = [...effective.values()].reduce((acc, v) => acc + v, 0);
+  return { effective, allocated, unallocated: total - allocated };
+}
+
+export type AllocationSummary = {
+  total: number | null;
+  allocated: number;
+  unallocated: number | null;
+  variantCount: number;
+};
+
+/** Summary for the stock allocation panel (allocated = sum of effective). */
+export function summarizeAllocation(total: number | null, effectiveQuantities: number[], variantCount: number): AllocationSummary {
+  const allocated = effectiveQuantities.reduce((acc, v) => acc + v, 0);
+  return { total, allocated, unallocated: total === null ? null : total - allocated, variantCount };
+}
+
+/**
+ * Previous-price rule: when both prices are present, the previous
+ * (compare-at) price must be strictly greater than the selling price.
+ * Null either side = no sale = valid. Mirrors backend INVALID_PRICE.
+ */
+export function validatePricePair(price: number | null, compareAtPrice: number | null): string | null {
+  if (price === null || compareAtPrice === null) return null;
+  if (!(compareAtPrice > price)) return 'Previous price must be higher than the selling price when both are set.';
+  return null;
+}
 
 export type FieldResult = { ok: true; value: number | null } | { ok: false; error: string };
 

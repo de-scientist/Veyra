@@ -3,14 +3,18 @@ import { describe, expect, it } from 'vitest';
 import {
   availabilityLabel,
   buildAllowList,
+  distributeStockEvenly,
+  distributeUnallocatedStock,
   existingVariantRows,
   formatKES,
   matchDimensionAttributes,
   mergePreviewRows,
   parseTemplateTokens,
   requiredDimensionTokens,
+  summarizeAllocation,
   summarizeSelection,
   validatePriceInput,
+  validatePricePair,
   validateStockInput,
 } from './variant-matrix';
 
