@@ -30,16 +30,20 @@ import {
 import {
   IDENTITY_TOKENS,
   buildAllowList,
+  distributeUnallocatedStock,
   existingVariantRows,
   formatKES,
   formatStock,
   mergePreviewRows,
   requiredDimensionTokens,
+  summarizeAllocation,
   summarizeSelection,
   validatePriceInput,
+  validatePricePair,
   validateStockInput,
   type MatrixPair,
   type MatrixRow,
+  type StockStrategy,
 } from '../lib/variant-matrix';
 import { AdminStatusBadge, ConfirmAction } from './admin';
 import { useConfirm } from './ConfirmDialog';
@@ -182,6 +186,15 @@ export function VariantManager({
   const [bulkCompareAt, setBulkCompareAt] = useState('');
   const [bulkStock, setBulkStock] = useState('');
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  // Product-level defaults for newly generated variants (form-level only —
+  // the backend has no inherited/custom column). Empty per-row inputs mean
+  // "inherited": changing a default updates inherited rows automatically
+  // while rows with explicit edits keep their overrides.
+  const [defaultPrice, setDefaultPrice] = useState('');
+  const [defaultCompareAt, setDefaultCompareAt] = useState('');
+  const [totalStock, setTotalStock] = useState('');
+  const [stockStrategy, setStockStrategy] = useState<StockStrategy>('even');
+  const [defaultsError, setDefaultsError] = useState<string | null>(null);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic preview sequence: a slower earlier response must never clobber
   // newer matrix state when selections change mid-flight.
@@ -398,6 +411,111 @@ export function VariantManager({
     });
   };
 
+  // ---- Product-level defaults → inheritance (new rows only) ----
+  const defaultPriceParsed = useMemo(() => {
+    if (!defaultPrice.trim()) return { ok: true as const, value: null as number | null, error: null as string | null };
+    const parsed = validatePriceInput(defaultPrice);
+    return parsed.ok ? { ok: true as const, value: parsed.value, error: null as string | null } : { ok: false as const, value: null as number | null, error: parsed.error };
+  }, [defaultPrice]);
+  const defaultCompareParsed = useMemo(() => {
+    if (!defaultCompareAt.trim()) return { ok: true as const, value: null as number | null, error: null as string | null };
+    const parsed = validatePriceInput(defaultCompareAt);
+    return parsed.ok ? { ok: true as const, value: parsed.value, error: null as string | null } : { ok: false as const, value: null as number | null, error: parsed.error };
+  }, [defaultCompareAt]);
+  const totalStockParsed = useMemo(() => {
+    if (!totalStock.trim()) return { ok: true as const, value: null as number | null, error: null as string | null };
+    const parsed = validateStockInput(totalStock);
+    return parsed.ok ? { ok: true as const, value: parsed.value, error: null as string | null } : { ok: false as const, value: null as number | null, error: parsed.error };
+  }, [totalStock]);
+  const defaultsPairError = useMemo(() => {
+    if (!defaultPriceParsed.ok || !defaultCompareParsed.ok) return null;
+    return validatePricePair(defaultPriceParsed.value, defaultCompareParsed.value);
+  }, [defaultPriceParsed, defaultCompareParsed]);
+
+  const newIncludedRows = useMemo(
+    () => rows.filter((row) => row.status === 'new' && (rowEdits[row.key]?.included ?? true)),
+    [rows, rowEdits],
+  );
+
+  /** Explicit per-row stock overrides for new rows (valid whole units only). */
+  const overriddenStock = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of newIncludedRows) {
+      const raw = rowEdits[row.key]?.stock ?? '';
+      if (!raw.trim()) continue;
+      const parsed = validateStockInput(raw);
+      if (parsed.ok && parsed.value !== null) map.set(row.key, parsed.value);
+    }
+    return map;
+  }, [newIncludedRows, rowEdits]);
+
+  /** Effective stock per new row: overrides kept, remainder shared evenly in stable order. */
+  const effectiveStock = useMemo(() => {
+    if (stockStrategy === 'manual' || !totalStockParsed.ok || totalStockParsed.value === null) {
+      const map = new Map<string, number>();
+      for (const row of newIncludedRows) map.set(row.key, overriddenStock.get(row.key) ?? 0);
+      return map;
+    }
+    return distributeUnallocatedStock({
+      total: totalStockParsed.value,
+      keysInOrder: newIncludedRows.map((row) => row.key),
+      overridden: overriddenStock,
+    }).effective;
+  }, [stockStrategy, totalStockParsed, newIncludedRows, overriddenStock]);
+
+  const allocation = useMemo(() => {
+    const quantities = newIncludedRows.map((row) => effectiveStock.get(row.key) ?? 0);
+    if (!totalStockParsed.ok) return summarizeAllocation(null, quantities, newIncludedRows.length);
+    return summarizeAllocation(totalStockParsed.value, quantities, newIncludedRows.length);
+  }, [effectiveStock, newIncludedRows, totalStockParsed]);
+
+  const effectivePriceOf = useCallback(
+    (row: MatrixRow): number | null => {
+      const raw = rowEdits[row.key]?.price ?? '';
+      if (raw.trim()) {
+        const parsed = validatePriceInput(raw);
+        return parsed.ok ? parsed.value : null;
+      }
+      if (row.status !== 'new') return row.priceOverride;
+      return defaultPriceParsed.ok ? defaultPriceParsed.value : null;
+    },
+    [rowEdits, defaultPriceParsed],
+  );
+
+  const effectiveCompareOf = useCallback(
+    (row: MatrixRow): number | null => {
+      const raw = rowEdits[row.key]?.compareAt ?? '';
+      if (raw.trim()) {
+        const parsed = validatePriceInput(raw);
+        return parsed.ok ? parsed.value : null;
+      }
+      if (row.status !== 'new') return rowComparable(row);
+      return defaultCompareParsed.ok ? defaultCompareParsed.value : null;
+    },
+    [rowEdits, defaultCompareParsed],
+  );
+
+  const resetRowPrices = (key: string) => {
+    setEdit(key, { price: '', compareAt: '' });
+    notify('info', 'Row reset to product defaults — inherited until you type a custom price.');
+  };
+
+  const distributeEvenly = () => {
+    // Explicit redistribution: clear stock overrides on new rows so every
+    // row re-inherits its even share. Established (existing) inventory is
+    // never touched.
+    setRowEdits((prev) => {
+      const next = { ...prev };
+      for (const row of newIncludedRows) {
+        const current = next[row.key] ?? { price: '', compareAt: '', stock: '', included: true };
+        next[row.key] = { ...current, stock: '' };
+      }
+      return next;
+    });
+    setStockStrategy('even');
+    notify('success', 'Stock overrides cleared — new items share the total evenly.');
+  };
+
   const toggleCheck = (key: string) => {
     setChecked((prev) => {
       const next = new Set(prev);
@@ -494,42 +612,60 @@ export function VariantManager({
       // Per-row prices → one batch PATCH (never one request per variant).
       // Previous (compare-at) prices ride the same batch write; both fields
       // map to the existing authoritative columns (no new model).
+      // Validate product defaults first: malformed defaults or a
+      // previous price at/below the selling price blocks creation.
+      if (!defaultPriceParsed.ok) throw new Error(`Default selling price: ${defaultPriceParsed.error}`);
+      if (!defaultCompareParsed.ok) throw new Error(`Default previous price: ${defaultCompareParsed.error}`);
+      if (!totalStockParsed.ok) throw new Error(`Total stock: ${totalStockParsed.error}`);
+      if (defaultsPairError) throw new Error(defaultsPairError);
       const priceWrites: Array<{ id: string; price?: number; compareAtPrice?: number | null }> = [];
       for (const row of withEdits) {
         if (row.status !== 'new' || !row.included) continue;
-        const parsed = validatePriceInput(editOf(row.key).price);
-        if (!parsed.ok) {
-          setRowErrors((prev) => ({ ...prev, [row.key]: parsed.error }));
-          throw new Error(`Row ${row.sku}: ${parsed.error}`);
+        // Raw inputs must still be well-formed when present; empty means
+        // "inherit the product default" (never silently fabricated).
+        const rawParsed = validatePriceInput(editOf(row.key).price);
+        if (!rawParsed.ok) {
+          setRowErrors((prev) => ({ ...prev, [row.key]: rawParsed.error }));
+          throw new Error(`Row ${row.sku}: ${rawParsed.error}`);
         }
-        if (parsed.value === null || !(parsed.value > 0)) {
-          const message = 'Enter a selling price above KES 0 for each new item.';
+        const rawCompareParsed = validatePriceInput(editOf(row.key).compareAt);
+        if (!rawCompareParsed.ok) {
+          setRowErrors((prev) => ({ ...prev, [row.key]: rawCompareParsed.error }));
+          throw new Error(`Row ${row.sku}: ${rawCompareParsed.error}`);
+        }
+        const effectivePrice = effectivePriceOf(row);
+        const effectiveCompare = effectiveCompareOf(row);
+        if (effectivePrice === null || !(effectivePrice > 0)) {
+          const message = 'Enter a selling price above KES 0 for each new item (or set a product default above).';
           setRowErrors((prev) => ({ ...prev, [row.key]: message }));
           throw new Error(`Row ${row.sku}: ${message}`);
         }
-        const compareParsed = validatePriceInput(editOf(row.key).compareAt);
-        if (!compareParsed.ok) {
-          setRowErrors((prev) => ({ ...prev, [row.key]: compareParsed.error }));
-          throw new Error(`Row ${row.sku}: ${compareParsed.error}`);
+        const pairError = validatePricePair(effectivePrice, effectiveCompare);
+        if (pairError) {
+          setRowErrors((prev) => ({ ...prev, [row.key]: pairError }));
+          throw new Error(`Row ${row.sku}: ${pairError}`);
         }
         const createdId = createdBySku.get(row.sku);
         if (createdId) {
           priceWrites.push({
             id: createdId,
-            price: parsed.value,
-            ...(compareParsed.value !== null ? { compareAtPrice: compareParsed.value } : {}),
+            price: effectivePrice,
+            ...(effectiveCompare !== null ? { compareAtPrice: effectiveCompare } : {}),
           });
         }
       }
       if (priceWrites.length > 0) await batchUpdateVariants(productId, { variants: priceWrites });
       // Per-row stock → one batch restock (new variants start at zero).
+      // Effective quantities conserve the entered total: overrides are kept,
+      // inherited rows share the remainder evenly in stable order.
       const stockWrites: Array<{ variantId: string; quantity: number }> = [];
       for (const row of withEdits) {
         if (row.status !== 'new' || !row.included) continue;
-        const parsed = validateStockInput(editOf(row.key).stock);
-        if (!parsed.ok) throw new Error(`Row ${row.sku}: ${parsed.error}`);
+        const rawParsed = validateStockInput(editOf(row.key).stock);
+        if (!rawParsed.ok) throw new Error(`Row ${row.sku}: ${rawParsed.error}`);
+        const quantity = effectiveStock.get(row.key) ?? 0;
         const createdId = createdBySku.get(row.sku);
-        if (parsed.value !== null && parsed.value > 0 && createdId) stockWrites.push({ variantId: createdId, quantity: parsed.value });
+        if (quantity > 0 && createdId) stockWrites.push({ variantId: createdId, quantity });
       }
       if (stockWrites.length > 0) await restockVariantsBatch({ reason: 'Initial matrix stock', items: stockWrites });
       notify('success', `Created ${result.summary.created} variant(s)${result.summary.existing > 0 ? `, ${result.summary.existing} already existed` : ''}.`);
@@ -582,6 +718,18 @@ export function VariantManager({
           const entry = writes.find((w) => w.id === row.variantId);
           if (entry) entry.compareAtPrice = parsed.value;
           else writes.push({ id: row.variantId as string, compareAtPrice: parsed.value });
+        }
+      }
+      // Resulting pair must satisfy the previous-price rule (compare-at >
+      // selling price when both are present). Established values are never
+      // rewritten — only staged edits are validated here.
+      const entry = writes.find((w) => w.id === row.variantId);
+      if (entry) {
+        const resultingPrice = entry.price ?? row.priceOverride;
+        const resultingCompare = entry.compareAtPrice !== undefined ? entry.compareAtPrice : rowComparable(row);
+        const pairError = validatePricePair(resultingPrice, resultingCompare);
+        if (pairError) {
+          nextErrors[row.key] = pairError;
         }
       }
     }
@@ -814,6 +962,131 @@ export function VariantManager({
         </div>
       </fieldset>
 
+      <fieldset className="variant-manager__defaults" disabled={!categoryId || saving}>
+        <legend>Product defaults <span className="muted-copy">— starting prices &amp; stock for new items</span></legend>
+        <p className="muted-copy workspace-card__hint">
+          Defaults populate new items only. Leave a row empty to inherit; type a value to customize that row.
+          Changing a default updates inherited rows without touching customized ones. Established items keep their
+          saved prices and stock — they are never redistributed automatically.
+        </p>
+        <div className="form-grid">
+          <label htmlFor="variant-default-price">
+            <span>Default selling price (KES)</span>
+            <input
+              id="variant-default-price"
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              placeholder="e.g. 2500.00"
+              value={defaultPrice}
+              onChange={(e) => {
+                setDefaultPrice(e.currentTarget.value);
+                setDefaultsError(null);
+              }}
+              aria-invalid={Boolean((!defaultPriceParsed.ok && defaultPrice.trim()) || defaultsPairError)}
+            />
+            {!defaultPriceParsed.ok && defaultPrice.trim() ? (
+              <span className="field-error" role="alert">{defaultPriceParsed.error}</span>
+            ) : null}
+          </label>
+          <label htmlFor="variant-default-compare">
+            <span>Default previous price (KES) — optional</span>
+            <input
+              id="variant-default-compare"
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              placeholder="e.g. 3000.00 for a sale"
+              value={defaultCompareAt}
+              onChange={(e) => {
+                setDefaultCompareAt(e.currentTarget.value);
+                setDefaultsError(null);
+              }}
+              aria-invalid={Boolean((!defaultCompareParsed.ok && defaultCompareAt.trim()) || defaultsPairError)}
+              aria-describedby="variant-default-compare-hint"
+            />
+            {!defaultCompareParsed.ok && defaultCompareAt.trim() ? (
+              <span className="field-error" role="alert">{defaultCompareParsed.error}</span>
+            ) : (
+              <span id="variant-default-compare-hint" className="muted-copy">
+                Shown crossed-out only when higher than the selling price.
+              </span>
+            )}
+          </label>
+          <label htmlFor="variant-total-stock">
+            <span>Total stock to distribute</span>
+            <input
+              id="variant-total-stock"
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              placeholder="e.g. 24"
+              value={totalStock}
+              onChange={(e) => {
+                setTotalStock(e.currentTarget.value);
+                setDefaultsError(null);
+              }}
+              aria-invalid={Boolean(!totalStockParsed.ok && totalStock.trim())}
+            />
+            {!totalStockParsed.ok && totalStock.trim() ? (
+              <span className="field-error" role="alert">{totalStockParsed.error}</span>
+            ) : null}
+          </label>
+        </div>
+        {defaultsPairError ? (
+          <div className="error-message" role="alert">{defaultsPairError}</div>
+        ) : null}
+        {defaultsError ? (
+          <div className="error-message" role="alert">{defaultsError}</div>
+        ) : null}
+        <div className="variant-manager__strategy" role="group" aria-label="Stock allocation strategy">
+          <label className="facet-option" htmlFor="stock-strategy-even">
+            <input
+              id="stock-strategy-even"
+              type="radio"
+              name="stock-strategy"
+              checked={stockStrategy === 'even'}
+              onChange={() => setStockStrategy('even')}
+            />
+            <span><strong>Distribute evenly</strong><span className="muted-copy"> — split the total across new items; remainder goes to the first items in order. Custom rows keep their quantities and only the rest is shared.</span></span>
+          </label>
+          <label className="facet-option" htmlFor="stock-strategy-manual">
+            <input
+              id="stock-strategy-manual"
+              type="radio"
+              name="stock-strategy"
+              checked={stockStrategy === 'manual'}
+              onChange={() => setStockStrategy('manual')}
+            />
+            <span><strong>Enter stock manually</strong><span className="muted-copy"> — new rows start at 0 unless you type a quantity. You may leave some at zero.</span></span>
+          </label>
+        </div>
+        <dl className="media-meta" aria-label="Stock allocation summary" aria-live="polite">
+          <dt>Total entered</dt>
+          <dd>{totalStockParsed.ok && totalStockParsed.value !== null ? totalStockParsed.value.toLocaleString('en-KE') : '—'}</dd>
+          <dt>Allocated</dt>
+          <dd>{allocation.allocated.toLocaleString('en-KE')}</dd>
+          <dt>Unallocated</dt>
+          <dd>{allocation.unallocated === null ? '—' : allocation.unallocated.toLocaleString('en-KE')}</dd>
+          <dt>New items</dt>
+          <dd>{allocation.variantCount}</dd>
+        </dl>
+        {allocation.unallocated !== null && allocation.unallocated < 0 ? (
+          <div className="error-message" role="alert">
+            Custom rows exceed the total by {Math.abs(allocation.unallocated).toLocaleString('en-KE')} unit(s) — raise the total or lower a custom quantity. Nothing is discarded.
+          </div>
+        ) : null}
+        <div className="form-actions">
+          <button type="button" className="button button--secondary button--small" onClick={distributeEvenly} disabled={saving || newIncludedRows.length === 0}>
+            Distribute evenly
+          </button>
+          <span className="muted-copy">Clears custom stock on new rows so every row re-inherits its even share. Existing items are untouched.</span>
+        </div>
+      </fieldset>
+
       <div className="variant-manager__summary" role="status" aria-live="polite">
         <strong>{selectionSummary.label}</strong>
         <span className="muted-copy">
@@ -929,47 +1202,79 @@ export function VariantManager({
                       </td>
                       <td data-label="Selling price (KES)">
                         {row.status === 'existing' ? (
-                          <span>{formatKES(row.priceOverride)}</span>
+                          <span>{formatKES(row.priceOverride)} <span className="status-badge">Established</span></span>
                         ) : (
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={edit.price}
-                            placeholder="Required, e.g. 2500"
-                            onChange={(e) => setEdit(row.key, { price: e.currentTarget.value })}
-                            aria-label={`Selling price for ${row.sku}`}
-                            aria-invalid={Boolean(rowErrors[row.key])}
-                            disabled={!edit.included}
-                            required
-                          />
+                          <>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={edit.price}
+                              placeholder={defaultPriceParsed.ok && defaultPriceParsed.value !== null ? `Inherits ${formatKES(defaultPriceParsed.value)}` : 'Required, e.g. 2500'}
+                              onChange={(e) => setEdit(row.key, { price: e.currentTarget.value })}
+                              aria-label={`Selling price for ${row.sku}`}
+                              aria-invalid={Boolean(rowErrors[row.key])}
+                              disabled={!edit.included}
+                              required
+                            />
+                            {edit.price.trim() ? (
+                              <span className="variant-matrix__row-actions">
+                                <span className="status-badge status-badge--new">Custom</span>
+                                <button type="button" className="text-button" onClick={() => resetRowPrices(row.key)} disabled={!edit.included} aria-label={`Reset prices for ${row.sku} to defaults`}>
+                                  Reset
+                                </button>
+                              </span>
+                            ) : defaultPriceParsed.ok && defaultPriceParsed.value !== null ? (
+                              <span className="muted-copy">Inherits {formatKES(defaultPriceParsed.value)}</span>
+                            ) : null}
+                          </>
                         )}
                         {row.status === 'existing' && (
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={edit.price}
-                            placeholder="New price"
-                            onChange={(e) => setEdit(row.key, { price: e.currentTarget.value })}
-                            aria-label={`New selling price for ${row.sku}`}
-                          />
+                          <>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={edit.price}
+                              placeholder="New price"
+                              onChange={(e) => setEdit(row.key, { price: e.currentTarget.value })}
+                              aria-label={`New selling price for ${row.sku}`}
+                            />
+                            {!edit.price.trim() && defaultPriceParsed.ok && defaultPriceParsed.value !== null && defaultPriceParsed.value !== row.priceOverride ? (
+                              <button type="button" className="text-button" onClick={() => setEdit(row.key, { price: String(defaultPriceParsed.value) })} aria-label={`Stage default price for ${row.sku}`}>
+                                Use default ({formatKES(defaultPriceParsed.value)})
+                              </button>
+                            ) : null}
+                          </>
                         )}
                       </td>
                       <td data-label="Previous price (KES)">
                         {row.status === 'existing' ? (
                           <span className="muted-copy">{row.compareAtPrice === null ? '—' : formatKES(row.compareAtPrice)}</span>
-                        ) : null}
+                        ) : (
+                          <>
+                            {edit.compareAt.trim() ? (
+                              <span className="status-badge status-badge--new">Custom</span>
+                            ) : defaultCompareParsed.ok && defaultCompareParsed.value !== null ? (
+                              <span className="muted-copy">Inherits {formatKES(defaultCompareParsed.value)}</span>
+                            ) : null}
+                          </>
+                        )}
                         <input
                           type="number"
                           min="0"
                           step="0.01"
                           value={edit.compareAt}
-                          placeholder={row.status === 'existing' ? 'New previous' : 'Optional'}
+                          placeholder={row.status === 'existing' ? 'New previous' : defaultCompareParsed.ok && defaultCompareParsed.value !== null ? `Inherits ${formatKES(defaultCompareParsed.value)}` : 'Optional'}
                           onChange={(e) => setEdit(row.key, { compareAt: e.currentTarget.value })}
                           aria-label={`Previous price for ${row.sku}`}
                           disabled={row.status === 'new' && !edit.included}
                         />
+                        {row.status === 'new' && (edit.price.trim() || edit.compareAt.trim()) ? (
+                          <button type="button" className="text-button" onClick={() => resetRowPrices(row.key)} disabled={!edit.included} aria-label={`Reset prices for ${row.sku} to defaults`}>
+                            Reset
+                          </button>
+                        ) : null}
                       </td>
                       <td data-label="Stock">
                         {row.status === 'existing' ? (
@@ -978,16 +1283,23 @@ export function VariantManager({
                             {outOfStock && <span className="muted-copy"> · Out of stock</span>}
                           </span>
                         ) : (
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={edit.stock}
-                            placeholder="0"
-                            onChange={(e) => setEdit(row.key, { stock: e.currentTarget.value })}
-                            aria-label={`Stock for ${row.sku}`}
-                            disabled={!edit.included}
-                          />
+                          <>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={edit.stock}
+                              placeholder={stockStrategy === 'even' && totalStockParsed.ok && totalStockParsed.value !== null ? `Inherits ${effectiveStock.get(row.key) ?? 0}` : '0'}
+                              onChange={(e) => setEdit(row.key, { stock: e.currentTarget.value })}
+                              aria-label={`Stock for ${row.sku}`}
+                              disabled={!edit.included}
+                            />
+                            {edit.stock.trim() ? (
+                              <span className="muted-copy">Custom</span>
+                            ) : stockStrategy === 'even' && totalStockParsed.ok && totalStockParsed.value !== null ? (
+                              <span className="muted-copy">Inherits {effectiveStock.get(row.key) ?? 0}</span>
+                            ) : null}
+                          </>
                         )}
                         {row.status === 'existing' && (
                           <span className="variant-matrix__row-actions">
