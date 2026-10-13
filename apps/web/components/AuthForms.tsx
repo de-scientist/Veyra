@@ -24,7 +24,7 @@ import { googleCallbackMessage } from '../lib/google-auth';
 import { JB_CONTACT_PHONE_DISPLAY, JB_CONTACT_PHONE_TEL } from '../lib/business-contact';
 import { notifySessionUpdated, useSession } from '../lib/session';
 import { AuthAlert } from './AuthAlert';
-import { GoogleDivider, GoogleSignInButton, useGoogleConfigured } from './GoogleSignInButton';
+import { GoogleAuthSection } from './GoogleSignInButton';
 import { JBButtonLoader, JBLoading } from './JBLoading';
 import { PasswordField } from './PasswordField';
 
@@ -110,7 +110,6 @@ export function LoginForm() {
   const formId = useId();
   const scopeId = `login-${formId}`;
   const emailErrorId = `login-email-error-${formId}`;
-  const googleConfigured = useGoogleConfigured();
   // Surface a safe, actionable message when returning from Google
   // (`?google=` / `?google_error=` set by the backend callback).
   const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(() =>
@@ -225,15 +224,10 @@ export function LoginForm() {
         />
       ) : null}
 
-      {googleConfigured ? (
-        <>
-          <GoogleSignInButton redirect={target} disabled={busy} />
-          <GoogleDivider />
-        </>
-      ) : null}
+      <GoogleAuthSection redirect={target} disabled={busy} context="login" />
 
       <div className="auth-field">
-        <label htmlFor={`${scopeId}-email`}>Email address</label>
+      <label htmlFor={`${scopeId}-email`}>Email address</label>
         <input
           id={`${scopeId}-email`}
           type="email"
@@ -292,7 +286,6 @@ export function RegisterForm() {
   const { status, refresh } = useSession();
   const formId = useId();
   const scopeId = `register-${formId}`;
-  const googleConfigured = useGoogleConfigured();
   // Surface a safe, actionable message when returning from Google
   // (`?google=` / `?google_error=` set by the backend callback).
   const [formAlert, setFormAlert] = useState<{ tone: 'error' | 'success'; title: string; message: string } | null>(() =>
@@ -432,15 +425,7 @@ export function RegisterForm() {
         />
       ) : null}
 
-      {googleConfigured ? (
-        <>
-          <GoogleSignInButton redirect={target} disabled={busy} />
-          <p className="muted-copy auth-google-note">
-            Continuing with Google creates your JB Mercantile customer account.
-          </p>
-          <GoogleDivider />
-        </>
-      ) : null}
+      <GoogleAuthSection redirect={target} disabled={busy} context="register" />
 
       <div className="form-grid">
         <TextField

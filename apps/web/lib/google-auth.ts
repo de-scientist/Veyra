@@ -38,15 +38,13 @@ async function googleRequest<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /**
- * Whether Google sign-in is configured. Fail-closed on network error: the
- * caller hides the Google button instead of showing a fake working button.
+ * Whether Google sign-in is configured. Throws on network/HTTP failure so
+ * callers can distinguish "status unreachable" from "genuinely
+ * unconfigured" — a failed request must never masquerade as proof that
+ * Google OAuth is off (that failure mode silently hid the button).
  */
 export async function getGoogleStatus(): Promise<{ configured: boolean }> {
-  try {
-    return await googleRequest<{ configured: boolean }>('/auth/google/status');
-  } catch {
-    return { configured: false };
-  }
+  return googleRequest<{ configured: boolean }>('/auth/google/status');
 }
 
 /** Backend initiation URL — the browser navigates here (full redirect). */
