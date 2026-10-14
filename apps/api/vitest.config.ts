@@ -1,7 +1,8 @@
 import { defineConfig } from 'vitest/config';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
-const envContent = readFileSync(new URL('../../.env', import.meta.url), 'utf8');
+const envPath = new URL('../../.env', import.meta.url);
+const envContent = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
 for (const line of envContent.split('\n')) {
   const [key, ...rest] = line.split('=');
   if (key && !process.env[key.trim()]) {
@@ -10,6 +11,8 @@ for (const line of envContent.split('\n')) {
 }
 
 export default defineConfig({
+  configFile: false,
+  css: { postcss: { plugins: [] } },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
