@@ -5,7 +5,6 @@
                             "moduleResolution":  "NodeNext",
                             "outDir":  "dist",
                             "rootDir":  "src",
-                            // "baseUrl":  ".",
                             "paths":  {
                                           "@veyra/config":  [
                                                                 "../../packages/config/src/index.ts"
