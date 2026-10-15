@@ -28,7 +28,7 @@ const loginSchema = z.object({
 export function getCookieOptions() {
   return {
     httpOnly: true,
-    sameSite: 'lax' as const,
+    sameSite: 'none' as const,
     secure: env.NODE_ENV === 'production',
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
