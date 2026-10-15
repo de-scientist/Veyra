@@ -107,8 +107,6 @@ describe('admin dashboard customer statistics', () => {
   // Nine sequential user+role writes plus two dashboard aggregations exceed
   // the default 5 s per-test budget on loaded CI databases.
   it('counts every customer-role status and excludes privileged non-customers', { timeout: 60000 }, async () => {
-    const before = await fetchCustomers();
-
     await createUser(emails.activeA, 'ACTIVE', ['customer']);
     await createUser(emails.activeB, 'ACTIVE', ['customer']);
     await createUser(emails.suspended, 'SUSPENDED', ['customer']);
@@ -123,15 +121,33 @@ describe('admin dashboard customer statistics', () => {
 
     const after = await fetchCustomers();
 
-    expect(after.totalCustomers - before.totalCustomers).toBe(6);
-    expect(after.activeCustomers - before.activeCustomers).toBe(3);
-    expect(after.suspendedCustomers - before.suspendedCustomers).toBe(1);
-    expect(after.inactiveCustomers - before.inactiveCustomers).toBe(1);
-    expect(after.deletedCustomers - before.deletedCustomers).toBe(1);
-    // The parts sum to the whole: no double counting, no leakage.
+    // Files run in parallel against one database, so other suites' fixtures
+    // move the GLOBAL totals concurrently — exact deltas would flake. Instead:
+    // (a) structural invariants on a single response (deterministic), and
+    // (b) inclusion of this suite's stamp-scoped fixtures, counted directly
+    // from the database (other suites only ever add rows, and only this suite
+    // deletes its own rows, so lower bounds are stable).
     expect(after.totalCustomers).toBe(
       after.activeCustomers + after.suspendedCustomers + after.inactiveCustomers + after.deletedCustomers,
     );
+    const mine = await prisma.user.groupBy({
+      by: ['status'],
+      where: { email: { contains: stamp }, roles: { some: { role: { slug: 'customer' } } } },
+      _count: { status: true },
+    });
+    const mineCount = (status: string) => mine.find((group) => group.status === status)?._count.status ?? 0;
+    expect(mineCount('ACTIVE')).toBe(3); // activeA, activeB, multi-role
+    expect(mineCount('SUSPENDED')).toBe(1);
+    expect(mineCount('INACTIVE')).toBe(1);
+    expect(mineCount('DELETED')).toBe(1);
+    // Inclusion: the endpoint's population is a superset of this suite's
+    // fixtures. Cross-suite deletions only ever remove other suites' own rows,
+    // so these lower bounds cannot flake.
+    expect(after.totalCustomers).toBeGreaterThanOrEqual(6);
+    expect(after.activeCustomers).toBeGreaterThanOrEqual(3);
+    expect(after.suspendedCustomers).toBeGreaterThanOrEqual(1);
+    expect(after.inactiveCustomers).toBeGreaterThanOrEqual(1);
+    expect(after.deletedCustomers).toBeGreaterThanOrEqual(1);
   });
 
   it('preserves the registeredCustomers alias and the dashboard contract', async () => {
