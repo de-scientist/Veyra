@@ -734,15 +734,14 @@ async function assertSuperAdminHandover(tx: LifecycleTransaction, userId: string
   }
 }
 
-async function lifecycleMutation(
-  userId: string,
-  mutate: (tx: LifecycleTransaction) => Promise<unknown>,
-): Promise<void> {
-  // Fast path (advisory only): ordinary accounts never take the lock, so
-  // normal customer behavior keeps the exact pre-existing code path.
+async function lifecycleMutation(userId: string, mutate: (tx: LifecycleTransaction) => Promise<void>): Promise<void> {
+  // Fast path (advisory only): ordinary accounts never take the lock. The
+  // statements still run inside one transaction, exactly as before.
   const routing = await readLifecycleStanding(prisma, userId);
   if (!routing.usableSuperAdmin) {
-    await mutate(prisma);
+    await prisma.$transaction(async (tx) => {
+      await mutate(tx);
+    });
     return;
   }
   await prisma.$transaction(async (tx) => {
@@ -755,25 +754,21 @@ async function lifecycleMutation(
 }
 
 export async function deactivateAccount(userId: string) {
-  await lifecycleMutation(userId, (tx) =>
-    Promise.resolve().then(async () => {
-      await tx.user.update({ where: { id: userId }, data: { status: 'INACTIVE' } });
-      await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.auditLog.create({ data: { actorId: userId, action: AuditAction.ACCOUNT_DEACTIVATED, entity: 'User', entityId: userId } });
-    }),
-  );
+  await lifecycleMutation(userId, async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { status: 'INACTIVE' } });
+    await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    await tx.auditLog.create({ data: { actorId: userId, action: AuditAction.ACCOUNT_DEACTIVATED, entity: 'User', entityId: userId } });
+  });
   await emitSecurityEvent(userId, 'ACCOUNT_DEACTIVATED');
   return { deactivated: true };
 }
 
 export async function requestAccountDeletion(userId: string) {
-  await lifecycleMutation(userId, (tx) =>
-    Promise.resolve().then(async () => {
-      await tx.user.update({ where: { id: userId }, data: { status: 'DELETED', deletedAt: new Date() } });
-      await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.auditLog.create({ data: { actorId: userId, action: AuditAction.ACCOUNT_DELETION_REQUESTED, entity: 'User', entityId: userId } });
-    }),
-  );
+  await lifecycleMutation(userId, async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { status: 'DELETED', deletedAt: new Date() } });
+    await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    await tx.auditLog.create({ data: { actorId: userId, action: AuditAction.ACCOUNT_DELETION_REQUESTED, entity: 'User', entityId: userId } });
+  });
   return { deleted: true };
 }
 
