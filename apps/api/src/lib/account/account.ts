@@ -4,6 +4,7 @@ import { hashPassword, hashToken, verifyPassword } from '../auth.js';
 import { calculateAvailableQuantity } from '../catalog.js';
 import { HttpError } from '../errors.js';
 import { emitSecurityEvent } from '../notifications/domainHooks.js';
+import { isSuperAdminSlug } from '../permissions.js';
 import { prisma } from '../prisma.js';
 import { addCartItem } from '../shopping.js';
 
@@ -684,22 +685,95 @@ export async function claimGuestOrder(userId: string, orderNumber: string, token
   return { orderNumber, claimed: true };
 }
 
+/**
+ * Advisory-lock key serializing super-admin lifecycle mutations (deactivate /
+ * delete). Fixed stable integer; `pg_advisory_xact_lock` releases it at
+ * commit/rollback, so no cleanup path can leak it. PostgreSQL-only — matches
+ * the single production database and the local dev database.
+ */
+const SUPERADMIN_LIFECYCLE_LOCK = 829167541;
+
+const SUPER_ADMIN_SLUGS = ['super_admin', 'super-admin'];
+
+type LifecycleTransaction = Prisma.TransactionClient;
+
+async function readLifecycleStanding(tx: LifecycleTransaction, userId: string) {
+  const holder = await tx.user.findUnique({
+    where: { id: userId },
+    select: { status: true, roles: { select: { role: { select: { slug: true } } } } },
+  });
+  const slugs = (holder?.roles ?? []).map((entry) => entry.role.slug);
+  return { usableSuperAdmin: holder?.status === 'ACTIVE' && slugs.some((slug) => isSuperAdminSlug(slug)) };
+}
+
+/**
+ * Last-super-admin invariant: a usable (ACTIVE + super-admin grant) account
+ * must not deactivate/delete itself when no other usable super-admin exists.
+ * The check runs INSIDE the mutation transaction while holding the advisory
+ * lock, so concurrent lifecycle operations serialize instead of racing on a
+ * count performed outside the transaction. Blocked attempts throw before any
+ * write, leaving user, grants, and sessions untouched. Ordinary accounts take
+ * the pre-existing unwatched path unchanged.
+ */
+async function assertSuperAdminHandover(tx: LifecycleTransaction, userId: string): Promise<void> {
+  const { usableSuperAdmin } = await readLifecycleStanding(tx, userId);
+  if (!usableSuperAdmin) return;
+  const remaining = await tx.user.count({
+    where: {
+      id: { not: userId },
+      status: 'ACTIVE',
+      roles: { some: { role: { slug: { in: SUPER_ADMIN_SLUGS } } } },
+    },
+  });
+  if (remaining === 0) {
+    throw new HttpError(
+      409,
+      'LAST_SUPER_ADMIN',
+      'This is the last active super-administrator. Promote another account before deactivating or deleting this one.',
+    );
+  }
+}
+
+async function lifecycleMutation(
+  userId: string,
+  mutate: (tx: LifecycleTransaction) => Promise<unknown>,
+): Promise<void> {
+  // Fast path (advisory only): ordinary accounts never take the lock, so
+  // normal customer behavior keeps the exact pre-existing code path.
+  const routing = await readLifecycleStanding(prisma, userId);
+  if (!routing.usableSuperAdmin) {
+    await mutate(prisma);
+    return;
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SUPERADMIN_LIFECYCLE_LOCK})`;
+    // Authoritative re-check under the lock: the routing read above is stale
+    // by the time the lock is held.
+    await assertSuperAdminHandover(tx, userId);
+    await mutate(tx);
+  });
+}
+
 export async function deactivateAccount(userId: string) {
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: userId }, data: { status: 'INACTIVE' } }),
-    prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
-    prisma.auditLog.create({ data: { actorId: userId, action: AuditAction.ACCOUNT_DEACTIVATED, entity: 'User', entityId: userId } }),
-  ]);
+  await lifecycleMutation(userId, (tx) =>
+    Promise.resolve().then(async () => {
+      await tx.user.update({ where: { id: userId }, data: { status: 'INACTIVE' } });
+      await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.auditLog.create({ data: { actorId: userId, action: AuditAction.ACCOUNT_DEACTIVATED, entity: 'User', entityId: userId } });
+    }),
+  );
   await emitSecurityEvent(userId, 'ACCOUNT_DEACTIVATED');
   return { deactivated: true };
 }
 
 export async function requestAccountDeletion(userId: string) {
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: userId }, data: { status: 'DELETED', deletedAt: new Date() } }),
-    prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
-    prisma.auditLog.create({ data: { actorId: userId, action: AuditAction.ACCOUNT_DELETION_REQUESTED, entity: 'User', entityId: userId } }),
-  ]);
+  await lifecycleMutation(userId, (tx) =>
+    Promise.resolve().then(async () => {
+      await tx.user.update({ where: { id: userId }, data: { status: 'DELETED', deletedAt: new Date() } });
+      await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.auditLog.create({ data: { actorId: userId, action: AuditAction.ACCOUNT_DELETION_REQUESTED, entity: 'User', entityId: userId } });
+    }),
+  );
   return { deleted: true };
 }
 
