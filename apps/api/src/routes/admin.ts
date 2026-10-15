@@ -329,6 +329,11 @@ export async function adminRoutes(app: FastifyInstance) {
       include: { roles: { include: { role: true } } },
     });
     if (!existing) throw new HttpError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found.');
+    // Self-lockout guard: nobody suspends or reinstates their own account
+    // through the directory — use the account-security flows instead.
+    if (payload.status !== undefined && id === actorId(request)) {
+      throw new HttpError(403, 'SELF_LOCKOUT_DENIED', 'You cannot change your own account status here.');
+    }
     // Privilege-boundary guard: an account holding super_admin retains full
     // platform control, so only a super-admin may suspend or reinstate it —
     // an admin must never affect a super-admin's availability.
@@ -632,21 +637,12 @@ export async function adminRoutes(app: FastifyInstance) {
       throw new HttpError(403, 'SELF_LOCKOUT_DENIED', 'You cannot remove your own super-administrator role.');
     }
 
-    // Last-super-admin guard: revoking the final ACTIVE super-admin (even
-    // someone else's) would leave the system unmanageable. Only ACTIVE holders
-    // count — suspended/inactive/deleted accounts cannot use the APIs anyway.
-    if (payload.action === 'revoke' && isSuperAdminSlug(roleSlug) && target.status === 'ACTIVE') {
-      const remainingSuperAdmins = await prisma.user.count({
-        where: {
-          id: { not: id },
-          status: 'ACTIVE',
-          roles: { some: { role: { slug: { in: ['super_admin', 'super-admin'] } } } },
-        },
-      });
-      if (remainingSuperAdmins === 0) {
-        throw new HttpError(409, 'LAST_SUPER_ADMIN', 'This is the last active super-administrator. Promote another account first.');
-      }
-    }
+    // Last-super-admin safety (by construction, not by query): revoking a
+    // super-admin grant requires a super-admin actor, and self-revocation is
+    // denied above — so every successful revoke leaves its actor holding the
+    // grant. The final usable super-admin therefore cannot be removed here.
+    // (A `remaining === 0` query would be dead code: any actor reaching this
+    // point is itself a surviving ACTIVE holder.)
 
     if (payload.action === 'assign') {
       if (alreadyHas) throw new HttpError(409, 'ROLE_ALREADY_ASSIGNED', 'The user already has this role.');
