@@ -44,11 +44,13 @@ async function ensureRole(slug: string) {
   return prisma.role.upsert({ where: { slug }, update: {}, create: { name: slug, slug } });
 }
 
+let sharedPasswordHash = '';
+
 async function createUser(email: string, status: 'ACTIVE' | 'SUSPENDED' | 'INACTIVE' | 'DELETED', roleSlugs: string[]) {
   const user = await prisma.user.create({
     data: {
       email,
-      passwordHash: await hashPassword('password123'),
+      passwordHash: sharedPasswordHash,
       firstName: 'CustStats',
       lastName: status,
       status,
@@ -88,6 +90,9 @@ async function fetchCustomers(): Promise<DashboardCustomers> {
 
 beforeAll(async () => {
   app = await buildApp();
+  // One bcrypt hash reused across fixtures: the hash value is irrelevant to
+  // counting (sessions are minted directly); this keeps the suite fast.
+  sharedPasswordHash = await hashPassword('password123');
   const operator = await createUser(emails.staff, 'ACTIVE', ['staff']);
   staffCookie = await createSessionCookie(operator.id);
 }, 60000);
@@ -99,7 +104,9 @@ afterAll(async () => {
 });
 
 describe('admin dashboard customer statistics', () => {
-  it('counts every customer-role status and excludes privileged non-customers', async () => {
+  // Nine sequential user+role writes plus two dashboard aggregations exceed
+  // the default 5 s per-test budget on loaded CI databases.
+  it('counts every customer-role status and excludes privileged non-customers', { timeout: 60000 }, async () => {
     const before = await fetchCustomers();
 
     await createUser(emails.activeA, 'ACTIVE', ['customer']);
