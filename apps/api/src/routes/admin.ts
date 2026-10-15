@@ -141,7 +141,7 @@ export async function adminRoutes(app: FastifyInstance) {
       ordersToday, ordersWeek, paidOrders, unpaidOrders, cancelledOrders,
       unfulfilledPaid, failedDeliveries, pendingReturns, pendingRefunds,
       activeProducts, activeVariants, outOfStock, activeReservations,
-      customers, guestOrders, failedPayments,
+      customerStatusGroups, guestOrders, failedPayments,
     ] = await Promise.all([
       prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
       prisma.order.count({ where: { createdAt: { gte: weekStart } } }),
@@ -156,10 +156,21 @@ export async function adminRoutes(app: FastifyInstance) {
       prisma.productVariant.count({ where: { status: 'ACTIVE', deletedAt: null } }),
       prisma.inventory.count({ where: { quantityOnHand: { lte: 0 } } }),
       prisma.inventoryReservation.count({ where: { status: 'ACTIVE' } }),
-      prisma.user.count({ where: { status: 'ACTIVE', roles: { some: { role: { slug: 'customer' } } } } }),
+      // Customer-role users grouped by account status. Grouping the User table
+      // (not UserRole rows) counts each user once even with multiple roles,
+      // and the `some customer` filter excludes privileged accounts that lack
+      // the customer role. All four UserStatus members are represented.
+      prisma.user.groupBy({ by: ['status'], where: { roles: { some: { role: { slug: 'customer' } } } }, _count: { status: true } }),
       prisma.order.count({ where: { userId: null } }),
       prisma.payment.count({ where: { status: 'FAILED' } }),
     ]);
+    const customerCountFor = (status: string) =>
+      customerStatusGroups.find((group) => group.status === status)?._count.status ?? 0;
+    const activeCustomers = customerCountFor('ACTIVE');
+    const suspendedCustomers = customerCountFor('SUSPENDED');
+    const inactiveCustomers = customerCountFor('INACTIVE');
+    const deletedCustomers = customerCountFor('DELETED');
+    const totalCustomers = activeCustomers + suspendedCustomers + inactiveCustomers + deletedCustomers;
     const paidValue = await prisma.order.aggregate({ where: { paymentStatus: 'PAID', status: { not: 'CANCELLED' } }, _sum: { grandTotal: true } });
     // Low stock needs available-vs-threshold comparison (not expressible in one
     // indexed where clause); bounded scan keeps it honest without fake metrics.
@@ -174,7 +185,17 @@ export async function adminRoutes(app: FastifyInstance) {
         commerce: { ordersToday, ordersWeek, paidOrders, unpaidOrders, cancelledOrders, paidOrderValue: Number(paidValue._sum.grandTotal ?? 0), currency: 'KES' },
         operations: { unfulfilledPaidOrders: unfulfilledPaid, failedDeliveries, pendingReturns, pendingRefunds, failedPayments },
         inventory: { activeProducts, activeVariants, lowStockVariants: lowStockCount, outOfStockVariants: outOfStock, activeReservations },
-        customers: { registeredCustomers: customers, guestOrders },
+        customers: {
+          totalCustomers,
+          activeCustomers,
+          suspendedCustomers,
+          inactiveCustomers,
+          deletedCustomers,
+          // Legacy alias: previously ACTIVE-only despite the name. Now equals
+          // the all-status total so existing consumers keep working.
+          registeredCustomers: totalCustomers,
+          guestOrders,
+        },
         needsAttention: {
           pendingPayments: unpaidOrders,
           unfulfilledPaidOrders: unfulfilledPaid,
