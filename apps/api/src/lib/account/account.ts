@@ -715,7 +715,7 @@ async function readLifecycleStanding(tx: LifecycleTransaction, userId: string) {
  * write, leaving user, grants, and sessions untouched. Ordinary accounts take
  * the pre-existing unwatched path unchanged.
  */
-async function assertSuperAdminHandover(tx: LifecycleTransaction, userId: string): Promise<void> {
+export async function assertSuperAdminHandover(tx: LifecycleTransaction, userId: string): Promise<void> {
   const { usableSuperAdmin } = await readLifecycleStanding(tx, userId);
   if (!usableSuperAdmin) return;
   const remaining = await tx.user.count({

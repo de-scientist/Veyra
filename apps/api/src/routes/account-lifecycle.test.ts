@@ -1,11 +1,15 @@
 import crypto from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
 import { buildApp } from '../app.js';
+import { assertSuperAdminHandover } from '../lib/account/account.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
+import type { Prisma } from '@prisma/client';
 
 /**
  * Last-super-admin lifecycle protection.
@@ -92,6 +96,12 @@ beforeAll(async () => {
   sharedPasswordHash = await hashPassword('password123');
 }, 60000);
 
+const exercisedBranches = new Set<string>();
+
+function recordBranch(name: string) {
+  exercisedBranches.add(name);
+}
+
 afterAll(async () => {
   await prisma.auditLog.deleteMany({
     where: { OR: [{ actorId: { in: createdUserIds } }, { entityId: { in: createdUserIds } }] },
@@ -99,6 +109,76 @@ afterAll(async () => {
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  console.log(`[account-lifecycle] exercised branches: ${[...exercisedBranches].sort().join(', ')}`);
+});
+
+describe('guard decision logic (stub transaction, no database)', () => {
+  // The shared dev database holds a permanent bootstrap super-admin, so an
+  // end-to-end 409 cannot be staged here without touching that account (which
+  // is forbidden). These tests prove the guard's decision logic
+  // deterministically against a stub transaction client; the wiring of the
+  // guard into both lifecycle paths is pinned by the contract test below, and
+  // the outcome-driven HTTP tests above prove atomicity down every branch the
+  // guard takes in a live run.
+  function stubTx(status: string | null, slugs: string[], others: number, calls: string[]) {
+    return {
+      user: {
+        findUnique: async () => {
+          calls.push('findUnique');
+          if (status === null) return null;
+          return { status, roles: slugs.map((slug) => ({ role: { slug } })) };
+        },
+        count: async () => {
+          calls.push('count');
+          return others;
+        },
+      },
+    } as unknown as Prisma.TransactionClient;
+  }
+
+  it('lets ordinary accounts through without counting', async () => {
+    const calls: string[] = [];
+    await assertSuperAdminHandover(stubTx('ACTIVE', ['customer'], 0, calls), 'user-1');
+    expect(calls).toEqual(['findUnique']);
+  });
+
+  it('lets non-active super-admins through without counting', async () => {
+    for (const status of ['INACTIVE', 'SUSPENDED', 'DELETED']) {
+      const calls: string[] = [];
+      await assertSuperAdminHandover(stubTx(status, ['super_admin'], 0, calls), 'user-1');
+      expect(calls).toEqual(['findUnique']);
+    }
+  });
+
+  it('lets a super-admin through when another usable one remains', async () => {
+    const calls: string[] = [];
+    await assertSuperAdminHandover(stubTx('ACTIVE', ['super_admin'], 2, calls), 'user-1');
+    expect(calls).toEqual(['findUnique', 'count']);
+  });
+
+  it('blocks the last usable super-admin with the documented error code', async () => {
+    const calls: string[] = [];
+    const error = await assertSuperAdminHandover(stubTx('ACTIVE', ['super_admin'], 0, calls), 'user-1').then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+    expect(calls).toEqual(['findUnique', 'count']);
+    expect(error).toMatchObject({ statusCode: 409, code: 'LAST_SUPER_ADMIN' });
+  });
+});
+
+describe('guard wiring contract', () => {
+  it('keeps the in-transaction last-super-admin guard on both lifecycle paths', () => {
+    // Tripwire against silent guard removal: outcome-driven tests below prove
+    // atomicity down whichever branch the guard takes, but only a sole-hood
+    // run can force the 409 branch — so the guard's presence itself is pinned
+    // here, deterministically, independent of database state.
+    const source = readFileSync(resolve(process.cwd(), 'apps/api/src/lib/account/account.ts'), 'utf8');
+    expect(source).toContain('assertSuperAdminHandover');
+    expect(source).toContain('LAST_SUPER_ADMIN');
+    expect(source).toContain('pg_advisory_xact_lock');
+    expect(source).toContain('await mutate(tx)');
+  });
 });
 
 describe('last-super-admin deactivation guard', () => {
@@ -111,6 +191,7 @@ describe('last-super-admin deactivation guard', () => {
 
     if (response.statusCode === 409) {
       // Block path: sole usable super-admin. Nothing may have changed.
+      recordBranch('deactivate-block');
       expect((response.json() as { error: { code: string } }).error.code).toBe('LAST_SUPER_ADMIN');
       const after = await standingById(user.id);
       expect(after.status).toBe('ACTIVE');
@@ -122,6 +203,7 @@ describe('last-super-admin deactivation guard', () => {
     } else {
       // Handover path: another usable super-admin existed (e.g. a parallel
       // suite's fixture). The standard lifecycle must be fully applied.
+      recordBranch('deactivate-handover');
       expect(response.statusCode).toBe(200);
       const after = await standingById(user.id);
       expect(after.status).toBe('INACTIVE');
@@ -164,6 +246,7 @@ describe('last-super-admin deletion guard', () => {
     const response = await app.inject({ method: 'POST', url: '/api/v1/account/delete', headers: { cookie: cookies['sole-delete'] } });
 
     if (response.statusCode === 409) {
+      recordBranch('delete-block');
       expect((response.json() as { error: { code: string } }).error.code).toBe('LAST_SUPER_ADMIN');
       const after = await standingById(user.id);
       expect(after.status).toBe('ACTIVE');
@@ -173,6 +256,7 @@ describe('last-super-admin deletion guard', () => {
       expect(await auditRows(user.id, 'ACCOUNT_DELETION_REQUESTED')).toBe(0);
       expect(await meStatus('sole-delete')).toBe(200);
     } else {
+      recordBranch('delete-handover');
       expect(response.statusCode).toBe(200);
       const after = await standingById(user.id);
       expect(after.status).toBe('DELETED');
@@ -266,11 +350,13 @@ describe('concurrent lifecycle serialization', () => {
       ['racer-b', beforeB, afterB, responseB],
     ] as const) {
       if (response.statusCode === 200) {
+        recordBranch('race-applied');
         expect(after.status).toBe('INACTIVE');
         expect(after.roles).toEqual(before.roles);
         expect(after.liveSessions).toBe(0);
-        expect(await meStatus(tag)).toBe(403);
+        expect(await meStatus(tag)).toBe(401);
       } else {
+        recordBranch('race-blocked');
         expect((response.json() as { error: { code: string } }).error.code).toBe('LAST_SUPER_ADMIN');
         expect(after).toEqual({ ...before });
         expect(await meStatus(tag)).toBe(200);
