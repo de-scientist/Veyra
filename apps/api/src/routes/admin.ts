@@ -578,15 +578,13 @@ export async function adminRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const payload = z.object({ permission: z.string().trim().min(1).max(120) }).parse(request.body);
     const permissionSlug = payload.permission.toLowerCase();
-    const [role, permission] = await Promise.all([
-      prisma.role.findUnique({ where: { id } }),
-      prisma.permission.findUnique({ where: { slug: permissionSlug } }),
-    ]);
+    const role = await prisma.role.findUnique({ where: { id } });
     if (!role) throw new HttpError(404, 'ROLE_NOT_FOUND', 'Role not found.');
-    if (!permission) throw new HttpError(404, 'PERMISSION_NOT_FOUND', 'Permission not found.');
     if (isSuperAdminSlug(role.slug)) {
       throw new HttpError(403, 'ROLE_PROTECTED', 'The super-administrator grant set is fixed by the platform.');
     }
+    const permission = await prisma.permission.findUnique({ where: { slug: permissionSlug } });
+    if (!permission) throw new HttpError(404, 'PERMISSION_NOT_FOUND', 'Permission not found.');
     try {
       await prisma.rolePermission.create({ data: { roleId: id, permissionId: permission.id } });
     } catch (error) {
@@ -600,15 +598,13 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.delete('/admin/roles/:roleId/permissions/:permissionSlug', { preHandler: requireSuperAdmin }, async (request) => {
     const { roleId, permissionSlug } = request.params as { roleId: string; permissionSlug: string };
-    const [role, permission] = await Promise.all([
-      prisma.role.findUnique({ where: { id: roleId } }),
-      prisma.permission.findUnique({ where: { slug: permissionSlug.toLowerCase() } }),
-    ]);
+    const role = await prisma.role.findUnique({ where: { id: roleId } });
     if (!role) throw new HttpError(404, 'ROLE_NOT_FOUND', 'Role not found.');
-    if (!permission) throw new HttpError(404, 'PERMISSION_NOT_FOUND', 'Permission not found.');
     if (isSuperAdminSlug(role.slug)) {
       throw new HttpError(403, 'ROLE_PROTECTED', 'The super-administrator grant set is fixed by the platform.');
     }
+    const permission = await prisma.permission.findUnique({ where: { slug: permissionSlug.toLowerCase() } });
+    if (!permission) throw new HttpError(404, 'PERMISSION_NOT_FOUND', 'Permission not found.');
     const removed = await prisma.rolePermission.deleteMany({ where: { roleId, permissionId: permission.id } });
     if (removed.count === 0) throw new HttpError(404, 'PERMISSION_NOT_GRANTED', 'This role does not have the permission.');
     return { success: true, data: { role: role.slug, permission: permission.slug, revoked: true } };

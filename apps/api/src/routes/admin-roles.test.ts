@@ -118,9 +118,9 @@ describe('role-definition and grant endpoints', () => {
   });
 
   it('denies customer, staff, and admin without mutating anything', async () => {
-    const before = await authCounts();
     const role = await ensureRole(`${stamp}-immutable`);
     createdRoleIds.push(role.id);
+    const before = await authCounts();
     for (const email of [emails.customer, emails.staff, emails.admin]) {
       const attempts = [
         app.inject({ method: 'GET', url: '/api/v1/admin/permissions', headers: { cookie: cookies[email] } }),
@@ -353,8 +353,9 @@ describe('escalation resistance and permission resolution', () => {
     const granted = await getUserPermissionSlugs(multi.id);
     expect(granted).toContain(`${stamp}-union-read`);
     expect(granted).toContain(`${stamp}-union-write`);
-    const superUser = await prisma.user.findUniqueOrThrow({ where: { email: emails.superB } });
-    expect(await getUserPermissionSlugs(superUser.id)).toEqual(['*']);
+    // Dedicated holder: earlier tests revoke the shared super-admin fixtures.
+    const wildcard = await createUser(`${stamp}-wildcard@example.com`, ['super_admin']);
+    expect(await getUserPermissionSlugs(wildcard.id)).toEqual(['*']);
     await prisma.rolePermission.deleteMany({ where: { permissionId: { in: [read.id, write.id] } } });
   }, 60000);
 
