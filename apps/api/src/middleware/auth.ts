@@ -94,14 +94,22 @@ export async function requireAuth(request: FastifyRequest, _reply: FastifyReply)
   Object.assign(request, { user: session.user, session });
 }
 
-export async function requireRole(request: FastifyRequest, role: string, reply: FastifyReply) {
-  await requireAuth(request, reply);
-  const user = getRequestUser(request);
-  assertUserActive(user);
+/**
+ * Role gate factory — mirrors `requirePermission(...)` below. (Previously this
+ * took `(request, role, reply)`, which is unusable as a Fastify `preHandler`
+ * and invited wiring the reply object in as the role. It was never wired to a
+ * route; the factory form is the only supported shape.)
+ */
+export function requireRole(role: string) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    await requireAuth(request, reply);
+    const user = getRequestUser(request);
+    assertUserActive(user);
 
-  if (!user || !roleSlugsOf(user.roles ?? []).includes(role.toLowerCase())) {
-    throw new HttpError(403, 'FORBIDDEN', 'You do not have permission to access this resource.');
-  }
+    if (!user || !roleSlugsOf(user.roles ?? []).includes(role.toLowerCase())) {
+      throw new HttpError(403, 'FORBIDDEN', 'You do not have permission to access this resource.');
+    }
+  };
 }
 
 function denyForbidden(message: string): never {

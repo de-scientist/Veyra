@@ -627,3 +627,43 @@ export type AdminRole = {
 export function getAdminRoles() {
   return request<{ roles: AdminRole[] }>('/admin/roles');
 }
+
+export type AdminPermission = {
+  id: string;
+  name: string;
+  slug: string;
+  resource: string;
+  action: string;
+  roles: string[];
+};
+
+/** Canonical system roles: platform invariants the API refuses to rename/delete. */
+export const SYSTEM_ROLE_SLUGS = ['super_admin', 'super-admin', 'admin', 'staff', 'customer'];
+
+export function isSystemRole(slug: string): boolean {
+  return SYSTEM_ROLE_SLUGS.includes(slug.toLowerCase());
+}
+
+export function getAdminPermissions() {
+  return request<{ permissions: AdminPermission[] }>('/admin/permissions');
+}
+
+export function createAdminRole(input: { name: string; slug: string }) {
+  return request<AdminRole>('/admin/roles', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateAdminRole(id: string, input: { name: string }) {
+  return request<AdminRole>(`/admin/roles/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function deleteAdminRole(id: string) {
+  return request<{ deleted: boolean }>(`/admin/roles/${id}`, { method: 'DELETE' });
+}
+
+export function grantRolePermission(roleId: string, permission: string) {
+  return request<{ granted: boolean }>(`/admin/roles/${roleId}/permissions`, { method: 'POST', body: JSON.stringify({ permission }) });
+}
+
+export function revokeRolePermission(roleId: string, permission: string) {
+  return request<{ revoked: boolean }>(`/admin/roles/${roleId}/permissions/${encodeURIComponent(permission)}`, { method: 'DELETE' });
+}

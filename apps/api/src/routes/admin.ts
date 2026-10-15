@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 
 import { HttpError } from '../lib/errors.js';
 import { cancelOrder } from '../lib/orders.js';
+import { isSuperAdminSlug } from '../lib/permissions.js';
 import { prisma } from '../lib/prisma.js';
 import { releaseStaleReservations } from '../lib/reservations.js';
 import {
@@ -323,8 +324,20 @@ export async function adminRoutes(app: FastifyInstance) {
     if (payload.status !== undefined) {
       await requireAdminAccess(request, reply);
     }
-    const existing = await prisma.user.findFirst({ where: { id, roles: { some: { role: { slug: 'customer' } } } } });
+    const existing = await prisma.user.findFirst({
+      where: { id, roles: { some: { role: { slug: 'customer' } } } },
+      include: { roles: { include: { role: true } } },
+    });
     if (!existing) throw new HttpError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found.');
+    // Privilege-boundary guard: an account holding super_admin retains full
+    // platform control, so only a super-admin may suspend or reinstate it —
+    // an admin must never affect a super-admin's availability.
+    if (payload.status !== undefined && existing.roles.some((entry) => isSuperAdminSlug(entry.role.slug))) {
+      const actorRoles = await prisma.userRole.findMany({ where: { userId: actorId(request) }, include: { role: true } });
+      if (!actorRoles.some((entry) => isSuperAdminSlug(entry.role.slug))) {
+        throw new HttpError(403, 'SUPER_ADMIN_PROTECTED', 'Only a super-administrator can change this account.');
+      }
+    }
     const customer = await prisma.user.update({ where: { id }, data: { firstName: payload.firstName?.trim(), lastName: payload.lastName?.trim(), phone: payload.phone, status: payload.status }, select: { id: true, email: true, firstName: true, lastName: true, phone: true, status: true } });
     await prisma.auditLog.create({ data: { actorId: actorId(request), action: 'CUSTOMER_UPDATED', entity: 'User', entityId: id, before: { status: existing.status } as Prisma.InputJsonValue, after: { status: customer.status } as Prisma.InputJsonValue, ...auditMeta(request) } });
     return { success: true, data: customer };
@@ -476,6 +489,126 @@ export async function adminRoutes(app: FastifyInstance) {
     };
   });
 
+  // ---- Role definitions and permission grants (super-admin only) ----
+  // Canonical system roles (super_admin, admin, staff, customer) are platform
+  // invariants: they can never be renamed or deleted, and the super_admin
+  // grant set is fixed by code (wildcard in lib/permissions.ts). Custom roles
+  // may be created, renamed, granted permissions, and deleted while empty.
+  // NOTE (audit gap F7): the AuditAction enum has no role/permission members,
+  // so definition changes cannot be audit-logged without an enum migration.
+  // User-role assignments below keep using USER_ROLE_CHANGED.
+  const CANONICAL_ROLE_SLUGS = ['super_admin', 'super-admin', 'admin', 'staff', 'customer'];
+  const ROLE_SLUG_PATTERN = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
+
+  function assertMutableRole(slug: string): void {
+    if (CANONICAL_ROLE_SLUGS.includes(slug.toLowerCase())) {
+      throw new HttpError(403, 'ROLE_PROTECTED', 'System roles cannot be renamed or deleted.');
+    }
+  }
+
+  app.get('/admin/permissions', { preHandler: requireSuperAdmin }, async () => {
+    const permissions = await prisma.permission.findMany({
+      include: { roles: { include: { role: true } } },
+      orderBy: { slug: 'asc' },
+    });
+    return {
+      success: true,
+      data: {
+        permissions: permissions.map((permission) => ({
+          id: permission.id,
+          name: permission.name,
+          slug: permission.slug,
+          resource: permission.resource,
+          action: permission.action,
+          roles: permission.roles.map((entry) => entry.role.slug),
+        })),
+      },
+    };
+  });
+
+  app.post('/admin/roles', { preHandler: requireSuperAdmin }, async (request) => {
+    const payload = z.object({
+      name: z.string().trim().min(2).max(80),
+      slug: z.string().trim().max(60),
+    }).parse(request.body);
+    const slug = payload.slug.toLowerCase();
+    if (!ROLE_SLUG_PATTERN.test(slug)) {
+      throw new HttpError(400, 'INVALID_ROLE_SLUG', 'Role slugs use lowercase letters, numbers, hyphens, and underscores.');
+    }
+    if (CANONICAL_ROLE_SLUGS.includes(slug)) {
+      throw new HttpError(409, 'ROLE_RESERVED', 'This slug is reserved for a system role.');
+    }
+    try {
+      const role = await prisma.role.create({ data: { name: payload.name, slug } });
+      return { success: true, data: { id: role.id, name: role.name, slug: role.slug, memberCount: 0, permissions: [] as string[] } };
+    } catch (error) {
+      conflict(error);
+    }
+  });
+
+  app.patch('/admin/roles/:id', { preHandler: requireSuperAdmin }, async (request) => {
+    const { id } = request.params as { id: string };
+    const payload = z.object({ name: z.string().trim().min(2).max(80) }).parse(request.body);
+    const role = await prisma.role.findUnique({ where: { id } });
+    if (!role) throw new HttpError(404, 'ROLE_NOT_FOUND', 'Role not found.');
+    assertMutableRole(role.slug);
+    const updated = await prisma.role.update({ where: { id }, data: { name: payload.name } });
+    return { success: true, data: { id: updated.id, name: updated.name, slug: updated.slug } };
+  });
+
+  app.delete('/admin/roles/:id', { preHandler: requireSuperAdmin }, async (request) => {
+    const { id } = request.params as { id: string };
+    const role = await prisma.role.findUnique({ where: { id }, include: { _count: { select: { users: true } } } });
+    if (!role) throw new HttpError(404, 'ROLE_NOT_FOUND', 'Role not found.');
+    assertMutableRole(role.slug);
+    if (role._count.users > 0) {
+      throw new HttpError(409, 'ROLE_NOT_EMPTY', 'Reassign every member before deleting this role.');
+    }
+    await prisma.rolePermission.deleteMany({ where: { roleId: id } });
+    await prisma.role.delete({ where: { id } });
+    return { success: true, data: { deleted: true } };
+  });
+
+  app.post('/admin/roles/:id/permissions', { preHandler: requireSuperAdmin }, async (request) => {
+    const { id } = request.params as { id: string };
+    const payload = z.object({ permission: z.string().trim().min(1).max(120) }).parse(request.body);
+    const permissionSlug = payload.permission.toLowerCase();
+    const [role, permission] = await Promise.all([
+      prisma.role.findUnique({ where: { id } }),
+      prisma.permission.findUnique({ where: { slug: permissionSlug } }),
+    ]);
+    if (!role) throw new HttpError(404, 'ROLE_NOT_FOUND', 'Role not found.');
+    if (!permission) throw new HttpError(404, 'PERMISSION_NOT_FOUND', 'Permission not found.');
+    if (isSuperAdminSlug(role.slug)) {
+      throw new HttpError(403, 'ROLE_PROTECTED', 'The super-administrator grant set is fixed by the platform.');
+    }
+    try {
+      await prisma.rolePermission.create({ data: { roleId: id, permissionId: permission.id } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new HttpError(409, 'PERMISSION_ALREADY_GRANTED', 'This role already has the permission.');
+      }
+      throw error;
+    }
+    return { success: true, data: { role: role.slug, permission: permission.slug, granted: true } };
+  });
+
+  app.delete('/admin/roles/:roleId/permissions/:permissionSlug', { preHandler: requireSuperAdmin }, async (request) => {
+    const { roleId, permissionSlug } = request.params as { roleId: string; permissionSlug: string };
+    const [role, permission] = await Promise.all([
+      prisma.role.findUnique({ where: { id: roleId } }),
+      prisma.permission.findUnique({ where: { slug: permissionSlug.toLowerCase() } }),
+    ]);
+    if (!role) throw new HttpError(404, 'ROLE_NOT_FOUND', 'Role not found.');
+    if (!permission) throw new HttpError(404, 'PERMISSION_NOT_FOUND', 'Permission not found.');
+    if (isSuperAdminSlug(role.slug)) {
+      throw new HttpError(403, 'ROLE_PROTECTED', 'The super-administrator grant set is fixed by the platform.');
+    }
+    const removed = await prisma.rolePermission.deleteMany({ where: { roleId, permissionId: permission.id } });
+    if (removed.count === 0) throw new HttpError(404, 'PERMISSION_NOT_GRANTED', 'This role does not have the permission.');
+    return { success: true, data: { role: role.slug, permission: permission.slug, revoked: true } };
+  });
+
   app.post('/admin/users/:id/roles', { preHandler: requireSuperAdmin }, async (request) => {
     const { id } = request.params as { id: string };
     const payload = z.object({ role: z.string().trim().min(1).max(60), action: z.enum(['assign', 'revoke']) }).parse(request.body);
@@ -495,8 +628,24 @@ export async function adminRoutes(app: FastifyInstance) {
     const alreadyHas = target.roles.some((entry) => entry.role.slug.toLowerCase() === roleSlug);
 
     // Self-lockout guard: a super-admin cannot strip their own super-admin role.
-    if (actor === id && payload.action === 'revoke' && (roleSlug === 'super_admin' || roleSlug === 'super-admin')) {
+    if (actor === id && payload.action === 'revoke' && isSuperAdminSlug(roleSlug)) {
       throw new HttpError(403, 'SELF_LOCKOUT_DENIED', 'You cannot remove your own super-administrator role.');
+    }
+
+    // Last-super-admin guard: revoking the final ACTIVE super-admin (even
+    // someone else's) would leave the system unmanageable. Only ACTIVE holders
+    // count — suspended/inactive/deleted accounts cannot use the APIs anyway.
+    if (payload.action === 'revoke' && isSuperAdminSlug(roleSlug) && target.status === 'ACTIVE') {
+      const remainingSuperAdmins = await prisma.user.count({
+        where: {
+          id: { not: id },
+          status: 'ACTIVE',
+          roles: { some: { role: { slug: { in: ['super_admin', 'super-admin'] } } } },
+        },
+      });
+      if (remainingSuperAdmins === 0) {
+        throw new HttpError(409, 'LAST_SUPER_ADMIN', 'This is the last active super-administrator. Promote another account first.');
+      }
     }
 
     if (payload.action === 'assign') {
