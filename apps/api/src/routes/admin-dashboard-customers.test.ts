@@ -140,6 +140,12 @@ describe('admin dashboard customer statistics', () => {
     expect(mineCount('SUSPENDED')).toBe(1);
     expect(mineCount('INACTIVE')).toBe(1);
     expect(mineCount('DELETED')).toBe(1);
+    // Exact stamp-scoped total: 6 customer-role users out of 9 fixtures —
+    // the admin/staff/super_admin-only accounts are excluded, and the
+    // multi-role account counts once.
+    expect(
+      await prisma.user.count({ where: { email: { contains: stamp }, roles: { some: { role: { slug: 'customer' } } } } }),
+    ).toBe(6);
     // Inclusion: the endpoint's population is a superset of this suite's
     // fixtures. Cross-suite deletions only ever remove other suites' own rows,
     // so these lower bounds cannot flake.

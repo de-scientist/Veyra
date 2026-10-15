@@ -69,15 +69,6 @@ async function createUser(email: string, roleSlugs: string[], status: 'ACTIVE' |
   return user;
 }
 
-async function authCounts() {
-  const [roles, grants, assignments] = await Promise.all([
-    prisma.role.count(),
-    prisma.rolePermission.count(),
-    prisma.userRole.count(),
-  ]);
-  return { roles, grants, assignments };
-}
-
 beforeAll(async () => {
   app = await buildApp();
   // Probe route for the requireRole factory (F4): staff-only read.
@@ -120,7 +111,21 @@ describe('role-definition and grant endpoints', () => {
   it('denies customer, staff, and admin without mutating anything', async () => {
     const role = await ensureRole(`${stamp}-immutable`);
     createdRoleIds.push(role.id);
-    const before = await authCounts();
+    // Stamp-scoped snapshot: global counts move under parallel suites, so the
+    // no-mutation proof covers only rows this suite owns.
+    const snapshot = async () => ({
+      assignments: await prisma.userRole.findMany({
+        where: { userId: { in: createdUserIds } },
+        select: { userId: true, roleId: true },
+        orderBy: [{ userId: 'asc' }, { roleId: 'asc' }],
+      }),
+      grants: await prisma.rolePermission.findMany({
+        where: { roleId: role.id },
+        select: { roleId: true, permissionId: true },
+      }),
+      stampRoles: await prisma.role.count({ where: { slug: { contains: stamp } } }),
+    });
+    const before = await snapshot();
     for (const email of [emails.customer, emails.staff, emails.admin]) {
       const attempts = [
         app.inject({ method: 'GET', url: '/api/v1/admin/permissions', headers: { cookie: cookies[email] } }),
@@ -134,7 +139,7 @@ describe('role-definition and grant endpoints', () => {
         expect((await attempt).statusCode).toBe(403);
       }
     }
-    expect(await authCounts()).toEqual(before);
+    expect(await snapshot()).toEqual(before);
   });
 
   it('super-admin runs the full custom-role lifecycle', async () => {
