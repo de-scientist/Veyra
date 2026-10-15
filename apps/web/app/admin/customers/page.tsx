@@ -15,6 +15,15 @@ export default function AdminCustomersPage() {
   const [error, setError] = useState<string | null>(null);
   const [params, setParams] = useState({ page: 1, pageSize: 20, search: '', status: '' });
 
+  // Dashboard cards deep-link here with ?status=ACTIVE|SUSPENDED|INACTIVE|DELETED.
+  // Read client-side on mount (no useSearchParams → no Suspense boundary needed).
+  useEffect(() => {
+    const initial = new URLSearchParams(window.location.search).get('status') ?? '';
+    if ((STATUSES as string[]).includes(initial) && initial !== '') {
+      setParams((prev) => ({ ...prev, status: initial }));
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
