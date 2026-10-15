@@ -85,7 +85,11 @@ export default function AdminDashboardPage() {
       <section className="account-section" aria-label="Customers">
         <h2>Customers</h2>
         <div className="account-summary-grid">
-          <AdminStatCard label="Registered Customers" value={data.customers.registeredCustomers} href="/admin/customers" />
+          <AdminStatCard label="Total Customers" value={data.customers.totalCustomers} href="/admin/customers" />
+          <AdminStatCard label="Active Customers" value={data.customers.activeCustomers} href="/admin/customers?status=ACTIVE" />
+          <AdminStatCard label="Suspended Customers" value={data.customers.suspendedCustomers} href="/admin/customers?status=SUSPENDED" />
+          <AdminStatCard label="Inactive Customers" value={data.customers.inactiveCustomers} href="/admin/customers?status=INACTIVE" />
+          <AdminStatCard label="Deleted Customers" value={data.customers.deletedCustomers} href="/admin/customers?status=DELETED" />
           <AdminStatCard label="Guest Orders" value={data.customers.guestOrders} href="/admin/orders" />
         </div>
       </section>

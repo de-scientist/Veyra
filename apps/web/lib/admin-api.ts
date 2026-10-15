@@ -81,7 +81,7 @@ export type AdminDashboard = {
   commerce: { ordersToday: number; ordersWeek: number; paidOrders: number; unpaidOrders: number; cancelledOrders: number; paidOrderValue: number; currency: string };
   operations: { unfulfilledPaidOrders: number; failedDeliveries: number; pendingReturns: number; pendingRefunds: number; failedPayments: number };
   inventory: { activeProducts: number; activeVariants: number; lowStockVariants: number; outOfStockVariants: number; activeReservations: number };
-  customers: { registeredCustomers: number; guestOrders: number };
+  customers: { totalCustomers: number; activeCustomers: number; suspendedCustomers: number; inactiveCustomers: number; deletedCustomers: number; registeredCustomers: number; guestOrders: number };
   needsAttention: { pendingPayments: number; unfulfilledPaidOrders: number; failedDeliveries: number; returnsAwaitingReview: number; refundsAwaitingAction: number; lowStockVariants: number };
 };
 
