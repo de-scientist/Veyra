@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { authorizeUpload } from '../lib/media/service.js';
-import { requireAuth, requireOperationsAccess } from '../middleware/auth.js';
+import { requireAuth, requireOperationsAccess, requirePermission } from '../middleware/auth.js';
 import { sensitiveLimit } from '../lib/rateLimits.js';
 
 /**
@@ -37,6 +37,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       // claims. Profile context stays with requireAuth (self-scoped in the
       // service from the session user ID).
       await requireOperationsAccess(request, reply);
+      await requirePermission('products.manage')(request, reply);
     }
 
     const authorization = authorizeUpload(request, {

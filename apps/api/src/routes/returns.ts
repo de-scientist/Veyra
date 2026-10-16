@@ -40,46 +40,49 @@ export async function returnRoutes(app: FastifyInstance) {
     return { success: true, data: await ownedReturnDetail(returnId, currentUser(request)) };
   });
 
-  app.get('/admin/returns', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/returns', { preHandler: [requireOperationsAccess, requirePermission('orders.manage')] }, async (request) => {
     const value = (request.query as { status?: string }).status;
     const status = value ? z.nativeEnum(ReturnStatus).parse(value) : undefined;
     return { success: true, data: await returnQueue(status) };
   });
 
-  app.get('/admin/returns/:returnId', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/returns/:returnId', { preHandler: [requireOperationsAccess, requirePermission('orders.manage')] }, async (request) => {
     const { returnId } = request.params as { returnId: string };
     return { success: true, data: await returnDetail(returnId) };
   });
 
-  app.post('/admin/returns/:returnId/review', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/returns/:returnId/review', { preHandler: [requireOperationsAccess, requirePermission('orders.manage')] }, async (request) => {
     const { returnId } = request.params as { returnId: string };
     return { success: true, data: await reviewReturn(returnId, currentUser(request)) };
   });
 
-  app.post('/admin/returns/:returnId/approve', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/returns/:returnId/approve', { preHandler: [requireOperationsAccess, requirePermission('orders.manage')] }, async (request) => {
     const { returnId } = request.params as { returnId: string };
     const payload = noteSchema.parse(request.body ?? {});
     return { success: true, data: await approveReturn(returnId, currentUser(request), payload.note) };
   });
 
-  app.post('/admin/returns/:returnId/reject', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/returns/:returnId/reject', { preHandler: [requireOperationsAccess, requirePermission('orders.manage')] }, async (request) => {
     const { returnId } = request.params as { returnId: string };
     const payload = z.object({ reason: z.string().trim().min(2).max(500) }).parse(request.body);
     return { success: true, data: await rejectReturn(returnId, currentUser(request), payload.reason) };
   });
 
-  app.post('/admin/returns/:returnId/receive', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/returns/:returnId/receive', { preHandler: [requireOperationsAccess, requirePermission('orders.manage')] }, async (request) => {
     const { returnId } = request.params as { returnId: string };
     const payload = noteSchema.parse(request.body ?? {});
     return { success: true, data: await receiveReturn(returnId, currentUser(request), payload.note) };
   });
 
-  app.post('/admin/returns/:returnId/inspect', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/returns/:returnId/inspect', { preHandler: [requireOperationsAccess, requirePermission('orders.manage', 'inventory.manage')] }, async (request) => {
     const { returnId } = request.params as { returnId: string };
     return { success: true, data: await inspectReturn(returnId, currentUser(request), inspectSchema.parse(request.body).items) };
   });
 
-  app.post('/admin/returns/:returnId/refund', { preHandler: requireOperationsAccess, ...sensitiveLimit() }, async (request) => {
+  // Refund initiation creates a PENDING financial obligation (no money moves;
+  // execution is attested separately via refunds.process). Distinct capability
+  // from completion: financial role gate + initiation grant, admin-only.
+  app.post('/admin/returns/:returnId/refund', { preHandler: [requireFinancialAccess, requirePermission('refunds.request')], ...sensitiveLimit() }, async (request) => {
     const { returnId } = request.params as { returnId: string };
     const payload = refundSchema.parse(request.body);
     return { success: true, data: await requestRefund(returnId, currentUser(request), payload.idempotencyKey) };

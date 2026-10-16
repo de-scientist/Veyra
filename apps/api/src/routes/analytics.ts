@@ -6,6 +6,7 @@ import { HttpError } from '../lib/errors.js';
 import { authLimit } from '../lib/rateLimits.js';
 import { prisma } from '../lib/prisma.js';
 import { requireOperationsAccess } from '../middleware/operations.js';
+import { requirePermission } from '../middleware/auth.js';
 import { customerMetrics, customerSegments, topCustomers } from '../lib/analytics/customers.js';
 import { METRIC_DEFINITIONS } from '../lib/analytics/definitions.js';
 import { deliveryFailures, deliveryMethodSplit, fulfillmentDurations, fulfillmentStatus } from '../lib/analytics/fulfillment.js';
@@ -42,7 +43,7 @@ function resolvePeriod(query: z.infer<typeof rangeSchema>) {
 }
 
 export async function analyticsRoutes(app: FastifyInstance) {
-  app.get('/admin/analytics/overview', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/overview', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     const [sales, payments, returns, refunds, inventory, quality] = await Promise.all([
@@ -68,7 +69,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get('/admin/analytics/sales', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/sales', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     const [summary, series, byCategory, byPaymentMethod] = await Promise.all([
@@ -80,7 +81,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
     return { success: true, data: { period: { from: period.start, to: period.end, timezone: 'Africa/Nairobi' }, summary, series, byCategory, byPaymentMethod } };
   });
 
-  app.get('/admin/analytics/products', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/products', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     const [top, variants, returned] = await Promise.all([
@@ -91,7 +92,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
     return { success: true, data: { period: { from: period.start, to: period.end, timezone: 'Africa/Nairobi' }, topProducts: top, topVariants: variants, mostReturned: returned } };
   });
 
-  app.get('/admin/analytics/categories', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/categories', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     // Parent totals cover only directly-categorised products; descendants are
@@ -100,7 +101,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
     return { success: true, data: { period: { from: period.start, to: period.end, timezone: 'Africa/Nairobi' }, note: 'Parent category totals exclude descendant categories to avoid double-counting.', byCategory } };
   });
 
-  app.get('/admin/analytics/customers', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/customers', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     const [metrics, segments, top] = await Promise.all([
@@ -111,7 +112,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
     return { success: true, data: { period: { from: period.start, to: period.end, timezone: 'Africa/Nairobi' }, metrics, segments, topCustomers: top } };
   });
 
-  app.get('/admin/analytics/inventory', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/inventory', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     const [snapshot, lowStock, movements, velocity] = await Promise.all([
@@ -123,28 +124,28 @@ export async function analyticsRoutes(app: FastifyInstance) {
     return { success: true, data: { period: { from: period.start, to: period.end, timezone: 'Africa/Nairobi' }, snapshot, lowStock, movements, velocity } };
   });
 
-  app.get('/admin/analytics/payments', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/payments', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     const [metrics, mpesa] = await Promise.all([paymentMetrics(period), mpesaMetrics(period)]);
     return { success: true, data: { period: { from: period.start, to: period.end, timezone: 'Africa/Nairobi' }, metrics, mpesa } };
   });
 
-  app.get('/admin/analytics/fulfillment', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/fulfillment', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     const [status, durations] = await Promise.all([fulfillmentStatus(period), fulfillmentDurations(period)]);
     return { success: true, data: { period: { from: period.start, to: period.end, timezone: 'Africa/Nairobi' }, status, durations } };
   });
 
-  app.get('/admin/analytics/delivery', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/delivery', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     const [methods, failures] = await Promise.all([deliveryMethodSplit(period), deliveryFailures(period)]);
     return { success: true, data: { period: { from: period.start, to: period.end, timezone: 'Africa/Nairobi' }, methods, failures } };
   });
 
-  app.get('/admin/analytics/returns', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/analytics/returns', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async (request) => {
     const query = rangeSchema.parse(request.query);
     const period = resolvePeriod(query);
     const [metrics, reasons, processing, exchanges, refunds] = await Promise.all([
@@ -157,15 +158,15 @@ export async function analyticsRoutes(app: FastifyInstance) {
     return { success: true, data: { period: { from: period.start, to: period.end, timezone: 'Africa/Nairobi' }, metrics, reasons, processing, exchanges, refunds } };
   });
 
-  app.get('/admin/analytics/quality', { preHandler: requireOperationsAccess }, async () => {
+  app.get('/admin/analytics/quality', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async () => {
     return { success: true, data: { issues: await dataQuality() } };
   });
 
-  app.get('/admin/analytics/definitions', { preHandler: requireOperationsAccess }, async () => {
+  app.get('/admin/analytics/definitions', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')] }, async () => {
     return { success: true, data: { timezone: 'Africa/Nairobi', metrics: METRIC_DEFINITIONS } };
   });
 
-  app.get('/admin/analytics/export/:report', { preHandler: requireOperationsAccess, ...authLimit() }, async (request, reply) => {
+  app.get('/admin/analytics/export/:report', { preHandler: [requireOperationsAccess, requirePermission('analytics.read')], ...authLimit() }, async (request, reply) => {
     const { report } = request.params as { report: string };
     if (!(REPORT_KEYS as string[]).includes(report)) throw new HttpError(404, 'REPORT_NOT_FOUND', 'Unknown report.');
     const query = rangeSchema.extend({ format: z.enum(['csv']).default('csv'), exportLimit: z.coerce.number().int().min(1).max(5000).optional() }).parse(request.query);

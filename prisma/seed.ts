@@ -46,6 +46,7 @@ async function main() {
   // Additive-only: reruns upsert missing rows and never delete custom grants.
   const allPermissions = [
     { name: 'View Dashboard', slug: 'dashboard.read', resource: 'dashboard', action: 'read' },
+    { name: 'View Products', slug: 'products.read', resource: 'products', action: 'read' },
     { name: 'Manage Products', slug: 'products.manage', resource: 'products', action: 'manage' },
     { name: 'Manage Inventory', slug: 'inventory.manage', resource: 'inventory', action: 'manage' },
     { name: 'Manage Categories', slug: 'categories.manage', resource: 'categories', action: 'manage' },
@@ -54,6 +55,7 @@ async function main() {
     { name: 'View Fulfillment', slug: 'fulfillment.view', resource: 'fulfillment', action: 'read' },
     { name: 'Process Fulfillment', slug: 'fulfillment.process', resource: 'fulfillment', action: 'manage' },
     { name: 'Manage Delivery', slug: 'delivery.manage', resource: 'delivery', action: 'manage' },
+    { name: 'Request Refunds', slug: 'refunds.request', resource: 'refunds', action: 'request' },
     { name: 'Process Refunds', slug: 'refunds.process', resource: 'refunds', action: 'manage' },
     { name: 'View Customers', slug: 'customers.read', resource: 'customers', action: 'read' },
     { name: 'Manage Customers', slug: 'customers.manage', resource: 'customers', action: 'manage' },
@@ -64,6 +66,10 @@ async function main() {
     { name: 'Manage Notifications', slug: 'notifications.manage', resource: 'notifications', action: 'manage' },
     { name: 'View Analytics', slug: 'analytics.read', resource: 'analytics', action: 'read' },
     { name: 'Manage Settings', slug: 'settings.manage', resource: 'settings', action: 'manage' },
+    { name: 'Manage Coupons', slug: 'coupons.manage', resource: 'coupons', action: 'manage' },
+    { name: 'Moderate Reviews', slug: 'reviews.moderate', resource: 'reviews', action: 'moderate' },
+    { name: 'View Payments', slug: 'payments.read', resource: 'payments', action: 'read' },
+    { name: 'Manage Payments', slug: 'payments.manage', resource: 'payments', action: 'manage' },
   ];
 
   // Least-privilege default grants (managed defaults for fresh installs).
@@ -72,6 +78,7 @@ async function main() {
   // settings (settings.manage) — those stay super-admin-only by route guard.
   const adminPermissionSlugs = [
     'dashboard.read',
+    'products.read',
     'products.manage',
     'inventory.manage',
     'categories.manage',
@@ -80,6 +87,7 @@ async function main() {
     'fulfillment.view',
     'fulfillment.process',
     'delivery.manage',
+    'refunds.request',
     'refunds.process',
     'customers.read',
     'customers.manage',
@@ -87,18 +95,25 @@ async function main() {
     'notifications.read',
     'notifications.manage',
     'analytics.read',
+    'coupons.manage',
+    'reviews.moderate',
+    'payments.read',
+    'payments.manage',
   ];
 
-  // Staff: strictly inventory, orders and fulfillment (+ read-only dashboard).
+  // Staff: inventory, orders and fulfillment (+ read-only dashboard, product
+  // catalogue reads and customer-directory reads for order-support lookup).
   // No catalogue/taxonomy management, no refunds, no customer administration,
   // no analytics/media/settings, no role administration.
   const staffPermissionSlugs = [
     'dashboard.read',
+    'products.read',
     'inventory.manage',
     'orders.manage',
     'fulfillment.view',
     'fulfillment.process',
     'delivery.manage',
+    'customers.read',
   ];
 
   for (const permission of allPermissions) {

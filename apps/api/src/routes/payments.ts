@@ -6,7 +6,7 @@ import { sensitiveLimit } from '../lib/rateLimits.js';
 import { HttpError } from '../lib/errors.js';
 import { getPaymentStatus, handleMpesaCallback, initiateMpesaPayment, queryPaymentTransaction } from '../lib/payments/service.js';
 import { MANUAL_CHANNELS, listManualPending, rejectManualPayment, submitManualPayment, verifyManualPayment } from '../lib/payments/manual.js';
-import { requireFinancialAccess } from '../middleware/auth.js';
+import { requireFinancialAccess, requirePermission } from '../middleware/auth.js';
 
 function headerValue(request: FastifyRequest, name: string) {
   const value = request.headers[name];
@@ -59,11 +59,11 @@ export async function paymentRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get('/admin/payments/manual-pending', { preHandler: requireFinancialAccess }, async () => {
+  app.get('/admin/payments/manual-pending', { preHandler: [requireFinancialAccess, requirePermission('payments.read')] }, async () => {
     return { success: true, data: await listManualPending() };
   });
 
-  app.post('/admin/payments/:paymentId/verify', { preHandler: requireFinancialAccess }, async (request) => {
+  app.post('/admin/payments/:paymentId/verify', { preHandler: [requireFinancialAccess, requirePermission('payments.manage')] }, async (request) => {
     const { paymentId } = request.params as { paymentId: string };
     const { note } = z.object({ note: z.string().max(500).optional() }).parse(request.body ?? {});
     const actorId = (request as FastifyRequest & { user?: { id: string } }).user?.id;
@@ -71,7 +71,7 @@ export async function paymentRoutes(app: FastifyInstance) {
     return { success: true, data: await verifyManualPayment(paymentId, actorId, note) };
   });
 
-  app.post('/admin/payments/:paymentId/reject', { preHandler: requireFinancialAccess }, async (request) => {
+  app.post('/admin/payments/:paymentId/reject', { preHandler: [requireFinancialAccess, requirePermission('payments.manage')] }, async (request) => {
     const { paymentId } = request.params as { paymentId: string };
     const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(request.body);
     const actorId = (request as FastifyRequest & { user?: { id: string } }).user?.id;

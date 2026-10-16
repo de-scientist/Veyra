@@ -134,7 +134,7 @@ function serializeAdminOrder(order: Prisma.OrderGetPayload<{ include: typeof ord
 
 export async function adminRoutes(app: FastifyInstance) {
   // ---- Operations dashboard ----
-  app.get('/admin/dashboard', { preHandler: requireOperationsAccess }, async () => {
+  app.get('/admin/dashboard', { preHandler: [requireOperationsAccess, requirePermission('dashboard.read')] }, async () => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(todayStart);
@@ -259,7 +259,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // ---- Payment visibility (read-only; mutations stay in Phase 7/9 services) ----
-  app.get('/admin/payments', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/payments', { preHandler: [requireOperationsAccess, requirePermission('payments.read')] }, async (request) => {
     const query = paginationSchema.extend({
       status: z.enum(['UNPAID', 'PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED']).optional(),
     }).parse(request.query);
@@ -280,7 +280,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // ---- Customer directory (data-minimized; no secrets) ----
-  app.get('/admin/customers', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/customers', { preHandler: [requireOperationsAccess, requirePermission('customers.read')] }, async (request) => {
     const query = paginationSchema.extend({
       status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'DELETED']).optional(),
     }).parse(request.query);
@@ -300,7 +300,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return { success: true, data: { customers: customers.map((c) => ({ ...c, orderCount: c._count.orders })), pagination: paginate(query.page, query.pageSize, total) } };
   });
 
-  app.get('/admin/customers/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/customers/:id', { preHandler: [requireOperationsAccess, requirePermission('customers.read')] }, async (request) => {
     const { id } = request.params as { id: string };
     // Scoped to the customer directory (same role filter as the list endpoint):
     // staff/admin lookups of non-customer user IDs return 404, never PII.
@@ -317,7 +317,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return { success: true, data: { ...customer, orders: customer.orders.map((o) => ({ ...o, grandTotal: Number(o.grandTotal) })) } };
   });
 
-  app.patch('/admin/customers/:id', { preHandler: requireOperationsAccess }, async (request, reply) => {
+  app.patch('/admin/customers/:id', { preHandler: [requireOperationsAccess, requirePermission('customers.manage')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const payload = z.object({ firstName: z.string().min(1).max(120).optional(), lastName: z.string().min(1).max(120).optional(), phone: z.string().max(32).nullable().optional(), status: z.enum(['ACTIVE', 'SUSPENDED']).optional() }).parse(request.body);
     // Suspend/reinstate is user-lifecycle management: administrators only.
@@ -350,7 +350,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // ---- Audit log viewer ----
-  app.get('/admin/audit-logs', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/audit-logs', { preHandler: [requireOperationsAccess, requirePermission('audit.read')] }, async (request) => {
     const query = paginationSchema.extend({
       action: z.string().max(60).optional(),
       entity: z.string().max(60).optional(),
@@ -369,7 +369,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // ---- Review moderation (existing Review model) ----
-  app.get('/admin/reviews', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/reviews', { preHandler: [requireOperationsAccess, requirePermission('reviews.moderate')] }, async (request) => {
     const query = paginationSchema.extend({ status: z.string().max(20).optional() }).parse(request.query);
     const where: Prisma.ReviewWhereInput = {};
     if (query.status) where.status = query.status;
@@ -381,7 +381,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return { success: true, data: { reviews, pagination: paginate(query.page, query.pageSize, total) } };
   });
 
-  app.post('/admin/reviews/:id/moderate', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/reviews/:id/moderate', { preHandler: [requireOperationsAccess, requirePermission('reviews.moderate')] }, async (request) => {
     const { id } = request.params as { id: string };
     const payload = z.object({ status: z.enum(['APPROVED', 'REJECTED', 'PENDING']), reason: z.string().max(300).optional() }).parse(request.body);
     const existing = await prisma.review.findUnique({ where: { id } });
@@ -392,7 +392,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // ---- Coupon administration (existing Coupon model; no new promotion engine) ----
-  app.get('/admin/coupons', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/coupons', { preHandler: [requireOperationsAccess, requirePermission('coupons.manage')] }, async (request) => {
     const query = paginationSchema.extend({ status: z.string().max(20).optional() }).parse(request.query);
     const where: Prisma.CouponWhereInput = {};
     if (query.status) where.status = query.status;
@@ -404,7 +404,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return { success: true, data: { coupons: coupons.map((c) => ({ ...c, value: Number(c.value), usageCount: c._count.usages })), pagination: paginate(query.page, query.pageSize, total) } };
   });
 
-  app.post('/admin/coupons', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/coupons', { preHandler: [requireOperationsAccess, requirePermission('coupons.manage')] }, async (request) => {
     const payload = z.object({
       code: z.string().min(3).max(40),
       discountType: z.string().min(3).max(20).default('PERCENTAGE'),
@@ -425,7 +425,7 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch('/admin/coupons/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/coupons/:id', { preHandler: [requireOperationsAccess, requirePermission('coupons.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const payload = z.object({ status: z.string().min(3).max(20).optional(), maxUses: z.number().int().positive().nullable().optional(), validUntil: z.string().datetime().nullable().optional() }).parse(request.body);
     const existing = await prisma.coupon.findUnique({ where: { id } });
@@ -674,7 +674,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // ---- Stale reservation sweep (explicit admin trigger; no background worker) ----
   // Audited as INVENTORY_ADJUSTED (the closed AuditAction enum has no sweep
   // member; entity + payload distinguish automated sweeps from manual edits).
-  app.post('/admin/inventory/reservations/release-stale', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/inventory/reservations/release-stale', { preHandler: [requireOperationsAccess, requirePermission('inventory.manage')] }, async (request) => {
     const released = await releaseStaleReservations(prisma);
     await prisma.auditLog.create({
       data: {

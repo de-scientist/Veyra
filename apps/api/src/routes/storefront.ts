@@ -13,7 +13,7 @@ import {
   suggestCatalog,
   type DiscoveryParams,
 } from '../lib/storefront.js';
-import { requireOperationsAccess } from '../middleware/auth.js';
+import { requireOperationsAccess, requirePermission } from '../middleware/auth.js';
 
 const KNOWN_DISCOVERY_KEYS = new Set(['q', 'category', 'collection', 'sort', 'page', 'pageSize', 'maxPrice', 'inStock']);
 
@@ -84,7 +84,7 @@ export async function storefrontRoutes(app: FastifyInstance) {
 
   // Admin product detail for the editor (operations). The public detail
   // route above is ACTIVE-only, so editors use this for DRAFT/ARCHIVED work.
-  app.get('/admin/products/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/products/:id', { preHandler: [requireOperationsAccess, requirePermission('products.read')] }, async (request) => {
     const { id } = request.params as { id: string };
     const product = await prisma.product.findUnique({
       where: { id },

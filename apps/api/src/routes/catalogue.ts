@@ -277,7 +277,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
 
   // ---- Admin product management (operations staff only) ----
 
-  app.get('/admin/products', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/products', { preHandler: [requireOperationsAccess, requirePermission('products.read')] }, async (request) => {
     const query = paginationSchema.extend({
       status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional(),
       categoryId: z.string().optional(),
@@ -299,7 +299,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: { products, pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) } } };
   });
 
-  app.post('/admin/products', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/products', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const payload = productSchema.parse(request.body);
     const safeSlug = payload.slug ? generateSlug(payload.slug) : generateSlug(payload.name);
     // Creating directly ACTIVE is a publish transition: no variants or media
@@ -335,7 +335,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch('/admin/products/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/products/:id', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const payload = productUpdateSchema.parse(request.body);
     const existing = await prisma.product.findUnique({ where: { id } });
@@ -436,7 +436,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     expectedUpdatedAt: z.string().datetime().optional(),
   });
 
-  app.patch('/admin/products/:id/draft', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/products/:id/draft', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const payload = productDraftUpdateSchema.parse(request.body);
     const existing = await prisma.product.findUnique({ where: { id } });
@@ -467,7 +467,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/admin/products/:productId/variants', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/products/:productId/variants', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId } = request.params as { productId: string };
     const payload = variantSchema.parse(request.body);
 
@@ -623,7 +623,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/admin/products/:productId/variants/generate', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/products/:productId/variants/generate', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId } = request.params as { productId: string };
     const payload = generateVariantsSchema.parse(request.body);
     // Bulk domain operation: one request generates N variants atomically
@@ -636,7 +636,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: result };
   });
 
-  app.patch('/admin/products/:productId/variants/:variantId', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/products/:productId/variants/:variantId', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId, variantId } = request.params as { productId: string; variantId: string };
     const payload = variantUpdateSchema.parse(request.body);
     const existing = await prisma.productVariant.findFirst({ where: { id: variantId, productId } });
@@ -699,7 +699,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: variant };
   });
 
-  app.patch('/admin/products/:productId/variants', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/products/:productId/variants', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId } = request.params as { productId: string };
     const payload = variantBatchSchema.parse(request.body);
     const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -769,13 +769,13 @@ export async function catalogueRoutes(app: FastifyInstance) {
   // operational key on the same ProductVariant. Generation is
   // server-authoritative; the database unique constraint wins races.
 
-  app.post('/admin/products/:productId/variants/:variantId/barcode/generate', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/products/:productId/variants/:variantId/barcode/generate', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId, variantId } = request.params as { productId: string; variantId: string };
     const result = await generateVariantBarcode(productId, variantId, actorId(request));
     return { success: true, data: result };
   });
 
-  app.post('/admin/products/:productId/variants/:variantId/barcode/assign', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/products/:productId/variants/:variantId/barcode/assign', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId, variantId } = request.params as { productId: string; variantId: string };
     const payload = barcodeAssignSchema.parse(request.body);
     const result = await assignVariantBarcode(productId, variantId, payload.barcode, payload.source, actorId(request), {
@@ -786,7 +786,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: result };
   });
 
-  app.post('/admin/products/:productId/variants/barcodes/generate-missing', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/products/:productId/variants/barcodes/generate-missing', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId } = request.params as { productId: string };
     const payload = z.object({ limit: z.number().int().min(1).max(100).default(100) }).parse(request.body ?? {});
     // Bulk generation never overwrites: only barcode-less variants qualify.
@@ -967,12 +967,12 @@ export async function catalogueRoutes(app: FastifyInstance) {
 
   // ---- Categories / collections / attributes (operations staff only) ----
 
-  app.get('/admin/categories', { preHandler: requireOperationsAccess }, async () => {
+  app.get('/admin/categories', { preHandler: [requireOperationsAccess, requirePermission('products.read')] }, async () => {
     const categories = await prisma.category.findMany({ include: { _count: { select: { products: true } } }, orderBy: { name: 'asc' } });
     return { success: true, data: categories };
   });
 
-  app.post('/admin/categories', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/categories', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const payload = categorySchema.parse(request.body);
     if (payload.parentId) {
       const parent = await prisma.category.findUnique({ where: { id: payload.parentId } });
@@ -1004,7 +1004,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch('/admin/categories/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/categories/:id', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const payload = categorySchema.partial().parse(request.body);
     const existing = await prisma.category.findUnique({ where: { id } });
@@ -1043,12 +1043,12 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/admin/collections', { preHandler: requireOperationsAccess }, async () => {
+  app.get('/admin/collections', { preHandler: [requireOperationsAccess, requirePermission('products.read')] }, async () => {
     const collections = await prisma.collection.findMany({ include: { _count: { select: { products: true } } }, orderBy: { name: 'asc' } });
     return { success: true, data: collections };
   });
 
-  app.post('/admin/collections', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/collections', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const payload = collectionSchema.parse(request.body);
     try {
       const collection = await prisma.collection.create({
@@ -1061,7 +1061,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch('/admin/collections/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/collections/:id', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const payload = collectionSchema.partial().parse(request.body);
     const existing = await prisma.collection.findUnique({ where: { id } });
@@ -1075,12 +1075,12 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/admin/attributes', { preHandler: requireOperationsAccess }, async () => {
+  app.get('/admin/attributes', { preHandler: [requireOperationsAccess, requirePermission('products.read')] }, async () => {
     const attributes = await prisma.attribute.findMany({ include: { values: { orderBy: { value: 'asc' } } }, orderBy: { name: 'asc' } });
     return { success: true, data: attributes };
   });
 
-  app.post('/admin/attributes', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/attributes', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const payload = attributeSchema.parse(request.body);
     try {
       const attribute = await prisma.attribute.create({ data: { name: payload.name.trim(), slug: generateSlug(payload.name), type: payload.type.trim().toUpperCase() } });
@@ -1091,7 +1091,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/admin/attributes/:id/values', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/attributes/:id/values', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const payload = attributeValueSchema.parse(request.body);
     const attribute = await prisma.attribute.findUnique({ where: { id } });
@@ -1111,7 +1111,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch('/admin/attributes/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/attributes/:id', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const payload = z.object({ name: z.string().min(2).max(120).optional(), type: z.string().min(2).max(40).optional() }).parse(request.body);
     const existing = await prisma.attribute.findUnique({ where: { id } });
@@ -1126,7 +1126,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: attribute };
   });
 
-  app.delete('/admin/attributes/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.delete('/admin/attributes/:id', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const existing = await prisma.attribute.findUnique({ where: { id }, include: { _count: { select: { values: true } } } });
     if (!existing) throw new HttpError(404, 'ATTRIBUTE_NOT_FOUND', 'Attribute not found.');
@@ -1139,7 +1139,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: { deleted: true } };
   });
 
-  app.delete('/admin/attributes/values/:valueId', { preHandler: requireOperationsAccess }, async (request) => {
+  app.delete('/admin/attributes/values/:valueId', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { valueId } = request.params as { valueId: string };
     const existing = await prisma.attributeValue.findUnique({ where: { id: valueId } });
     if (!existing) throw new HttpError(404, 'ATTRIBUTE_VALUE_NOT_FOUND', 'Attribute value not found.');
@@ -1152,7 +1152,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: { deleted: true } };
   });
 
-  app.delete('/admin/categories/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.delete('/admin/categories/:id', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const existing = await prisma.category.findUnique({
       where: { id },
@@ -1172,7 +1172,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: category };
   });
 
-  app.delete('/admin/collections/:id', { preHandler: requireOperationsAccess }, async (request) => {
+  app.delete('/admin/collections/:id', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { id } = request.params as { id: string };
     const existing = await prisma.collection.findUnique({ where: { id } });
     if (!existing || existing.deletedAt) throw new HttpError(404, 'COLLECTION_NOT_FOUND', 'Collection not found.');
@@ -1204,14 +1204,14 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return rows.map((row) => row.collection);
   }
 
-  app.get('/admin/products/:productId/collections', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/products/:productId/collections', { preHandler: [requireOperationsAccess, requirePermission('products.read')] }, async (request) => {
     const { productId } = request.params as { productId: string };
     const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });
     if (!product) throw new HttpError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
     return { success: true, data: { collections: await productCollectionsOf(productId) } };
   });
 
-  app.put('/admin/products/:productId/collections', { preHandler: requireOperationsAccess }, async (request) => {
+  app.put('/admin/products/:productId/collections', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId } = request.params as { productId: string };
     const payload = productCollectionsSchema.parse(request.body);
     const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });

@@ -26,6 +26,7 @@ export const FINANCIAL_ROLE_SLUGS = ['admin', 'super_admin', 'super-admin'] as c
  */
 export const PERMISSIONS = {
   DASHBOARD_READ: 'dashboard.read',
+  PRODUCTS_READ: 'products.read',
   PRODUCTS_MANAGE: 'products.manage',
   INVENTORY_MANAGE: 'inventory.manage',
   CATEGORIES_MANAGE: 'categories.manage',
@@ -34,6 +35,7 @@ export const PERMISSIONS = {
   FULFILLMENT_READ: 'fulfillment.view',
   FULFILLMENT_PROCESS: 'fulfillment.process',
   DELIVERY_MANAGE: 'delivery.manage',
+  REFUNDS_REQUEST: 'refunds.request',
   REFUNDS_PROCESS: 'refunds.process',
   CUSTOMERS_READ: 'customers.read',
   CUSTOMERS_MANAGE: 'customers.manage',
@@ -44,6 +46,10 @@ export const PERMISSIONS = {
   AUDIT_READ: 'audit.read',
   ANALYTICS_READ: 'analytics.read',
   SETTINGS_MANAGE: 'settings.manage',
+  COUPONS_MANAGE: 'coupons.manage',
+  REVIEWS_MODERATE: 'reviews.moderate',
+  PAYMENTS_READ: 'payments.read',
+  PAYMENTS_MANAGE: 'payments.manage',
 } as const;
 
 export type RoleEntry = { role?: { slug?: string | null } | null };

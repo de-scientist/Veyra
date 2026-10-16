@@ -13,7 +13,7 @@ import {
   updateProductImageMeta,
 } from '../lib/media/products.js';
 import { prisma } from '../lib/prisma.js';
-import { requireOperationsAccess } from '../middleware/auth.js';
+import { requireOperationsAccess, requirePermission } from '../middleware/auth.js';
 
 type AuthedRequest = FastifyRequest & { user?: { id: string } };
 
@@ -66,12 +66,12 @@ const replaceImageSchema = providerResultSchema.extend({
  * authorize anything (IDOR/BOLA).
  */
 export async function productMediaRoutes(app: FastifyInstance) {
-  app.get('/admin/products/:productId/images', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/products/:productId/images', { preHandler: [requireOperationsAccess, requirePermission('products.read')] }, async (request) => {
     const { productId } = request.params as { productId: string };
     return { success: true, data: await listProductImages(productId) };
   });
 
-  app.post('/admin/products/:productId/images', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/products/:productId/images', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId } = request.params as { productId: string };
     const payload = createImageSchema.parse(request.body);
     const image = await createProductImage({
@@ -86,7 +86,7 @@ export async function productMediaRoutes(app: FastifyInstance) {
   });
 
   // Static reorder path must win over `:imageId` — registered before it.
-  app.patch('/admin/products/:productId/images/reorder', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/products/:productId/images/reorder', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId } = request.params as { productId: string };
     const payload = reorderSchema.parse(request.body);
     const images = await reorderProductImages({ productId, imageIds: payload.imageIds });
@@ -94,7 +94,7 @@ export async function productMediaRoutes(app: FastifyInstance) {
     return { success: true, data: images };
   });
 
-  app.patch('/admin/products/:productId/images/:imageId', { preHandler: requireOperationsAccess }, async (request) => {
+  app.patch('/admin/products/:productId/images/:imageId', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId, imageId } = request.params as { productId: string; imageId: string };
     const payload = updateMetaSchema.parse(request.body);
     const image = await updateProductImageMeta({ productId, imageId, altText: payload.altText });
@@ -102,14 +102,14 @@ export async function productMediaRoutes(app: FastifyInstance) {
     return { success: true, data: image };
   });
 
-  app.post('/admin/products/:productId/images/:imageId/primary', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/products/:productId/images/:imageId/primary', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId, imageId } = request.params as { productId: string; imageId: string };
     const images = await setPrimaryProductImage({ productId, imageId });
     await audit('PRODUCT_PRIMARY_IMAGE_CHANGED', request, imageId, { productId });
     return { success: true, data: images };
   });
 
-  app.post('/admin/products/:productId/images/:imageId/replace', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/products/:productId/images/:imageId/replace', { preHandler: [requireOperationsAccess, requirePermission('products.manage')] }, async (request) => {
     const { productId, imageId } = request.params as { productId: string; imageId: string };
     const payload = replaceImageSchema.parse(request.body);
     const { image, providerCleanup } = await replaceProductImage({
@@ -124,7 +124,7 @@ export async function productMediaRoutes(app: FastifyInstance) {
 
   app.delete(
     '/admin/products/:productId/images/:imageId',
-    { preHandler: requireOperationsAccess },
+    { preHandler: [requireOperationsAccess, requirePermission('products.manage')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { productId, imageId } = request.params as { productId: string; imageId: string };
       const { images, providerCleanup } = await deleteProductImage({ productId, imageId });

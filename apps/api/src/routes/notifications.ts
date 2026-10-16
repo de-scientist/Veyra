@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { requireOperationsAccess } from '../middleware/operations.js';
 import { HttpError } from '../lib/errors.js';
 import { sensitiveLimit } from '../lib/rateLimits.js';
@@ -66,16 +66,16 @@ export async function notificationRoutes(app: FastifyInstance) {
     return { success: true, data: await notifications.updatePreference(userId(request), payload.category, payload.channel, payload.enabled) };
   });
 
-  app.get('/admin/notifications', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/notifications', { preHandler: [requireOperationsAccess, requirePermission('notifications.read')] }, async (request) => {
     const query = adminQueueSchema.parse(request.query);
     return { success: true, data: await notifications.adminQueue(query) };
   });
 
-  app.post('/admin/notifications/process', { preHandler: requireOperationsAccess, ...sensitiveLimit() }, async () => {
+  app.post('/admin/notifications/process', { preHandler: [requireOperationsAccess, requirePermission('notifications.manage')], ...sensitiveLimit() }, async () => {
     return { success: true, data: await drainOutbox() };
   });
 
-  app.post('/admin/notifications/:id/resend', { preHandler: requireOperationsAccess, ...sensitiveLimit() }, async (request) => {
+  app.post('/admin/notifications/:id/resend', { preHandler: [requireOperationsAccess, requirePermission('notifications.manage')], ...sensitiveLimit() }, async (request) => {
     const { id } = request.params as { id: string };
     const actor = userId(request);
     return { success: true, data: await retryDelivery(id, actor) };
