@@ -63,7 +63,7 @@ describe('production smoke journey', () => {
     // DB-permission grants for the enforced routes below (hermetic stamp role;
     // canonical roles are never mutated).
     const staffUser = await prisma.user.findUniqueOrThrow({ where: { email: createdIds.staffEmail } });
-    await grantTestPermissions(staffUser.id, `smoke-${stamp}`, ['orders.manage', 'inventory.manage']);
+    await grantTestPermissions(staffUser.id, `smoke-${stamp}`, ['orders.manage', 'inventory.manage', 'dashboard.read']);
   }, 60000);
 
   it('probes are green', async () => {
@@ -185,11 +185,13 @@ describe('production smoke journey', () => {
     expect([404, 409]).toContain(response.statusCode);
   });
 
-  it('staff operates dashboard, orders, and analytics; customers are fenced out', async () => {
-    for (const url of ['/api/v1/admin/dashboard', '/api/v1/admin/orders', '/api/v1/admin/inventory', '/api/v1/admin/analytics/overview']) {
+  it('staff operates dashboard, orders, and inventory; analytics is admin-only; customers are fenced out', async () => {
+    for (const url of ['/api/v1/admin/dashboard', '/api/v1/admin/orders', '/api/v1/admin/inventory']) {
       const response = await app.inject({ method: 'GET', url, headers: { cookie: staffCookie } });
       expect(response.statusCode).toBe(200);
     }
+    // analytics.read is not in the staff grant set.
+    expect((await app.inject({ method: 'GET', url: '/api/v1/admin/analytics/overview', headers: { cookie: staffCookie } })).statusCode).toBe(403);
     const orders = await app.inject({ method: 'GET', url: `/api/v1/admin/orders?search=${orderNumber}`, headers: { cookie: staffCookie } });
     expect((orders.json() as { data: { orders: Array<{ orderNumber: string }> } }).data.orders.some((o) => o.orderNumber === orderNumber)).toBe(true);
     const fenced = await app.inject({ method: 'GET', url: '/api/v1/admin/dashboard', headers: { cookie: customerCookie } });

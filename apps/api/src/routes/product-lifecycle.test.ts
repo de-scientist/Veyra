@@ -21,7 +21,7 @@ import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 let app: FastifyInstance;
 
 const stamp = `lc-${Date.now().toString(36)}`;
-const emails = { customer: `${stamp}-c@example.com`, staff: `${stamp}-s@example.com` };
+const emails = { customer: `${stamp}-c@example.com`, staff: `${stamp}-s@example.com`, admin: `${stamp}-a@example.com` };
 const cookies: Record<string, string> = {};
 const createdUserIds: string[] = [];
 const createdProductIds: string[] = [];
@@ -70,7 +70,11 @@ beforeAll(async () => {
   app = await buildApp();
   await createUser(emails.customer, 'customer');
   const staffUser = await createUser(emails.staff, 'staff');
-  await grantTestPermissions(staffUser.id, stamp, ['inventory.manage']);
+  await grantTestPermissions(staffUser.id, stamp, ['inventory.manage', 'products.read']);
+  // Catalogue writes are admin-only (products.manage); staff keeps reads and
+  // the inventory restock step.
+  const adminUser = await createUser(emails.admin, 'admin');
+  await grantTestPermissions(adminUser.id, `${stamp}-admin`, ['products.manage', 'products.read']);
   const category = await prisma.category.create({
     data: { name: `Lc Cat ${stamp}`, slug: `lc-cat-${stamp}`, status: 'ACTIVE', code: `LC${stamp.slice(-3).toUpperCase()}`, skuTemplate: '{CATEGORY}-{COLOR}' },
   });
@@ -105,6 +109,7 @@ afterAll(async () => {
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
   await cleanupTestGrantRole(stamp);
+  await cleanupTestGrantRole(`${stamp}-admin`);
 });
 
 describe('server-side publish readiness gate', () => {
@@ -114,7 +119,7 @@ describe('server-side publish readiness gate', () => {
   });
 
   it('rejects creating directly ACTIVE with structured issues', async () => {
-    const response = await call('POST', '/api/v1/admin/products', emails.staff, {
+    const response = await call('POST', '/api/v1/admin/products', emails.admin, {
       name: `Lc Direct ${stamp}`,
       description: 'A product that tries to skip the draft phase entirely.',
       status: 'ACTIVE',
@@ -128,7 +133,7 @@ describe('server-side publish readiness gate', () => {
   });
 
   it('rejects UI-bypass publish of an incomplete draft and changes nothing', async () => {
-    const created = await call('POST', '/api/v1/admin/products', emails.staff, {
+    const created = await call('POST', '/api/v1/admin/products', emails.admin, {
       name: `Lc Draft ${stamp}`,
       description: 'An intentionally incomplete draft for bypass testing.',
       status: 'DRAFT',
@@ -138,7 +143,7 @@ describe('server-side publish readiness gate', () => {
     draftSlug = (created.json() as { data: { id: string; slug: string } }).data.slug;
     createdProductIds.push(draftId);
 
-    const bypass = await call('PATCH', `/api/v1/admin/products/${draftId}`, emails.staff, { status: 'ACTIVE' });
+    const bypass = await call('PATCH', `/api/v1/admin/products/${draftId}`, emails.admin, { status: 'ACTIVE' });
     expect(bypass.statusCode).toBe(400);
     const body = bypass.json() as { error: { code: string; message: string; details: { issues: Array<{ field: string; code: string; message: string }> } } };
     expect(body.error.code).toBe('PRODUCT_NOT_READY_FOR_PUBLISH');
@@ -154,9 +159,9 @@ describe('server-side publish readiness gate', () => {
   });
 
   it('still allows archiving incomplete products', async () => {
-    const response = await call('PATCH', `/api/v1/admin/products/${draftId}`, emails.staff, { status: 'ARCHIVED' });
+    const response = await call('PATCH', `/api/v1/admin/products/${draftId}`, emails.admin, { status: 'ARCHIVED' });
     expect(response.statusCode).toBe(200);
-    await call('PATCH', `/api/v1/admin/products/${draftId}`, emails.staff, { status: 'DRAFT' });
+    await call('PATCH', `/api/v1/admin/products/${draftId}`, emails.admin, { status: 'DRAFT' });
   });
 });
 
@@ -166,7 +171,7 @@ describe('product collection assignment', () => {
 
   it('creates collections and starts unassigned', async () => {
     for (const tag of ['alpha', 'beta']) {
-      const response = await call('POST', '/api/v1/admin/collections', emails.staff, { name: `Lc ${tag} ${stamp}` });
+      const response = await call('POST', '/api/v1/admin/collections', emails.admin, { name: `Lc ${tag} ${stamp}` });
       expect(response.statusCode).toBe(200);
       const id = (response.json() as { data: { id: string } }).data.id;
       createdCollectionIds.push(id);
@@ -186,19 +191,19 @@ describe('product collection assignment', () => {
 
   it('rejects unknown products and collections', async () => {
     expect((await call('GET', '/api/v1/admin/products/00000000-0000-0000-0000-000000000000/collections', emails.staff)).statusCode).toBe(404);
-    expect((await call('PUT', `/api/v1/admin/products/${draftId}/collections`, emails.staff, { collectionIds: ['nope'] })).statusCode).toBe(404);
+    expect((await call('PUT', `/api/v1/admin/products/${draftId}/collections`, emails.admin, { collectionIds: ['nope'] })).statusCode).toBe(404);
   });
 
   it('assigns, replaces exactly, and clears', async () => {
-    const assigned = await call('PUT', `/api/v1/admin/products/${draftId}/collections`, emails.staff, { collectionIds: [collectionA, collectionB, collectionA] });
+    const assigned = await call('PUT', `/api/v1/admin/products/${draftId}/collections`, emails.admin, { collectionIds: [collectionA, collectionB, collectionA] });
     expect(assigned.statusCode).toBe(200);
     expect(((assigned.json() as { data: { collections: Array<{ id: string }> } }).data.collections).map((c) => c.id).sort()).toEqual([collectionA, collectionB].sort());
 
-    const replaced = await call('PUT', `/api/v1/admin/products/${draftId}/collections`, emails.staff, { collectionIds: [collectionB] });
+    const replaced = await call('PUT', `/api/v1/admin/products/${draftId}/collections`, emails.admin, { collectionIds: [collectionB] });
     expect(replaced.statusCode).toBe(200);
     expect((replaced.json() as { data: { collections: Array<{ id: string }> } }).data.collections.map((c) => c.id)).toEqual([collectionB]);
 
-    const cleared = await call('PUT', `/api/v1/admin/products/${draftId}/collections`, emails.staff, { collectionIds: [] });
+    const cleared = await call('PUT', `/api/v1/admin/products/${draftId}/collections`, emails.admin, { collectionIds: [] });
     expect(cleared.statusCode).toBe(200);
     expect((cleared.json() as { data: { collections: unknown[] } }).data.collections).toEqual([]);
   });
@@ -211,7 +216,7 @@ describe('server-backed draft persistence', () => {
   });
 
   it('saves draft fields without ever publishing', async () => {
-    const response = await call('PATCH', `/api/v1/admin/products/${draftId}/draft`, emails.staff, {
+    const response = await call('PATCH', `/api/v1/admin/products/${draftId}/draft`, emails.admin, {
       name: `Lc Draft Renamed ${stamp}`,
       description: 'An intentionally incomplete draft for bypass testing, renamed.',
       categoryId,
@@ -225,13 +230,13 @@ describe('server-backed draft persistence', () => {
   });
 
   it('validates draft input', async () => {
-    expect((await call('PATCH', `/api/v1/admin/products/${draftId}/draft`, emails.staff, { name: 'X' })).statusCode).toBe(400);
+    expect((await call('PATCH', `/api/v1/admin/products/${draftId}/draft`, emails.admin, { name: 'X' })).statusCode).toBe(400);
   });
 
   it('rejects stale autosaves with canonical state instead of overwriting', async () => {
     const fresh = await prisma.product.findUnique({ where: { id: draftId } });
     const staleStamp = new Date(new Date(fresh!.updatedAt).getTime() - 60000).toISOString();
-    const stale = await call('PATCH', `/api/v1/admin/products/${draftId}/draft`, emails.staff, {
+    const stale = await call('PATCH', `/api/v1/admin/products/${draftId}/draft`, emails.admin, {
       name: 'Stale overwrite attempt',
       expectedUpdatedAt: staleStamp,
     });
@@ -240,7 +245,7 @@ describe('server-backed draft persistence', () => {
     expect(body.error.code).toBe('DRAFT_CONFLICT');
     expect(body.error.details.product.name).toBe(`Lc Draft Renamed ${stamp}`);
 
-    const current = await call('PATCH', `/api/v1/admin/products/${draftId}/draft`, emails.staff, {
+    const current = await call('PATCH', `/api/v1/admin/products/${draftId}/draft`, emails.admin, {
       name: `Lc Draft Current ${stamp}`,
       expectedUpdatedAt: fresh!.updatedAt.toISOString(),
     });
@@ -251,7 +256,7 @@ describe('server-backed draft persistence', () => {
 
 describe('full lifecycle walkthrough to published storefront', () => {
   it('generates a variant, restocks inventory, and persists media with primary + order', async () => {
-    const generated = await call('POST', `/api/v1/admin/products/${draftId}/variants/generate`, emails.staff, {
+    const generated = await call('POST', `/api/v1/admin/products/${draftId}/variants/generate`, emails.admin, {
       attributes: { [colorAttrId]: [blackValueId] },
       price: 4999,
     });
@@ -263,19 +268,19 @@ describe('full lifecycle walkthrough to published storefront', () => {
     const restocked = await call('POST', `/api/v1/admin/inventory/${variant!.id}/restock`, emails.staff, { quantity: 10, reason: 'Lifecycle walkthrough stock' });
     expect(restocked.statusCode).toBe(200);
 
-    const first = await call('POST', `/api/v1/admin/products/${draftId}/images`, emails.staff, fakeImage('one'));
+    const first = await call('POST', `/api/v1/admin/products/${draftId}/images`, emails.admin, fakeImage('one'));
     expect(first.statusCode).toBe(200);
     const firstId = (first.json() as { data: { id: string; isPrimary: boolean } }).data.id;
     expect((first.json() as { data: { isPrimary: boolean } }).data.isPrimary).toBe(true);
-    const second = await call('POST', `/api/v1/admin/products/${draftId}/images`, emails.staff, fakeImage('two'));
+    const second = await call('POST', `/api/v1/admin/products/${draftId}/images`, emails.admin, fakeImage('two'));
     expect(second.statusCode).toBe(200);
     const secondId = (second.json() as { data: { id: string } }).data.id;
-    const reordered = await call('PATCH', `/api/v1/admin/products/${draftId}/images/reorder`, emails.staff, { imageIds: [secondId, firstId] });
+    const reordered = await call('PATCH', `/api/v1/admin/products/${draftId}/images/reorder`, emails.admin, { imageIds: [secondId, firstId] });
     expect(reordered.statusCode).toBe(200);
   });
 
   it('publishes the now-complete product and exposes it on the storefront', async () => {
-    const published = await call('PATCH', `/api/v1/admin/products/${draftId}`, emails.staff, { status: 'ACTIVE' });
+    const published = await call('PATCH', `/api/v1/admin/products/${draftId}`, emails.admin, { status: 'ACTIVE' });
     expect(published.statusCode).toBe(200);
     expect((published.json() as { data: { status: string } }).data.status).toBe('ACTIVE');
 

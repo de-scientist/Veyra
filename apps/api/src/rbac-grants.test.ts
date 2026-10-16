@@ -113,6 +113,42 @@ async function revokeGrant(roleSlug: string, permSlug: string) {
   await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permissionId: permission.id } });
 }
 
+/**
+ * Runs `fn` with the given canonical-role grants temporarily removed,
+ * restoring exactly the rows that existed (no-op on unseeded databases).
+ * The shared dev database carries the seeded grant matrix on the canonical
+ * roles; hermetic stamp grants are immune to this by design. Safe under
+ * parallel suites: no suite depends on canonical-role grants (all fixtures
+ * use stamp-scoped grant roles).
+ */
+async function withCanonicalGrantsRevoked(roleSlug: string, permSlugs: string[], fn: () => Promise<void>) {
+  const role = await prisma.role.findUnique({ where: { slug: roleSlug } });
+  const removed: string[] = [];
+  if (role) {
+    for (const permSlug of permSlugs) {
+      const permission = await prisma.permission.findUnique({ where: { slug: permSlug } });
+      if (permission) {
+        const count = await prisma.rolePermission.count({ where: { roleId: role.id, permissionId: permission.id } });
+        if (count > 0) {
+          await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permissionId: permission.id } });
+          removed.push(permission.id);
+        }
+      }
+    }
+  }
+  try {
+    await fn();
+  } finally {
+    for (const permissionId of removed) {
+      await prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId: role!.id, permissionId } },
+        update: {},
+        create: { roleId: role!.id, permissionId },
+      });
+    }
+  }
+}
+
 beforeAll(async () => {
   app = await buildApp();
   await ensureGrantRole(grantRoleSlug, ADMIN_OPS_GRANTS);
@@ -226,10 +262,19 @@ describe('representative route authorization', () => {
   });
 
   it('staff with no grants is denied even with the operations role slug', async () => {
-    for (const probe of probes) {
-      const response = await call(probe.method, probe.url, emails.staffBare, probe.payload as Record<string, unknown> | undefined);
-      expect(response.statusCode).toBe(403);
-    }
+    // The shared dev database may carry seeded operational grants on the
+    // canonical staff role: revoke them around these assertions so denial is
+    // about the missing grant, never ambient database state.
+    await withCanonicalGrantsRevoked(
+      'staff',
+      ['dashboard.read', 'inventory.manage', 'orders.manage', 'fulfillment.view', 'fulfillment.process', 'delivery.manage'],
+      async () => {
+        for (const probe of probes) {
+          const response = await call(probe.method, probe.url, emails.staffBare, probe.payload as Record<string, unknown> | undefined);
+          expect(response.statusCode).toBe(403);
+        }
+      },
+    );
   });
 
   it('staff with grants can read and write inventory', async () => {
@@ -276,14 +321,18 @@ describe('representative route authorization', () => {
 
   it('a read grant never authorizes a mutation', async () => {
     expect((await call('GET', '/api/v1/admin/fulfillments', emails.staffViewer)).statusCode).toBe(200);
-    expect((await call('POST', '/api/v1/admin/fulfillments/ORD-NOPE/start', emails.staffViewer, {})).statusCode).toBe(403);
+    await withCanonicalGrantsRevoked('staff', ['fulfillment.process'], async () => {
+      expect((await call('POST', '/api/v1/admin/fulfillments/ORD-NOPE/start', emails.staffViewer, {})).statusCode).toBe(403);
+    });
   });
 
   it('staff is denied refund completion; admin without the grant is denied too', async () => {
     const payload = { providerReference: 'RBAC-PROBE-123' };
     const url = '/api/v1/admin/refunds/00000000-0000-0000-0000-000000000000/process';
     expect((await call('POST', url, emails.staffOps, payload)).statusCode).toBe(403);
-    expect((await call('POST', url, emails.adminNoRefund, payload)).statusCode).toBe(403);
+    await withCanonicalGrantsRevoked('admin', ['refunds.process'], async () => {
+      expect((await call('POST', url, emails.adminNoRefund, payload)).statusCode).toBe(403);
+    });
     // Admin holding refunds.process passes the guard (404: no such refund row).
     expect((await call('POST', url, emails.adminOps, payload)).statusCode).toBe(404);
   });
@@ -314,16 +363,21 @@ describe('representative route authorization', () => {
   });
 
   it('revoking a database permission removes access immediately', async () => {
-    expect((await call('GET', '/api/v1/admin/inventory', emails.staffOps)).statusCode).toBe(200);
-    await revokeGrant(grantRoleSlug, 'inventory.manage');
-    try {
-      expect((await call('GET', '/api/v1/admin/inventory', emails.staffOps)).statusCode).toBe(403);
-      // Other grants on the same role keep working: revocation is grant-scoped.
-      expect((await call('GET', '/api/v1/admin/orders', emails.staffOps)).statusCode).toBe(200);
-    } finally {
-      await ensureGrantRole(grantRoleSlug, ADMIN_OPS_GRANTS);
-    }
-    expect((await call('GET', '/api/v1/admin/inventory', emails.staffOps)).statusCode).toBe(200);
+    // Canonical staff may carry a seeded inventory.manage grant in shared
+    // databases, which would backfill the stamp-role revocation: neutralize
+    // it for the duration (restored in finally by the helper).
+    await withCanonicalGrantsRevoked('staff', ['inventory.manage'], async () => {
+      expect((await call('GET', '/api/v1/admin/inventory', emails.staffOps)).statusCode).toBe(200);
+      await revokeGrant(grantRoleSlug, 'inventory.manage');
+      try {
+        expect((await call('GET', '/api/v1/admin/inventory', emails.staffOps)).statusCode).toBe(403);
+        // Other grants on the same role keep working: revocation is grant-scoped.
+        expect((await call('GET', '/api/v1/admin/orders', emails.staffOps)).statusCode).toBe(200);
+      } finally {
+        await ensureGrantRole(grantRoleSlug, ADMIN_OPS_GRANTS);
+      }
+      expect((await call('GET', '/api/v1/admin/inventory', emails.staffOps)).statusCode).toBe(200);
+    });
   });
 });
 

@@ -11,7 +11,7 @@ import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 let app: FastifyInstance;
 
 const stamp = `bc-${Date.now().toString(36)}`;
-const emails = { customer: `${stamp}-c@example.com`, staff: `${stamp}-s@example.com` };
+const emails = { customer: `${stamp}-c@example.com`, staff: `${stamp}-s@example.com`, admin: `${stamp}-a@example.com` };
 const cookies: Record<string, string> = {};
 const createdUserIds: string[] = [];
 const createdProductIds: string[] = [];
@@ -42,6 +42,10 @@ beforeAll(async () => {
   await createUser(emails.customer, 'customer');
   const staffUser = await createUser(emails.staff, 'staff');
   await grantTestPermissions(staffUser.id, stamp, ['inventory.manage']);
+  // Barcode writes are admin-only (products.manage); lookups stay
+  // staff-readable (inventory.manage).
+  const adminUser = await createUser(emails.admin, 'admin');
+  await grantTestPermissions(adminUser.id, `${stamp}-admin`, ['products.manage', 'products.read']);
   const product = await prisma.product.create({
     data: { name: `Barcode Widget ${stamp}`, slug: `barcode-widget-${stamp}`, description: 'Barcode fixture product.', status: 'ACTIVE', basePrice: 1000 },
   });
@@ -65,6 +69,7 @@ afterAll(async () => {
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
   await cleanupTestGrantRole(stamp);
+  await cleanupTestGrantRole(`${stamp}-admin`);
 });
 
 describe('barcode operations', () => {
@@ -75,7 +80,7 @@ describe('barcode operations', () => {
   });
 
   it('generates internal EAN-13 barcodes server-side (never GTIN)', async () => {
-    const response = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[0]}/barcode/generate`, emails.staff);
+    const response = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[0]}/barcode/generate`, emails.admin);
     expect(response.statusCode).toBe(200);
     const body = (response.json() as { data: { barcode: string; type: string } }).data;
     expect(body.type).toBe('EAN13');
@@ -83,13 +88,13 @@ describe('barcode operations', () => {
     expect((await prisma.productVariant.findUniqueOrThrow({ where: { id: variantIds[0] } })).barcode).toBe(body.barcode);
 
     // Never overwrites: second generation is refused, not replaced.
-    const again = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[0]}/barcode/generate`, emails.staff);
+    const again = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[0]}/barcode/generate`, emails.admin);
     expect(again.statusCode).toBe(409);
     expect((again.json() as { error: { code: string } }).error.code).toBe('BARCODE_ALREADY_ASSIGNED');
   });
 
   it('assigns manufacturer barcodes with strict validation', async () => {
-    const response = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[1]}/barcode/assign`, emails.staff, {
+    const response = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[1]}/barcode/assign`, emails.admin, {
       barcode: '5901234123457',
       source: 'MANUFACTURER',
     });
@@ -97,7 +102,7 @@ describe('barcode operations', () => {
     expect((response.json() as { data: { type: string; source: string } }).data).toMatchObject({ type: 'EAN13', source: 'MANUFACTURER' });
 
     // Invalid check digit rejected (never length-only).
-    const badCheck = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[2]}/barcode/assign`, emails.staff, {
+    const badCheck = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[2]}/barcode/assign`, emails.admin, {
       barcode: '5901234123450',
       type: 'EAN13',
       source: 'MANUFACTURER',
@@ -106,7 +111,7 @@ describe('barcode operations', () => {
     expect((badCheck.json() as { error: { code: string } }).error.code).toBe('INVALID_BARCODE_CHECK_DIGIT');
 
     // Duplicate across variants refused with the owning SKU named.
-    const duplicate = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[2]}/barcode/assign`, emails.staff, {
+    const duplicate = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[2]}/barcode/assign`, emails.admin, {
       barcode: '5901234123457',
       source: 'SUPPLIER',
     });
@@ -114,12 +119,12 @@ describe('barcode operations', () => {
     expect((duplicate.json() as { error: { code: string } }).error.code).toBe('BARCODE_ALREADY_EXISTS');
 
     // Silent overwrite refused; explicit replacement with reason succeeds and audits.
-    const silent = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[1]}/barcode/assign`, emails.staff, {
+    const silent = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[1]}/barcode/assign`, emails.admin, {
       barcode: '036000291452',
       source: 'MANUAL',
     });
     expect((silent.json() as { error: { code: string } }).error.code).toBe('BARCODE_ALREADY_ASSIGNED');
-    const replaced = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[1]}/barcode/assign`, emails.staff, {
+    const replaced = await call('POST', `/api/v1/admin/products/${productId}/variants/${variantIds[1]}/barcode/assign`, emails.admin, {
       barcode: '036000291452',
       source: 'MANUAL',
       replace: true,
@@ -147,7 +152,7 @@ describe('barcode operations', () => {
 
   it('bulk-generates only missing barcodes and preserves existing ones', async () => {
     const before = (await prisma.productVariant.findUniqueOrThrow({ where: { id: variantIds[0] } })).barcode;
-    const response = await call('POST', `/api/v1/admin/products/${productId}/variants/barcodes/generate-missing`, emails.staff, { limit: 100 });
+    const response = await call('POST', `/api/v1/admin/products/${productId}/variants/barcodes/generate-missing`, emails.admin, { limit: 100 });
     expect(response.statusCode).toBe(200);
     const body = (response.json() as { data: { generated: Array<{ variantId: string }>; skipped: number; errors: unknown[] } }).data;
     // variantIds[2] was never assigned (duplicate attempt failed before persist).

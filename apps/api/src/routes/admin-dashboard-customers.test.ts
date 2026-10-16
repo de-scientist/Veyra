@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../app.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 /**
  * Customer-statistics correction regression:
@@ -95,12 +96,14 @@ beforeAll(async () => {
   sharedPasswordHash = await hashPassword('password123');
   const operator = await createUser(emails.staff, 'ACTIVE', ['staff']);
   staffCookie = await createSessionCookie(operator.id);
+  await grantTestPermissions(operator.id, stamp, ['dashboard.read']);
 }, 60000);
 
 afterAll(async () => {
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  await cleanupTestGrantRole(stamp);
 });
 
 describe('admin dashboard customer statistics', () => {

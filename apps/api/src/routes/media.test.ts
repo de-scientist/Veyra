@@ -8,6 +8,7 @@ import { hashPassword, hashToken } from '../lib/auth.js';
 import { env } from '../lib/env.js';
 import { getMediaConfig, setMediaConfigForTests } from '../lib/media/cloudinary.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 let app: FastifyInstance;
 
@@ -70,7 +71,10 @@ beforeAll(async () => {
   await createUser(emails.customerA, 'customer');
   await createUser(emails.customerB, 'customer');
   await createUser(emails.staff, 'staff');
-  await createUser(emails.admin, 'admin');
+  const adminUser = await createUser(emails.admin, 'admin');
+  // Product-context signing requires products.manage (admin-only); profile
+  // contexts stay self-scoped for any authenticated user.
+  await grantTestPermissions(adminUser.id, stamp, ['products.manage', 'products.read']);
 }, 60000);
 
 afterAll(async () => {
@@ -78,6 +82,7 @@ afterAll(async () => {
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  await cleanupTestGrantRole(stamp);
 });
 
 describe('media upload authorization', () => {
@@ -114,13 +119,13 @@ describe('media upload authorization', () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it('authorizes product uploads for operations roles', async () => {
-    for (const email of [emails.staff, emails.admin]) {
-      const response = await signUpload(email, { context: 'product' });
-      expect(response.statusCode).toBe(200);
-      const data = (response.json() as { data: { folder: string } }).data;
-      expect(data.folder).toBe('jb-mercantile/products');
-    }
+  it('authorizes product uploads for admins; staff without products.manage is denied', async () => {
+    const denied = await signUpload(emails.staff, { context: 'product' });
+    expect(denied.statusCode).toBe(403);
+    const response = await signUpload(emails.admin, { context: 'product' });
+    expect(response.statusCode).toBe(200);
+    const data = (response.json() as { data: { folder: string } }).data;
+    expect(data.folder).toBe('jb-mercantile/products');
   });
 
   it('rejects unknown contexts', async () => {
@@ -149,8 +154,8 @@ describe('media upload authorization', () => {
     });
     expect(forged.statusCode).toBe(403);
 
-    // Staff attempt with overrides still yields server-controlled values.
-    const staff = await signUpload(emails.staff, {
+    // Admin attempt with overrides still yields server-controlled values.
+    const staff = await signUpload(emails.admin, {
       context: 'product',
       folder: 'arbitrary-folder',
       publicId: 'another-asset',

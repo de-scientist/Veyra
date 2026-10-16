@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../app.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 let app: FastifyInstance;
 
@@ -29,6 +30,7 @@ async function createUser(email: string, roleSlug: string) {
     data: { userId: user.id, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 3600000) },
   });
   cookies[email] = `veyra_session=${rawToken}`;
+  return user;
 }
 
 async function call(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, email: string | null, payload?: Record<string, unknown>) {
@@ -95,7 +97,10 @@ async function buildFixture(options: {
 beforeAll(async () => {
   app = await buildApp();
   await createUser(emails.customer, 'customer');
-  await createUser(emails.staff, 'staff');
+  // Variant generation writes are admin-only (products.manage); the suite
+  // operator is an admin with explicit stamp-scoped grants.
+  const operator = await createUser(emails.staff, 'admin');
+  await grantTestPermissions(operator.id, stamp, ['products.manage', 'products.read']);
 }, 60000);
 
 afterAll(async () => {
@@ -116,6 +121,7 @@ afterAll(async () => {
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  await cleanupTestGrantRole(stamp);
 });
 
 describe('variant generation engine', () => {

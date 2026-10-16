@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../app.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 /**
  * Phase 15 regression: GET/PATCH /admin/customers/:id must apply the same
@@ -56,8 +57,10 @@ beforeAll(async () => {
   app = await buildApp();
   await createUser(emails.customer, 'customer');
   await createUser(emails.otherCustomer, 'customer');
-  await createUser(emails.staff, 'staff');
-  await createUser(emails.admin, 'admin');
+  const staffUser = await createUser(emails.staff, 'staff');
+  await grantTestPermissions(staffUser.id, stamp, ['customers.read']);
+  const adminUser = await createUser(emails.admin, 'admin');
+  await grantTestPermissions(adminUser.id, `${stamp}-admin`, ['customers.read', 'customers.manage']);
   await createUser(emails.superAdmin, 'super_admin');
 }, 60000);
 
@@ -68,6 +71,8 @@ afterAll(async () => {
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  await cleanupTestGrantRole(stamp);
+  await cleanupTestGrantRole(`${stamp}-admin`);
 });
 
 describe('customer detail authorization (Phase 15)', () => {

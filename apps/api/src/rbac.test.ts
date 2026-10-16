@@ -7,6 +7,7 @@ import { buildApp } from './app.js';
 import { hashPassword, hashToken } from './lib/auth.js';
 import { userHasPermissionSlugs } from './lib/permissions.js';
 import { prisma } from './lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from './test-helpers.js';
 
 let app: FastifyInstance;
 
@@ -52,8 +53,10 @@ async function createUser(email: string, roleSlug: string, status = 'ACTIVE') {
 beforeAll(async () => {
   app = await buildApp();
   await createUser(emails.customer, 'customer');
-  await createUser(emails.staff, 'staff');
-  await createUser(emails.admin, 'admin');
+  const staffUser = await createUser(emails.staff, 'staff');
+  await grantTestPermissions(staffUser.id, stamp, ['dashboard.read']);
+  const adminUser = await createUser(emails.admin, 'admin');
+  await grantTestPermissions(adminUser.id, `${stamp}-admin`, ['customers.read', 'customers.manage']);
   await createUser(emails.superAdmin, 'super_admin');
   await createUser(emails.suspended, 'customer', 'SUSPENDED');
   await createUser(emails.deleted, 'customer', 'DELETED');
@@ -67,6 +70,8 @@ afterAll(async () => {
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  await cleanupTestGrantRole(stamp);
+  await cleanupTestGrantRole(`${stamp}-admin`);
 });
 
 describe('account-status enforcement', () => {
@@ -171,7 +176,7 @@ describe('staff restriction', () => {
     expect(response.statusCode).toBe(200);
   });
 
-  it('staff can edit customer profile fields', async () => {
+  it('staff cannot edit customer profile fields (customers.manage is admin-only)', async () => {
     const target = await prisma.user.findUniqueOrThrow({ where: { email: emails.target } });
     const response = await app.inject({
       method: 'PATCH',
@@ -179,7 +184,7 @@ describe('staff restriction', () => {
       headers: { cookie: cookies[emails.staff] },
       payload: { firstName: 'StaffEdited' },
     });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(403);
   });
 
   it('staff cannot suspend customers', async () => {

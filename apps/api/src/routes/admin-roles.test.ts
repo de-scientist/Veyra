@@ -8,6 +8,7 @@ import { hashPassword, hashToken } from '../lib/auth.js';
 import { getUserPermissionSlugs } from '../lib/permissions.js';
 import { requireRole } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 /**
  * RBAC administration hardening regression (audit F1–F4).
@@ -77,6 +78,11 @@ beforeAll(async () => {
   await createUser(emails.customer, ['customer']);
   await createUser(emails.staff, ['staff']);
   await createUser(emails.admin, ['admin']);
+  // The privilege-boundary tests drive PATCH /admin/customers/:id with the
+  // admin actor, which now requires customers.manage (in-handler super-admin
+  // checks still apply on top).
+  const adminActor = await prisma.user.findUniqueOrThrow({ where: { email: emails.admin } });
+  await grantTestPermissions(adminActor.id, stamp, ['customers.read', 'customers.manage']);
   await createUser(emails.superA, ['super_admin']);
   await createUser(emails.superB, ['super_admin']);
   await createUser(emails.superCustomer, ['super_admin', 'customer']);
@@ -92,6 +98,7 @@ afterAll(async () => {
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
   await prisma.rolePermission.deleteMany({ where: { roleId: { in: createdRoleIds } } });
   await prisma.role.deleteMany({ where: { id: { in: createdRoleIds } } });
+  await cleanupTestGrantRole(stamp);
   await prisma.permission.deleteMany({ where: { id: { in: createdPermissionIds } } });
 });
 

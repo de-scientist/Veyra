@@ -120,6 +120,42 @@ async function revokeGrant(roleSlug: string, permSlug: string) {
   await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permissionId: permission.id } });
 }
 
+/**
+ * Runs `fn` with the given canonical-role grants temporarily removed,
+ * restoring exactly the rows that existed (no-op on unseeded databases).
+ * Needed because the shared dev database carries the seeded grant matrix on
+ * the canonical roles; hermetic stamp grants are immune to this by design.
+ * Safe under parallel suites: after the fixture updates, no suite depends on
+ * canonical-role grants (all fixtures use stamp-scoped grant roles).
+ */
+async function withCanonicalGrantsRevoked(roleSlug: string, permSlugs: string[], fn: () => Promise<void>) {
+  const role = await prisma.role.findUnique({ where: { slug: roleSlug } });
+  const removed: string[] = [];
+  if (role) {
+    for (const permSlug of permSlugs) {
+      const permission = await prisma.permission.findUnique({ where: { slug: permSlug } });
+      if (permission) {
+        const count = await prisma.rolePermission.count({ where: { roleId: role.id, permissionId: permission.id } });
+        if (count > 0) {
+          await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permissionId: permission.id } });
+          removed.push(permission.id);
+        }
+      }
+    }
+  }
+  try {
+    await fn();
+  } finally {
+    for (const permissionId of removed) {
+      await prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId: role!.id, permissionId } },
+        update: {},
+        create: { roleId: role!.id, permissionId },
+      });
+    }
+  }
+}
+
 beforeAll(async () => {
   setMediaConfigForTests({ cloudName: 'jb-test-cloud', apiKey: 'test-key', apiSecret: 'test-secret-never-commit', baseFolder: 'jb-mercantile' });
   app = await buildApp();
@@ -199,7 +235,12 @@ describe('catalogue reads vs writes', () => {
     expect((await call('POST', '/api/v1/admin/products', emails.staffBare, { name: 'X' })).statusCode).toBe(403);
     expect((await call('GET', '/api/v1/admin/coupons', emails.staffBare)).statusCode).toBe(403);
     expect((await call('GET', '/api/v1/admin/analytics/overview', emails.staffBare)).statusCode).toBe(403);
-    expect((await call('GET', '/api/v1/admin/dashboard', emails.staffBare)).statusCode).toBe(403);
+    // dashboard.read may be seeded on the canonical staff role in shared
+    // databases: revoke it around the assertion so the denial is about the
+    // missing grant, never about ambient database state.
+    await withCanonicalGrantsRevoked('staff', ['dashboard.read'], async () => {
+      expect((await call('GET', '/api/v1/admin/dashboard', emails.staffBare)).statusCode).toBe(403);
+    });
   });
 
   it('staff reads catalogue data but cannot write it', async () => {
@@ -213,8 +254,10 @@ describe('catalogue reads vs writes', () => {
   it('batch, nested, and alternate catalogue routes do not bypass guards', async () => {
     const admin = emails.adminFull;
     const staff = emails.staffReader;
-    // Batch variant update: unknown product → 404 past the guard for admin.
-    expect((await call('PATCH', '/api/v1/admin/products/00000000-0000-0000-0000-000000000000/variants', admin, { variants: [] })).statusCode).toBe(404);
+    // Batch variant update: admin passes the guard, then body validation
+    // rejects the empty variants array (400 still proves guard passage —
+    // validation runs after authorization, never before it).
+    expect((await call('PATCH', '/api/v1/admin/products/00000000-0000-0000-0000-000000000000/variants', admin, { variants: [] })).statusCode).toBe(400);
     expect((await call('PATCH', '/api/v1/admin/products/00000000-0000-0000-0000-000000000000/variants', staff, { variants: [] })).statusCode).toBe(403);
     // Nested barcode generation.
     expect((await call('POST', '/api/v1/admin/products/00000000-0000-0000-0000-000000000000/variants/barcodes/generate-missing', staff, {})).statusCode).toBe(403);
@@ -230,7 +273,7 @@ describe('catalogue reads vs writes', () => {
     expect(created.statusCode).toBe(200);
     const productId = (created.json() as { data: { id: string } }).data.id;
     try {
-      expect((await call('PATCH', `/api/v1/admin/products/${productId}`, emails.adminFull, { description: 'Edited.' })).statusCode).toBe(200);
+      expect((await call('PATCH', `/api/v1/admin/products/${productId}`, emails.adminFull, { name: `Renamed ${stamp}` })).statusCode).toBe(200);
     } finally {
       await prisma.product.deleteMany({ where: { id: productId } });
     }
@@ -285,7 +328,11 @@ describe('media, coupons, and reviews', () => {
     expect((await call('GET', '/api/v1/admin/coupons', emails.staffReader)).statusCode).toBe(403);
     expect((await call('GET', '/api/v1/admin/reviews', emails.staffReader)).statusCode).toBe(403);
     // Admin holding every grant except coupons.manage is denied coupons only.
-    expect((await call('GET', '/api/v1/admin/coupons', emails.adminNoCoupon)).statusCode).toBe(403);
+    // Canonical admin may carry a seeded coupons.manage grant in shared
+    // databases: revoke it around the assertion so denial is grant-scoped.
+    await withCanonicalGrantsRevoked('admin', ['coupons.manage'], async () => {
+      expect((await call('GET', '/api/v1/admin/coupons', emails.adminNoCoupon)).statusCode).toBe(403);
+    });
     expect((await call('GET', '/api/v1/admin/reviews', emails.adminNoCoupon)).statusCode).toBe(200);
     expect((await call('POST', '/api/v1/admin/reviews/00000000-0000-0000-0000-000000000000/moderate', emails.adminFull, { status: 'APPROVED' })).statusCode).toBe(404);
   });
@@ -344,14 +391,21 @@ describe('returns operations, sweep, and refund initiation vs completion', () =>
     expect((await call('GET', '/api/v1/admin/returns', emails.staffOps)).statusCode).toBe(200);
     expect((await call('POST', '/api/v1/admin/returns/00000000-0000-0000-0000-000000000000/review', emails.staffOps, {})).statusCode).toBe(404);
     expect((await call('POST', '/api/v1/admin/returns/00000000-0000-0000-0000-000000000000/inspect', emails.staffOps, { items: [] })).statusCode).toBe(404);
-    // orders.manage alone is not enough for inspect (restocks inventory).
-    expect((await call('POST', '/api/v1/admin/returns/00000000-0000-0000-0000-000000000000/inspect', emails.staffOrders, { items: [] })).statusCode).toBe(403);
-    expect((await call('GET', '/api/v1/admin/returns', emails.staffReader)).statusCode).toBe(403);
+    // orders.manage alone is not enough for inspect (restocks inventory), and
+    // the reader role reaches no returns route. Canonical staff may carry
+    // seeded operational grants in shared databases, so revoke them around
+    // these grant-absence assertions.
+    await withCanonicalGrantsRevoked('staff', ['orders.manage', 'inventory.manage'], async () => {
+      expect((await call('POST', '/api/v1/admin/returns/00000000-0000-0000-0000-000000000000/inspect', emails.staffOrders, { items: [] })).statusCode).toBe(403);
+      expect((await call('GET', '/api/v1/admin/returns', emails.staffReader)).statusCode).toBe(403);
+    });
   });
 
   it('reservation sweep enforces inventory.manage', async () => {
     expect((await call('POST', '/api/v1/admin/inventory/reservations/release-stale', emails.staffOps, {})).statusCode).toBe(200);
-    expect((await call('POST', '/api/v1/admin/inventory/reservations/release-stale', emails.staffReader, {})).statusCode).toBe(403);
+    await withCanonicalGrantsRevoked('staff', ['inventory.manage'], async () => {
+      expect((await call('POST', '/api/v1/admin/inventory/reservations/release-stale', emails.staffReader, {})).statusCode).toBe(403);
+    });
   });
 
   it('refund initiation and completion enforce separate rules', async () => {
@@ -361,9 +415,13 @@ describe('returns operations, sweep, and refund initiation vs completion', () =>
     // Staff (operations role, no refund grants) is denied both.
     expect((await call('POST', initiate, emails.staffOps, payload)).statusCode).toBe(403);
     // Initiation grant alone reaches the handler (404: no such return) but
-    // does not authorize completion.
+    // does not authorize completion. The canonical admin role may carry a
+    // seeded refunds.process grant in shared databases: revoke it around the
+    // separation assertion so completion denial is about the missing grant.
     expect((await call('POST', initiate, emails.adminReqOnly, payload)).statusCode).toBe(404);
-    expect((await call('POST', complete, emails.adminReqOnly, { providerReference: 'REF-123' })).statusCode).toBe(403);
+    await withCanonicalGrantsRevoked('admin', ['refunds.process'], async () => {
+      expect((await call('POST', complete, emails.adminReqOnly, { providerReference: 'REF-123' })).statusCode).toBe(403);
+    });
     // Full admin passes both guards (404: no such rows; no money moves).
     expect((await call('POST', initiate, emails.adminFull, payload)).statusCode).toBe(404);
     expect((await call('POST', complete, emails.adminFull, { providerReference: 'REF-123' })).statusCode).toBe(404);

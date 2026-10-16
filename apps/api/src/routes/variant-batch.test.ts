@@ -11,7 +11,7 @@ import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 let app: FastifyInstance;
 
 const stamp = `batch-${Date.now().toString(36)}`;
-const emails = { customer: `${stamp}-c@example.com`, staff: `${stamp}-s@example.com` };
+const emails = { customer: `${stamp}-c@example.com`, staff: `${stamp}-s@example.com`, admin: `${stamp}-a@example.com` };
 const cookies: Record<string, string> = {};
 const createdUserIds: string[] = [];
 const createdProductIds: string[] = [];
@@ -54,8 +54,13 @@ async function buildProduct(key: string, variantCount: number): Promise<{ produc
 beforeAll(async () => {
   app = await buildApp();
   await createUser(emails.customer, 'customer');
+  // Variant batch writes are admin-only (products.manage); restock-batch stays
+  // staff-operable (inventory.manage). Staff variant-write denial is covered
+  // in rbac-admin-routes.test.ts.
   const staffUser = await createUser(emails.staff, 'staff');
   await grantTestPermissions(staffUser.id, stamp, ['inventory.manage']);
+  const adminUser = await createUser(emails.admin, 'admin');
+  await grantTestPermissions(adminUser.id, `${stamp}-admin`, ['products.manage', 'products.read']);
 }, 60000);
 
 afterAll(async () => {
@@ -74,6 +79,7 @@ afterAll(async () => {
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
   await cleanupTestGrantRole(stamp);
+  await cleanupTestGrantRole(`${stamp}-admin`);
 });
 
 describe('batch variant + inventory endpoints', () => {
@@ -84,7 +90,7 @@ describe('batch variant + inventory endpoints', () => {
 
   it('updates several variant prices in one transaction', async () => {
     const { productId, variantIds } = await buildProduct('price', 2);
-    const response = await call('PATCH', `/api/v1/admin/products/${productId}/variants`, emails.staff, {
+    const response = await call('PATCH', `/api/v1/admin/products/${productId}/variants`, emails.admin, {
       variants: [
         { id: variantIds[0], price: 2500 },
         { id: variantIds[1], price: 3000, compareAtPrice: 3500 },
@@ -100,19 +106,19 @@ describe('batch variant + inventory endpoints', () => {
 
   it('rejects batch updates atomically (unknown id, duplicates, negative price)', async () => {
     const { productId, variantIds } = await buildProduct('price-fail', 2);
-    const unknown = await call('PATCH', `/api/v1/admin/products/${productId}/variants`, emails.staff, {
+    const unknown = await call('PATCH', `/api/v1/admin/products/${productId}/variants`, emails.admin, {
       variants: [{ id: variantIds[0], price: 2500 }, { id: 'no-such-variant', price: 2500 }],
     });
     expect(unknown.statusCode).toBe(404);
     // Nothing was partially applied.
     expect(await prisma.productVariant.findUniqueOrThrow({ where: { id: variantIds[0] } }).then((row) => Number(row.priceOverride))).toBe(1000);
 
-    const duplicate = await call('PATCH', `/api/v1/admin/products/${productId}/variants`, emails.staff, {
+    const duplicate = await call('PATCH', `/api/v1/admin/products/${productId}/variants`, emails.admin, {
       variants: [{ id: variantIds[0], price: 2500 }, { id: variantIds[0], price: 2600 }],
     });
     expect(duplicate.statusCode).toBe(400);
 
-    const negative = await call('PATCH', `/api/v1/admin/products/${productId}/variants`, emails.staff, {
+    const negative = await call('PATCH', `/api/v1/admin/products/${productId}/variants`, emails.admin, {
       variants: [{ id: variantIds[0], price: -5 }],
     });
     expect(negative.statusCode).toBe(400);

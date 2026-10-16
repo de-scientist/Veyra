@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../app.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 /**
  * Phase B commerce matrix: cart, checkout, inventory, and order creation
@@ -167,6 +168,7 @@ describe('commerce flow (Phase B)', () => {
     await prisma.session.deleteMany({ where: { userId: { in: created.users } } });
     await prisma.userRole.deleteMany({ where: { userId: { in: created.users } } });
     await prisma.user.deleteMany({ where: { id: { in: created.users } } });
+    await cleanupTestGrantRole(`sweep-${stamp}`);
   }, 60000);
 
   async function trackOrder(orderNumber: string) {
@@ -447,6 +449,7 @@ describe('commerce flow (Phase B)', () => {
       await prisma.userRole.create({ data: { userId: staff.id, roleId: staffRole.id } });
       const rawToken = crypto.randomUUID();
       await prisma.session.create({ data: { userId: staff.id, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 3600000) } });
+      await grantTestPermissions(staff.id, `sweep-${stamp}`, ['inventory.manage']);
       const sweep = await app.inject({ method: 'POST', url: '/api/v1/admin/inventory/reservations/release-stale', headers: { cookie: `veyra_session=${rawToken}` } });
       expect(sweep.statusCode).toBe(200);
       expect(((sweep.json() as { data: { released: number } }).data.released)).toBeGreaterThanOrEqual(1);

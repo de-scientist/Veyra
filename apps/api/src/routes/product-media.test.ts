@@ -7,6 +7,7 @@ import { buildApp } from '../app.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { setMediaConfigForTests } from '../lib/media/cloudinary.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 vi.mock('../lib/media/cloudinary.js', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../lib/media/cloudinary.js')>();
@@ -57,6 +58,7 @@ async function createUser(email: string, roleSlug: string) {
     data: { userId: user.id, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 3600000) },
   });
   cookies[email] = `veyra_session=${rawToken}`;
+  return user;
 }
 
 async function call(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, email: string | null, payload?: Record<string, unknown>) {
@@ -72,8 +74,10 @@ beforeAll(async () => {
   });
   app = await buildApp();
   await createUser(emails.customer, 'customer');
-  await createUser(emails.staff, 'staff');
-  await createUser(emails.admin, 'admin');
+  const staffUser = await createUser(emails.staff, 'staff');
+  await grantTestPermissions(staffUser.id, stamp, ['products.read']);
+  const adminUser = await createUser(emails.admin, 'admin');
+  await grantTestPermissions(adminUser.id, `${stamp}-admin`, ['products.manage', 'products.read']);
 
   const a = await prisma.product.create({
     data: { name: `Media Product A ${stamp}`, slug: `media-a-${stamp}`, description: 'Product A for media tests.', status: 'DRAFT' },
@@ -104,6 +108,8 @@ afterAll(async () => {
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  await cleanupTestGrantRole(stamp);
+  await cleanupTestGrantRole(`${stamp}-admin`);
 });
 
 describe('product image authorization matrix', () => {
@@ -123,10 +129,11 @@ describe('product image authorization matrix', () => {
     ).toBe(403);
   });
 
-  it('staff reads an empty gallery', async () => {
+  it('staff reads an empty gallery but cannot write product media', async () => {
     const response = await call('GET', `/api/v1/admin/products/${productA}/images`, emails.staff);
     expect(response.statusCode).toBe(200);
     expect((response.json() as { data: unknown[] }).data).toEqual([]);
+    expect((await call('POST', `/api/v1/admin/products/${productA}/images`, emails.staff, fakeResult('denied'))).statusCode).toBe(403);
   });
 });
 
@@ -135,7 +142,7 @@ describe('product image CRUD', () => {
   let secondId = '';
 
   it('creates the first image as primary at position 0', async () => {
-    const response = await call('POST', `/api/v1/admin/products/${productA}/images`, emails.staff, {
+    const response = await call('POST', `/api/v1/admin/products/${productA}/images`, emails.admin, {
       ...fakeResult('first'),
       altText: 'Blue blender',
     });
@@ -149,7 +156,7 @@ describe('product image CRUD', () => {
   });
 
   it('creates subsequent images as secondary in order', async () => {
-    const response = await call('POST', `/api/v1/admin/products/${productA}/images`, emails.staff, fakeResult('second'));
+    const response = await call('POST', `/api/v1/admin/products/${productA}/images`, emails.admin, fakeResult('second'));
     expect(response.statusCode).toBe(200);
     const image = (response.json() as { data: Record<string, unknown> }).data;
     secondId = image.id as string;
@@ -158,19 +165,19 @@ describe('product image CRUD', () => {
   });
 
   it('rejects foreign provider results, unknown products, and archived products', async () => {
-    const foreign = await call('POST', `/api/v1/admin/products/${productA}/images`, emails.staff, {
+    const foreign = await call('POST', `/api/v1/admin/products/${productA}/images`, emails.admin, {
       ...fakeResult('evil'),
       publicId: 'other-folder/evil',
     });
     expect(foreign.statusCode).toBe(400);
-    const missing = await call('POST', '/api/v1/admin/products/00000000-0000-0000-0000-000000000000/images', emails.staff, fakeResult('x'));
+    const missing = await call('POST', '/api/v1/admin/products/00000000-0000-0000-0000-000000000000/images', emails.admin, fakeResult('x'));
     expect(missing.statusCode).toBe(404);
-    const archived = await call('POST', `/api/v1/admin/products/${archivedProduct}/images`, emails.staff, fakeResult('x'));
+    const archived = await call('POST', `/api/v1/admin/products/${archivedProduct}/images`, emails.admin, fakeResult('x'));
     expect(archived.statusCode).toBe(409);
   });
 
   it('rejects cross-product variant assignment', async () => {
-    const response = await call('POST', `/api/v1/admin/products/${productA}/images`, emails.staff, {
+    const response = await call('POST', `/api/v1/admin/products/${productA}/images`, emails.admin, {
       ...fakeResult('v'),
       variantId: variantB,
     });
@@ -178,7 +185,7 @@ describe('product image CRUD', () => {
   });
 
   it('updates alt text but never provider fields', async () => {
-    const response = await call('PATCH', `/api/v1/admin/products/${productA}/images/${firstId}`, emails.staff, {
+    const response = await call('PATCH', `/api/v1/admin/products/${productA}/images/${firstId}`, emails.admin, {
       altText: '  Red  blender  ',
       // tamper probe: schema must strip provider fields (asserted below)
       publicId: 'jb-mercantile/products/tampered',
@@ -193,18 +200,18 @@ describe('product image CRUD', () => {
   it('blocks cross-product image access (IDOR/BOLA → 404)', async () => {
     expect((await call('GET', `/api/v1/admin/products/${productB}/images`, emails.staff)).statusCode).toBe(200);
     expect(
-      (await call('PATCH', `/api/v1/admin/products/${productB}/images/${firstId}`, emails.staff, { altText: 'x' })).statusCode,
+      (await call('PATCH', `/api/v1/admin/products/${productB}/images/${firstId}`, emails.admin, { altText: 'x' })).statusCode,
     ).toBe(404);
     expect(
-      (await call('DELETE', `/api/v1/admin/products/${productB}/images/${firstId}`, emails.staff)).statusCode,
+      (await call('DELETE', `/api/v1/admin/products/${productB}/images/${firstId}`, emails.admin)).statusCode,
     ).toBe(404);
     expect(
-      (await call('POST', `/api/v1/admin/products/${productB}/images/${firstId}/primary`, emails.staff)).statusCode,
+      (await call('POST', `/api/v1/admin/products/${productB}/images/${firstId}/primary`, emails.admin)).statusCode,
     ).toBe(404);
   });
 
   it('sets primary transactionally (exactly one primary)', async () => {
-    const response = await call('POST', `/api/v1/admin/products/${productA}/images/${secondId}/primary`, emails.staff);
+    const response = await call('POST', `/api/v1/admin/products/${productA}/images/${secondId}/primary`, emails.admin);
     expect(response.statusCode).toBe(200);
     const images = (response.json() as { data: Array<{ id: string; isPrimary: boolean }> }).data;
     expect(images.filter((i) => i.isPrimary)).toHaveLength(1);
@@ -218,7 +225,7 @@ describe('product image CRUD', () => {
     const response = await app.inject({
       method: 'POST',
       url: `/api/v1/admin/products/${productA}/images/${secondId}/primary`,
-      headers: { cookie: cookies[emails.staff], 'content-type': 'application/json' },
+      headers: { cookie: cookies[emails.admin], 'content-type': 'application/json' },
     });
     expect(response.statusCode).toBe(200);
     const images = (response.json() as { data: Array<{ id: string; isPrimary: boolean }> }).data;
@@ -227,13 +234,13 @@ describe('product image CRUD', () => {
   });
 
   it('reorders atomically and rejects partial/foreign sets', async () => {
-    const bad = await call('PATCH', `/api/v1/admin/products/${productA}/images/reorder`, emails.staff, { imageIds: [firstId] });
+    const bad = await call('PATCH', `/api/v1/admin/products/${productA}/images/reorder`, emails.admin, { imageIds: [firstId] });
     expect(bad.statusCode).toBe(400);
-    const dupe = await call('PATCH', `/api/v1/admin/products/${productA}/images/reorder`, emails.staff, {
+    const dupe = await call('PATCH', `/api/v1/admin/products/${productA}/images/reorder`, emails.admin, {
       imageIds: [firstId, firstId],
     });
     expect(dupe.statusCode).toBe(400);
-    const ok = await call('PATCH', `/api/v1/admin/products/${productA}/images/reorder`, emails.staff, {
+    const ok = await call('PATCH', `/api/v1/admin/products/${productA}/images/reorder`, emails.admin, {
       imageIds: [secondId, firstId],
     });
     expect(ok.statusCode).toBe(200);
@@ -248,7 +255,7 @@ describe('product image CRUD', () => {
     const before = (await call('GET', `/api/v1/admin/products/${productA}/images`, emails.staff).then((r) =>
       (r.json() as { data: Array<Record<string, unknown>> }).data.find((i) => i.id === firstId),
     )) as Record<string, unknown>;
-    const response = await call('POST', `/api/v1/admin/products/${productA}/images/${firstId}/replace`, emails.staff, {
+    const response = await call('POST', `/api/v1/admin/products/${productA}/images/${firstId}/replace`, emails.admin, {
       ...fakeResult('replacement'),
       altText: 'Replacement blender',
     });
@@ -264,8 +271,8 @@ describe('product image CRUD', () => {
 
   it('deletes the primary and promotes the next image deterministically', async () => {
     // firstId is secondary now; make it primary, then delete it.
-    await call('POST', `/api/v1/admin/products/${productA}/images/${firstId}/primary`, emails.staff);
-    const response = await call('DELETE', `/api/v1/admin/products/${productA}/images/${firstId}`, emails.staff);
+    await call('POST', `/api/v1/admin/products/${productA}/images/${firstId}/primary`, emails.admin);
+    const response = await call('DELETE', `/api/v1/admin/products/${productA}/images/${firstId}`, emails.admin);
     expect(response.statusCode).toBe(200);
     const data = (response.json() as { data: { images: Array<{ id: string; isPrimary: boolean }>; providerCleanup: string } }).data;
     expect(data.images).toHaveLength(1);
@@ -274,12 +281,12 @@ describe('product image CRUD', () => {
   });
 
   it('handles concurrent primary updates and double deletes safely', async () => {
-    const third = (await call('POST', `/api/v1/admin/products/${productA}/images`, emails.staff, fakeResult('third')).then(
+    const third = (await call('POST', `/api/v1/admin/products/${productA}/images`, emails.admin, fakeResult('third')).then(
       (r) => (r.json() as { data: { id: string } }).data,
     ));
     const [a, b] = await Promise.all([
-      call('POST', `/api/v1/admin/products/${productA}/images/${secondId}/primary`, emails.staff),
-      call('POST', `/api/v1/admin/products/${productA}/images/${third.id}/primary`, emails.staff),
+      call('POST', `/api/v1/admin/products/${productA}/images/${secondId}/primary`, emails.admin),
+      call('POST', `/api/v1/admin/products/${productA}/images/${third.id}/primary`, emails.admin),
     ]);
     expect(a.statusCode).toBe(200);
     expect(b.statusCode).toBe(200);
@@ -287,8 +294,8 @@ describe('product image CRUD', () => {
     expect(primaries).toBe(1);
 
     const [d1, d2] = await Promise.all([
-      call('DELETE', `/api/v1/admin/products/${productA}/images/${third.id}`, emails.staff),
-      call('DELETE', `/api/v1/admin/products/${productA}/images/${third.id}`, emails.staff),
+      call('DELETE', `/api/v1/admin/products/${productA}/images/${third.id}`, emails.admin),
+      call('DELETE', `/api/v1/admin/products/${productA}/images/${third.id}`, emails.admin),
     ]);
     const codes = [d1.statusCode, d2.statusCode].sort();
     expect(codes).toEqual([200, 404]);
