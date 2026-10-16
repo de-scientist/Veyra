@@ -7,6 +7,7 @@ import { buildApp } from '../app.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { handleMpesaCallback } from '../lib/payments/service.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 let app: FastifyInstance;
 
@@ -30,6 +31,7 @@ async function createUser(email: string, roleSlug: string) {
     data: { userId: user.id, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 3600000) },
   });
   cookies[email] = `veyra_session=${rawToken}`;
+  return user;
 }
 
 async function call(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, email: string | null, payload?: Record<string, unknown>) {
@@ -61,7 +63,8 @@ async function buildOrder(options?: { paymentStatus?: 'UNPAID' | 'PAID'; fulfill
 beforeAll(async () => {
   app = await buildApp();
   await createUser(emails.customer, 'customer');
-  await createUser(emails.staff, 'staff');
+  const staffUser = await createUser(emails.staff, 'staff');
+  await grantTestPermissions(staffUser.id, stamp, ['orders.manage']);
   const product = await prisma.product.create({
     data: { name: `Cancel Widget ${stamp}`, slug: `cancel-widget-${stamp}`, description: 'Cancellation fixture product.', status: 'ACTIVE', basePrice: 2500 },
   });
@@ -86,6 +89,7 @@ afterAll(async () => {
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  await cleanupTestGrantRole(stamp);
 });
 
 describe('order cancellation with inventory release', () => {
