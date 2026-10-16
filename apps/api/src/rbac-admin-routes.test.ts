@@ -231,16 +231,20 @@ describe('catalogue reads vs writes', () => {
   });
 
   it('staff with no grants is denied even with the operations role slug', async () => {
-    expect((await call('GET', '/api/v1/admin/products', emails.staffBare)).statusCode).toBe(403);
-    expect((await call('POST', '/api/v1/admin/products', emails.staffBare, { name: 'X' })).statusCode).toBe(403);
-    expect((await call('GET', '/api/v1/admin/coupons', emails.staffBare)).statusCode).toBe(403);
-    expect((await call('GET', '/api/v1/admin/analytics/overview', emails.staffBare)).statusCode).toBe(403);
-    // dashboard.read may be seeded on the canonical staff role in shared
-    // databases: revoke it around the assertion so the denial is about the
-    // missing grant, never about ambient database state.
-    await withCanonicalGrantsRevoked('staff', ['dashboard.read'], async () => {
-      expect((await call('GET', '/api/v1/admin/dashboard', emails.staffBare)).statusCode).toBe(403);
-    });
+    // Shared databases may carry seeded grants on the canonical staff role:
+    // neutralize the full staff matrix around these assertions so denial is
+    // about the missing grant, never ambient database state.
+    await withCanonicalGrantsRevoked(
+      'staff',
+      ['dashboard.read', 'products.read', 'customers.read', 'inventory.manage', 'orders.manage', 'fulfillment.view', 'fulfillment.process', 'delivery.manage'],
+      async () => {
+        expect((await call('GET', '/api/v1/admin/products', emails.staffBare)).statusCode).toBe(403);
+        expect((await call('POST', '/api/v1/admin/products', emails.staffBare, { name: 'X' })).statusCode).toBe(403);
+        expect((await call('GET', '/api/v1/admin/coupons', emails.staffBare)).statusCode).toBe(403);
+        expect((await call('GET', '/api/v1/admin/analytics/overview', emails.staffBare)).statusCode).toBe(403);
+        expect((await call('GET', '/api/v1/admin/dashboard', emails.staffBare)).statusCode).toBe(403);
+      },
+    );
   });
 
   it('staff reads catalogue data but cannot write it', async () => {
@@ -280,14 +284,19 @@ describe('catalogue reads vs writes', () => {
   });
 
   it('revoking a catalogue grant removes access immediately', async () => {
-    expect((await call('GET', '/api/v1/admin/products', emails.adminFull)).statusCode).toBe(200);
-    await revokeGrant(ROLE_FULL, 'products.read');
-    try {
-      expect((await call('GET', '/api/v1/admin/products', emails.adminFull)).statusCode).toBe(403);
-    } finally {
-      await ensureGrantRole(ROLE_FULL, ADMIN_SLUGS);
-    }
-    expect((await call('GET', '/api/v1/admin/products', emails.adminFull)).statusCode).toBe(200);
+    // The canonical admin role may carry a seeded products.read grant in
+    // shared databases: neutralize it so the stamp-role revocation below is
+    // what the assertion measures (restored afterwards by the helper).
+    await withCanonicalGrantsRevoked('admin', ['products.read'], async () => {
+      expect((await call('GET', '/api/v1/admin/products', emails.adminFull)).statusCode).toBe(200);
+      await revokeGrant(ROLE_FULL, 'products.read');
+      try {
+        expect((await call('GET', '/api/v1/admin/products', emails.adminFull)).statusCode).toBe(403);
+      } finally {
+        await ensureGrantRole(ROLE_FULL, ADMIN_SLUGS);
+      }
+      expect((await call('GET', '/api/v1/admin/products', emails.adminFull)).statusCode).toBe(200);
+    });
   });
 });
 
