@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../app.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 /**
  * Phase D eligibility gate + audit trail: the authoritative eligibility check
@@ -129,6 +130,7 @@ describe('fulfillment eligibility + audit (Phase D)', () => {
     const staff = await makeUser(`phase-d-elig-staff-${stamp}@example.com`, 'staff');
     staffCookie = staff.cookie;
     staffId = staff.user.id;
+    await grantTestPermissions(staff.user.id, `elig-${stamp}`, ['fulfillment.view', 'fulfillment.process', 'delivery.manage']);
   }, 60000);
 
   afterAll(async () => {
@@ -160,6 +162,7 @@ describe('fulfillment eligibility + audit (Phase D)', () => {
     await prisma.session.deleteMany({ where: { userId: { in: created.users } } });
     await prisma.userRole.deleteMany({ where: { userId: { in: created.users } } });
     await prisma.user.deleteMany({ where: { id: { in: created.users } } });
+    await cleanupTestGrantRole(`elig-${stamp}`);
   }, 60000);
 
   it('reports eligibility for paid, unpaid, and unknown orders', async () => {

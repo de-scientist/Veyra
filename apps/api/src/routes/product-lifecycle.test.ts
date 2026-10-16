@@ -7,6 +7,7 @@ import { buildApp } from '../app.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { setMediaConfigForTests } from '../lib/media/cloudinary.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 /**
  * Product-creation limitations remediation: reproducible runtime workflow.
@@ -40,6 +41,7 @@ async function createUser(email: string, roleSlug: string) {
     data: { userId: user.id, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 3600000) },
   });
   cookies[email] = `veyra_session=${rawToken}`;
+  return user;
 }
 
 async function call(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, email: string | null, payload?: Record<string, unknown>) {
@@ -67,7 +69,8 @@ beforeAll(async () => {
   setMediaConfigForTests({ cloudName: 'jb-test-cloud', apiKey: 'test-key', apiSecret: 'test-secret-never-commit', baseFolder: 'jb-mercantile' });
   app = await buildApp();
   await createUser(emails.customer, 'customer');
-  await createUser(emails.staff, 'staff');
+  const staffUser = await createUser(emails.staff, 'staff');
+  await grantTestPermissions(staffUser.id, stamp, ['inventory.manage']);
   const category = await prisma.category.create({
     data: { name: `Lc Cat ${stamp}`, slug: `lc-cat-${stamp}`, status: 'ACTIVE', code: `LC${stamp.slice(-3).toUpperCase()}`, skuTemplate: '{CATEGORY}-{COLOR}' },
   });
@@ -101,6 +104,7 @@ afterAll(async () => {
   await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: createdUserIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  await cleanupTestGrantRole(stamp);
 });
 
 describe('server-side publish readiness gate', () => {

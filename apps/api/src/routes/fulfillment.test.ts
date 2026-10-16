@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../app.js';
 import { hashPassword, hashToken } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from '../test-helpers.js';
 
 /**
  * Phase D fulfillment matrix: payment gate, delivery lifecycles (courier /
@@ -154,6 +155,7 @@ describe('fulfillment + delivery (Phase D)', () => {
     const staff = await makeUser(`phase-d-staff-${stamp}@example.com`, 'staff');
     staffCookie = staff.cookie;
     staffId = staff.user.id;
+    await grantTestPermissions(staff.user.id, `fulfill-${stamp}`, ['fulfillment.view', 'fulfillment.process', 'delivery.manage']);
   }, 60000);
 
   afterAll(async () => {
@@ -185,6 +187,7 @@ describe('fulfillment + delivery (Phase D)', () => {
     await prisma.session.deleteMany({ where: { userId: { in: created.users } } });
     await prisma.userRole.deleteMany({ where: { userId: { in: created.users } } });
     await prisma.user.deleteMany({ where: { id: { in: created.users } } });
+    await cleanupTestGrantRole(`fulfill-${stamp}`);
   }, 60000);
 
   describe('payment gate + authorization', () => {

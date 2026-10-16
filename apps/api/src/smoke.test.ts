@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from './app.js';
 import { hashPassword, hashToken } from './lib/auth.js';
 import { prisma } from './lib/prisma.js';
+import { cleanupTestGrantRole, grantTestPermissions } from './test-helpers.js';
 
 /**
  * Production smoke suite (sandbox-safe): exercises the critical customer and
@@ -59,6 +60,10 @@ describe('production smoke journey', () => {
       if (role.slug === 'customer') customerCookie = `veyra_session=${rawToken}`;
       else staffCookie = `veyra_session=${rawToken}`;
     }
+    // DB-permission grants for the enforced routes below (hermetic stamp role;
+    // canonical roles are never mutated).
+    const staffUser = await prisma.user.findUniqueOrThrow({ where: { email: createdIds.staffEmail } });
+    await grantTestPermissions(staffUser.id, `smoke-${stamp}`, ['orders.manage', 'inventory.manage']);
   }, 60000);
 
   it('probes are green', async () => {
@@ -220,6 +225,7 @@ describe('production smoke journey', () => {
     await prisma.session.deleteMany({ where: { userId: { in: createdIds.users } } });
     await prisma.userRole.deleteMany({ where: { userId: { in: createdIds.users } } });
     await prisma.user.deleteMany({ where: { id: { in: createdIds.users } } });
+    await cleanupTestGrantRole(`smoke-${stamp}`);
     expect(await prisma.product.count({ where: { slug } })).toBe(0);
     expect(await prisma.user.count({ where: { id: { in: createdIds.users } } })).toBe(0);
   });
