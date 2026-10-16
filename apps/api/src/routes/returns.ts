@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ReturnCondition, ReturnDisposition, ReturnStatus, ReturnType } from '@prisma/client';
 
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { requireFinancialAccess, requireOperationsAccess } from '../middleware/operations.js';
 import { HttpError } from '../lib/errors.js';
 import { sensitiveLimit } from '../lib/rateLimits.js';
@@ -85,7 +85,7 @@ export async function returnRoutes(app: FastifyInstance) {
     return { success: true, data: await requestRefund(returnId, currentUser(request), payload.idempotencyKey) };
   });
 
-  app.post('/admin/refunds/:refundId/process', { preHandler: requireFinancialAccess, ...sensitiveLimit() }, async (request) => {
+  app.post('/admin/refunds/:refundId/process', { preHandler: [requireFinancialAccess, requirePermission('refunds.process')], ...sensitiveLimit() }, async (request) => {
     const { refundId } = request.params as { refundId: string };
     const payload = completeRefundSchema.parse(request.body);
     return { success: true, data: await completeManualRefund(refundId, currentUser(request), payload.providerReference) };

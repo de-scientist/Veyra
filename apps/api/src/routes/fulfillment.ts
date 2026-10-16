@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { DeliveryStatus } from '@prisma/client';
 
 import { requireOperationsAccess } from '../middleware/operations.js';
+import { requirePermission } from '../middleware/auth.js';
 import { getSessionUserId } from '../lib/shopping.js';
 import { customerDelivery, fulfillmentDetail, fulfillmentEligibility, fulfillmentQueue, operationsUsers, startFulfillment, pickFulfillment, packFulfillment, assignDelivery, transitionDelivery, updateDeliveryDetails } from '../lib/fulfillment.js';
 import { HttpError } from '../lib/errors.js';
@@ -23,57 +24,57 @@ function confirmationToken(request: FastifyRequest) {
 }
 
 export async function fulfillmentRoutes(app: FastifyInstance) {
-  app.get('/admin/fulfillments', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/fulfillments', { preHandler: [requireOperationsAccess, requirePermission('fulfillment.view')] }, async (request) => {
     const value = (request.query as { status?: string }).status;
     const status = value ? z.nativeEnum(DeliveryStatus).parse(value) : undefined;
     return { success: true, data: await fulfillmentQueue(status) };
   });
 
-  app.get('/admin/operations-users', { preHandler: requireOperationsAccess }, async () => {
+  app.get('/admin/operations-users', { preHandler: [requireOperationsAccess, requirePermission('fulfillment.view')] }, async () => {
     return { success: true, data: await operationsUsers() };
   });
 
-  app.get('/admin/fulfillments/:orderNumber', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/fulfillments/:orderNumber', { preHandler: [requireOperationsAccess, requirePermission('fulfillment.view')] }, async (request) => {
     const { orderNumber } = request.params as { orderNumber: string };
     return { success: true, data: await fulfillmentDetail(orderNumber) };
   });
 
-  app.get('/admin/fulfillments/:orderNumber/eligibility', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/fulfillments/:orderNumber/eligibility', { preHandler: [requireOperationsAccess, requirePermission('fulfillment.view')] }, async (request) => {
     const { orderNumber } = request.params as { orderNumber: string };
     return { success: true, data: await fulfillmentEligibility(orderNumber) };
   });
 
-  app.post('/admin/fulfillments/:orderNumber/start', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/fulfillments/:orderNumber/start', { preHandler: [requireOperationsAccess, requirePermission('fulfillment.process')] }, async (request) => {
     const { orderNumber } = request.params as { orderNumber: string };
     const payload = noteSchema.parse(request.body ?? {});
     return { success: true, data: await startFulfillment(orderNumber, actor(request), payload.note) };
   });
 
-  app.post('/admin/fulfillments/:orderNumber/pick', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/fulfillments/:orderNumber/pick', { preHandler: [requireOperationsAccess, requirePermission('fulfillment.process')] }, async (request) => {
     const { orderNumber } = request.params as { orderNumber: string };
     const payload = noteSchema.parse(request.body ?? {});
     return { success: true, data: await pickFulfillment(orderNumber, actor(request), payload.note) };
   });
 
-  app.post('/admin/fulfillments/:orderNumber/pack', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/fulfillments/:orderNumber/pack', { preHandler: [requireOperationsAccess, requirePermission('fulfillment.process')] }, async (request) => {
     const { orderNumber } = request.params as { orderNumber: string };
     const payload = noteSchema.parse(request.body ?? {});
     return { success: true, data: await packFulfillment(orderNumber, actor(request), payload.note) };
   });
 
-  app.post('/admin/deliveries/:deliveryId/assign', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/deliveries/:deliveryId/assign', { preHandler: [requireOperationsAccess, requirePermission('delivery.manage')] }, async (request) => {
     const { deliveryId } = request.params as { deliveryId: string };
     const payload = assignmentSchema.parse(request.body);
     return { success: true, data: await assignDelivery(deliveryId, payload.assigneeId, actor(request)) };
   });
 
-  app.post('/admin/deliveries/:deliveryId/status', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/deliveries/:deliveryId/status', { preHandler: [requireOperationsAccess, requirePermission('delivery.manage')] }, async (request) => {
     const { deliveryId } = request.params as { deliveryId: string };
     const payload = statusSchema.parse(request.body);
     return { success: true, data: await transitionDelivery(deliveryId, payload.status, actor(request), payload.note) };
   });
 
-  app.post('/admin/deliveries/:deliveryId/details', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/deliveries/:deliveryId/details', { preHandler: [requireOperationsAccess, requirePermission('delivery.manage')] }, async (request) => {
     const { deliveryId } = request.params as { deliveryId: string };
     const payload = z.object({ courierProvider: z.string().trim().max(120).optional(), estimatedDeliveryAt: z.string().trim().max(64).nullable().optional() }).parse(request.body ?? {});
     return { success: true, data: await updateDeliveryDetails(deliveryId, payload, actor(request)) };

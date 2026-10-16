@@ -15,6 +15,7 @@ import { HttpError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import { generateProductVariants, previewVariantGeneration } from '../lib/variant-generation-service.js';
 import { requireOperationsAccess } from '../middleware/operations.js';
+import { requirePermission } from '../middleware/auth.js';
 import {
   normalizeSegment,
   skuConflictFromPrismaTarget,
@@ -795,7 +796,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
 
   // ---- Admin inventory operations (operations staff only) ----
 
-  app.get('/admin/inventory/lookup', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/inventory/lookup', { preHandler: [requireOperationsAccess, requirePermission('inventory.manage')] }, async (request) => {
     // Scanner/keyboard lookup: barcode (grouping tolerant) → variant + SKU +
     // inventory. Unknown codes 404 with safe next steps (never auto-create).
     const query = z.object({ barcode: z.string().min(1).max(64) }).parse(request.query);
@@ -810,7 +811,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/admin/inventory', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/inventory', { preHandler: [requireOperationsAccess, requirePermission('inventory.manage')] }, async (request) => {
     const query = paginationSchema.extend({
       lowStock: z.coerce.boolean().optional(),
       outOfStock: z.coerce.boolean().optional(),
@@ -833,7 +834,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: { inventory: filtered, pagination: { page: query.page, pageSize: query.pageSize, total: filtered.length, totalPages: Math.max(1, Math.ceil(filtered.length / query.pageSize)) } } };
   });
 
-  app.get('/admin/inventory/movements', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/inventory/movements', { preHandler: [requireOperationsAccess, requirePermission('inventory.manage')] }, async (request) => {
     const query = paginationSchema.extend({
       movementType: z.string().max(20).optional(),
       variantId: z.string().optional(),
@@ -849,7 +850,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: { movements, pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) } } };
   });
 
-  app.get('/admin/inventory/reservations', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/inventory/reservations', { preHandler: [requireOperationsAccess, requirePermission('inventory.manage')] }, async (request) => {
     const query = paginationSchema.extend({
       status: z.enum(['ACTIVE', 'CONVERTED', 'RELEASED', 'EXPIRED']).optional(),
     }).parse(request.query);
@@ -863,7 +864,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: { reservations, pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) } } };
   });
 
-  app.post('/admin/inventory/:variantId/restock', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/inventory/:variantId/restock', { preHandler: [requireOperationsAccess, requirePermission('inventory.manage')] }, async (request) => {
     const { variantId } = request.params as { variantId: string };
     const payload = restockSchema.parse(request.body);
     validateRestockQuantity(payload.quantity);
@@ -888,7 +889,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: updated };
   });
 
-  app.post('/admin/inventory/restock-batch', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/inventory/restock-batch', { preHandler: [requireOperationsAccess, requirePermission('inventory.manage')] }, async (request) => {
     // Bulk restock for the variant matrix (Phase 3): one transactional request
     // instead of N per-variant restocks. Same validation as single restock.
     const payload = z
@@ -945,7 +946,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return { success: true, data: updated };
   });
 
-  app.post('/admin/inventory/:variantId/adjust', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/inventory/:variantId/adjust', { preHandler: [requireOperationsAccess, requirePermission('inventory.manage')] }, async (request) => {
     const { variantId } = request.params as { variantId: string };
     const payload = adjustSchema.parse(request.body);
     const actor = actorId(request);

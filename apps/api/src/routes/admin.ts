@@ -12,6 +12,7 @@ import {
   requireOperationsAccess,
   requireSuperAdmin,
 } from '../middleware/operations.js';
+import { requirePermission } from '../middleware/auth.js';
 
 const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).max(100).default(1),
@@ -210,7 +211,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // ---- Order operations ----
-  app.get('/admin/orders', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/orders', { preHandler: [requireOperationsAccess, requirePermission('orders.manage')] }, async (request) => {
     const query = orderListSchema.parse(request.query);
     const where: Prisma.OrderWhereInput = {};
     if (query.status) where.status = query.status;
@@ -239,7 +240,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return { success: true, data: { orders: orders.map((o) => ({ ...o, grandTotal: Number(o.grandTotal), itemCount: o._count.items })), pagination: paginate(query.page, query.pageSize, total) } };
   });
 
-  app.get('/admin/orders/:orderNumber', { preHandler: requireOperationsAccess }, async (request) => {
+  app.get('/admin/orders/:orderNumber', { preHandler: [requireOperationsAccess, requirePermission('orders.manage')] }, async (request) => {
     const { orderNumber } = request.params as { orderNumber: string };
     const order = await prisma.order.findUnique({ where: { orderNumber }, include: orderInclude });
     if (!order) throw new HttpError(404, 'ORDER_NOT_FOUND', 'Order not found.');
@@ -250,7 +251,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // reservations idempotently (RELEASED movement, ORDER reference); paid or
   // fulfilled orders are directed to returns/refunds. Re-cancelling is a
   // no-op success — stock is never released twice.
-  app.post('/admin/orders/:orderNumber/cancel', { preHandler: requireOperationsAccess }, async (request) => {
+  app.post('/admin/orders/:orderNumber/cancel', { preHandler: [requireOperationsAccess, requirePermission('orders.manage')] }, async (request) => {
     const { orderNumber } = request.params as { orderNumber: string };
     const payload = z.object({ reason: z.string().min(3).max(200) }).parse(request.body);
     const result = await cancelOrder(orderNumber, actorId(request), payload.reason);

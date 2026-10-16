@@ -40,7 +40,12 @@ async function main() {
     },
   });
 
-  const adminPermissions = [
+  // Canonical permission catalogue. This list MUST stay in sync with PERMISSIONS in
+  // apps/api/src/lib/permissions.ts — routes pick existing slugs from that catalog
+  // instead of inventing new ones, and this seed is the authoritative store.
+  // Additive-only: reruns upsert missing rows and never delete custom grants.
+  const allPermissions = [
+    { name: 'View Dashboard', slug: 'dashboard.read', resource: 'dashboard', action: 'read' },
     { name: 'Manage Products', slug: 'products.manage', resource: 'products', action: 'manage' },
     { name: 'Manage Inventory', slug: 'inventory.manage', resource: 'inventory', action: 'manage' },
     { name: 'Manage Categories', slug: 'categories.manage', resource: 'categories', action: 'manage' },
@@ -49,12 +54,54 @@ async function main() {
     { name: 'View Fulfillment', slug: 'fulfillment.view', resource: 'fulfillment', action: 'read' },
     { name: 'Process Fulfillment', slug: 'fulfillment.process', resource: 'fulfillment', action: 'manage' },
     { name: 'Manage Delivery', slug: 'delivery.manage', resource: 'delivery', action: 'manage' },
+    { name: 'Process Refunds', slug: 'refunds.process', resource: 'refunds', action: 'manage' },
+    { name: 'View Customers', slug: 'customers.read', resource: 'customers', action: 'read' },
+    { name: 'Manage Customers', slug: 'customers.manage', resource: 'customers', action: 'manage' },
+    { name: 'Manage Users', slug: 'users.manage', resource: 'users', action: 'manage' },
+    { name: 'Manage Roles', slug: 'roles.manage', resource: 'roles', action: 'manage' },
     { name: 'View Audit Logs', slug: 'audit.read', resource: 'audit', action: 'read' },
     { name: 'View Notifications', slug: 'notifications.read', resource: 'notifications', action: 'read' },
     { name: 'Manage Notifications', slug: 'notifications.manage', resource: 'notifications', action: 'manage' },
+    { name: 'View Analytics', slug: 'analytics.read', resource: 'analytics', action: 'read' },
+    { name: 'Manage Settings', slug: 'settings.manage', resource: 'settings', action: 'manage' },
   ];
 
-  for (const permission of adminPermissions) {
+  // Least-privilege default grants (managed defaults for fresh installs).
+  // Admin: operational management incl. the already Fin-authorized refund completion.
+  // Never role/permission administration (users.manage, roles.manage) or system
+  // settings (settings.manage) — those stay super-admin-only by route guard.
+  const adminPermissionSlugs = [
+    'dashboard.read',
+    'products.manage',
+    'inventory.manage',
+    'categories.manage',
+    'collections.manage',
+    'orders.manage',
+    'fulfillment.view',
+    'fulfillment.process',
+    'delivery.manage',
+    'refunds.process',
+    'customers.read',
+    'customers.manage',
+    'audit.read',
+    'notifications.read',
+    'notifications.manage',
+    'analytics.read',
+  ];
+
+  // Staff: strictly inventory, orders and fulfillment (+ read-only dashboard).
+  // No catalogue/taxonomy management, no refunds, no customer administration,
+  // no analytics/media/settings, no role administration.
+  const staffPermissionSlugs = [
+    'dashboard.read',
+    'inventory.manage',
+    'orders.manage',
+    'fulfillment.view',
+    'fulfillment.process',
+    'delivery.manage',
+  ];
+
+  for (const permission of allPermissions) {
     await prisma.permission.upsert({
       where: { slug: permission.slug },
       update: {},
@@ -62,67 +109,32 @@ async function main() {
     });
   }
 
-  const permissionRecords = await prisma.permission.findMany({
-    where: {
-      slug: {
-        in: adminPermissions.map((item) => item.slug),
-      },
-    },
-  });
-
-  for (const permission of permissionRecords) {
-    await prisma.rolePermission.upsert({
-      where: {
-        roleId_permissionId: {
-          roleId: adminRole.id,
+  async function grantPermissions(roleId: string, slugs: string[]) {
+    const permissionRecords = await prisma.permission.findMany({
+      where: { slug: { in: slugs } },
+    });
+    for (const permission of permissionRecords) {
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId,
           permissionId: permission.id,
         },
-      },
-      update: {},
-      create: {
-        roleId: adminRole.id,
-        permissionId: permission.id,
-      },
-    });
+      });
+    }
   }
 
-  for (const permission of permissionRecords) {
-    await prisma.rolePermission.upsert({
-      where: {
-        roleId_permissionId: {
-          roleId: superAdminRole.id,
-          permissionId: permission.id,
-        },
-      },
-      update: {},
-      create: {
-        roleId: superAdminRole.id,
-        permissionId: permission.id,
-      },
-    });
-  }
-
-  await prisma.rolePermission.upsert({
-    where: {
-      roleId_permissionId: {
-        roleId: staffRole.id,
-        permissionId: permissionRecords.find((permission) => permission.slug === 'products.manage')?.id ?? '',
-      },
-    },
-    update: {},
-    create: {
-      roleId: staffRole.id,
-      permissionId: permissionRecords.find((permission) => permission.slug === 'products.manage')?.id ?? '',
-    },
-  });
-
-  for (const permission of permissionRecords.filter((entry) => entry.slug.startsWith('fulfillment.') || entry.slug.startsWith('delivery.'))) {
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId: staffRole.id, permissionId: permission.id } },
-      update: {},
-      create: { roleId: staffRole.id, permissionId: permission.id },
-    });
-  }
+  await grantPermissions(adminRole.id, adminPermissionSlugs);
+  // Super-admin resolves to the platform wildcard in code regardless of rows;
+  // mirroring the admin grant set keeps the directory listing truthful.
+  await grantPermissions(superAdminRole.id, adminPermissionSlugs);
+  await grantPermissions(staffRole.id, staffPermissionSlugs);
 
   const passwordHash = await bcrypt.hash('Admin123!', 10);
 
