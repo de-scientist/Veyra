@@ -188,7 +188,113 @@ support lookup; justified by the authz spec test blessing staff reads).
 No other grant-matrix changes. No `users.manage`/`roles.manage`/`settings.manage`
 grants to anyone. Super-admin wildcard covers all (no code change).
 
-## Test impact (fixtures to update; hermetic stamp roles, no canonical mutation)
+## Implementation record (Phase 2, completed 2026-10-17)
+
+### Final route-to-permission mapping (all AND-composed with the pre-existing role gate)
+
+- Catalogue reads (GET products, categories, collections, attributes,
+  product-collections, product detail incl. `storefront.ts`, product images
+  list) → `products.read`. All catalogue/taxonomy/barcode writes, batch
+  variant update, collections PUT, product-media writes, product-context
+  `sign-upload` (in-handler) → `products.manage`.
+- Coupons (list/create/update) → `coupons.manage`; reviews (list/moderate) →
+  `reviews.moderate`.
+- Customer list/detail → `customers.read`; customer PATCH →
+  `customers.manage` (in-handler admin check for status changes retained).
+- Payment list + manual-pending → `payments.read`; manual verify/reject →
+  `payments.manage`.
+- All 13 analytics routes (incl. export) → `analytics.read`; audit-log
+  viewer → `audit.read`.
+- Notifications list → `notifications.read`; process/resend →
+  `notifications.manage`.
+- Dashboard → `dashboard.read`; reservation sweep → `inventory.manage`.
+- Returns queue/detail/review/approve/reject/receive → `orders.manage`;
+  inspect → `orders.manage` + `inventory.manage` (restocks inventory).
+- Refund initiation → `[requireFinancialAccess, refunds.request]` (was Ops-only;
+  staff excluded by both gate and missing grant). Refund completion unchanged:
+  `[requireFinancialAccess, refunds.process]`.
+- Intentionally left role-gated: `GET /admin/settings` (no fitting grant;
+  `settings.manage` stays reserved/ungranted per constraint), SA-only
+  role/permission/user administration, customer self-service, public
+  payment/webhook endpoints.
+
+### Files changed
+
+`lib/permissions.ts` (+6 slugs), `prisma/seed.ts` (25-permission catalogue;
+admin 22 / staff 8 grants), routes `catalogue`, `storefront`, `product-media`,
+`media`, `admin`, `returns`, `payments`, `analytics`, `notifications`; new
+`src/rbac-admin-routes.test.ts` (20 tests) + shared `src/test-helpers.ts`
+extension usage; fixture updates in 14 existing suites (operators switched to
+admin with stamp grants where writes are admin-only; staff keeps stamp-scoped
+reads; `rbac` staff-edit now asserts 403; `smoke` analytics now asserts staff
+403). No frontend changes. No refactors.
+
+### New permission slugs and grants
+
+`products.read` (admin+staff), `refunds.request` (admin),
+`coupons.manage` (admin), `reviews.moderate` (admin), `payments.read`
+(admin), `payments.manage` (admin); plus `customers.read` granted to staff
+(read-only support lookup; administration stays admin-only). No
+`users.manage`/`roles.manage`/`settings.manage` grants to anyone. Super-admin
+wildcard unchanged.
+
+### Refund initiation/completion policy
+
+Initiation (`POST /admin/returns/:id/refund`) creates a PENDING obligation row
+only — no provider call, no money movement; guarded by state eligibility
+(`APPROVED_FOR_RESOLUTION` + REFUND type + PAID payment), refundable-balance
+cap, per-return idempotency + unique client key, all transactional (verified in
+`lib/returns.ts`). Completion attests external execution. Separate slugs
+(`refunds.request` vs `refunds.process`), both admin-only; staff holds
+neither. Customer return/refund request flows untouched. No live providers
+touched in tests (404-probes on unknown IDs; no refunds executed).
+
+### Test results
+
+- New `rbac-admin-routes.test.ts`: 20/20 (401/403 matrix per group, missing-grant
+  denial, revocation, read≠write, batch/nested coverage, initiation/completion
+  separation, SA-only preserved, settings residual pinned).
+- Prior `rbac-grants.test.ts`: 16/16 (hermeticity hardened with canonical-grant
+  revoke/restore helpers after seeded canonical grants surfaced in the shared DB).
+- Full canonical suite (`npx vitest run` from repo root): 722/724, then 20/20
+  on the fixed file. The 2 failures were seed-state sensitivity in the new
+  file itself (canonical staff/admin carry seeded grants in shared DBs), fixed
+  with revoke-around-assert helpers — not product-code defects.
+- `npm run typecheck --workspace @veyra/api`: clean.
+  `npm run lint --workspace @veyra/api`: 0 errors (1 pre-existing warning in
+  untouched `storefront.ts`). `npm run build --workspace @veyra/api`: clean.
+  Frontend build skipped (no frontend changes).
+- No failures concealed; no pre-existing failures observed in affected areas.
+
+### Test-hermeticity note (important for future suites)
+
+The shared dev database carries the seeded grant matrix on canonical roles.
+Fixtures must NEVER assert bare-canonical-role denials on staff/admin-scope
+routes, and must use stamp-scoped grant roles (`src/test-helpers.ts`) plus the
+`withCanonicalGrantsRevoked` pattern (see both rbac suites) for
+grant-absence assertions. Positives via stamp grants are immune to seed state.
+
+### Migration status
+
+No migration required or created. Seed (`npm run db:seed`) run twice against
+local dev `veyra_dev1`: "Seed complete" both times; read-only verification:
+25 permissions, 1 row per canonical role, admin 22 / staff 8 / customer 0 /
+super_admin 22 grants, zero duplicates, zero leftover fixtures.
+
+### Production confirmation
+
+No production database connected, seeded, or modified. No production data,
+roles, grants, credentials, or account assignments changed. No deployment
+performed.
+
+### Release status
+
+LOCAL IMPLEMENTATION ONLY; deployment not performed. Grant-matrix changes
+(`products.read`, `refunds.request`, `coupons.manage`, `reviews.moderate`,
+`payments.read`, `payments.manage`, staff `customers.read`) are presented for
+review before any account assignments, per the task.
+
+## Test impact (fixtures updated; hermetic stamp roles, no canonical mutation)
 
 Suites using staff on newly-gated writes must switch operators to admin (with
 stamp grants) or assert 403: `catalogue`, `variant-manual`, `variant-batch`,
@@ -197,6 +303,6 @@ stamp grants) or assert 403: `catalogue`, `variant-manual`, `variant-batch`,
 `dashboard.read`), `smoke` (analytics/overview → staff 403), `commerce`
 (sweep staff needs `inventory.manage`), `admin-dashboard-customers` (staff
 dashboard needs `dashboard.read`), `admin-customers-authz` (staff read needs
-`customers.read`; any staff PATCH → 403). New focused tests will cover each
-group: 401/403 matrix, revocation, read≠write, batch/nested coverage, refund
+`customers.read`; any staff PATCH → 403). New focused tests cover each
+group (see Implementation record above): 401/403 matrix, revocation, read≠write, batch/nested coverage, refund
 initiation/completion separation, SA-only administration preserved.
