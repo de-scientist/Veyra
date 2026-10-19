@@ -251,148 +251,350 @@ const PRODUCTS: ProductSeed[] = [
   },
 ];
 
-async function main() {
-  // Categories (parents before children).
+type SkuConflict = { sku: string };
+
+type DryRunReport = {
+  categories: { existing: number; missing: number };
+  collections: { existing: number; missing: number };
+  attributes: { existing: number; missing: number };
+  attributeValues: { existing: number; missing: number };
+  products: { existing: number; missing: number; skippedInactive: number };
+  variants: { existing: number; missing: number; conflicts: SkuConflict[] };
+  inventory: { existingPreserved: number; newWouldInitialize: number };
+  images: { existingPreserved: number; newWouldCreate: number };
+  memberships: { existingPreserved: number; missingWouldAdd: number };
+  warnings: string[];
+  blocked: boolean;
+  blockReason?: string;
+};
+
+function reportSummary(report: DryRunReport, dryRun: boolean) {
+  const lines: string[] = [];
+  lines.push('=== Catalogue seed preflight report ===');
+  lines.push(`Mode: ${dryRun ? 'dry-run (no changes)' : 'live'}`);
+  lines.push(`Categories: ${report.categories.existing} existing, ${report.categories.missing} missing`);
+  lines.push(`Collections: ${report.collections.existing} existing, ${report.collections.missing} missing`);
+  lines.push(`Attributes: ${report.attributes.existing} existing, ${report.attributes.missing} missing`);
+  lines.push(`Attribute values: ${report.attributeValues.existing} existing, ${report.attributeValues.missing} missing`);
+  lines.push(`Products: ${report.products.existing} existing (preserved), ${report.products.missing} missing (would be created), ${report.products.skippedInactive} inactive/soft-deleted skipped`);
+  lines.push(`Variants: ${report.variants.existing} existing (preserved), ${report.variants.missing} missing (would be created)`);
+  if (report.variants.conflicts.length > 0) {
+    lines.push(`SKU ownership conflicts: ${report.variants.conflicts.length} (blocking)`);
+    for (const _ of report.variants.conflicts) {
+      lines.push(`  - SKU ***REDACTED*** conflicts with a variant owned by a different product`);
+    }
+  }
+  lines.push(`Inventory: ${report.inventory.existingPreserved} existing preserved, ${report.inventory.newWouldInitialize} new would be initialized`);
+  lines.push(`Product images: ${report.images.existingPreserved} existing preserved, ${report.images.newWouldCreate} new would be created (new products only)`);
+  lines.push(`Collection memberships: ${report.memberships.existingPreserved} existing preserved, ${report.memberships.missingWouldAdd} missing would be added`);
+  if (report.warnings.length > 0) {
+    lines.push(`Warnings (${report.warnings.length}):`);
+    for (const w of report.warnings) lines.push(`  - ${w}`);
+  }
+  lines.push(`Blocked: ${report.blocked}${report.blockReason ? ` — ${report.blockReason}` : ''}`);
+  lines.push('=== End preflight report ===');
+  console.log(lines.join('\n'));
+}
+
+export async function main({
+  db = prisma,
+  dryRun = process.argv.includes('--dry-run'),
+}: {
+  db?: PrismaClient;
+  dryRun?: boolean;
+} = {}) {
+  const report: DryRunReport = {
+    categories: { existing: 0, missing: 0 },
+    collections: { existing: 0, missing: 0 },
+    attributes: { existing: 0, missing: 0 },
+    attributeValues: { existing: 0, missing: 0 },
+    products: { existing: 0, missing: 0, skippedInactive: 0 },
+    variants: { existing: 0, missing: 0, conflicts: [] },
+    inventory: { existingPreserved: 0, newWouldInitialize: 0 },
+    images: { existingPreserved: 0, newWouldCreate: 0 },
+    memberships: { existingPreserved: 0, missingWouldAdd: 0 },
+    warnings: [],
+    blocked: false,
+  };
+
+  // Bootstrap reference data additively: create missing, never rewrite existing.
   const categoryIds = new Map<string, string>();
   for (const category of CATEGORIES) {
-    const record = await prisma.category.upsert({
-      where: { slug: category.slug },
-      update: { name: category.name, description: category.description, status: 'ACTIVE', deletedAt: null, code: category.code, skuTemplate: category.skuTemplate },
-      create: { name: category.name, slug: category.slug, description: category.description, status: 'ACTIVE', code: category.code, skuTemplate: category.skuTemplate },
-    });
-    categoryIds.set(category.slug, record.id);
-  }
-  for (const category of CATEGORIES) {
-    if (category.parent) {
-      await prisma.category.update({
-        where: { slug: category.slug },
-        data: { parentId: categoryIds.get(category.parent) ?? null },
+    const existing = await db.category.findUnique({ where: { slug: category.slug } });
+    if (existing) {
+      categoryIds.set(category.slug, existing.id);
+      report.categories.existing++;
+      if (existing.deletedAt !== null) {
+        report.warnings.push(`Category '${category.slug}' is soft-deleted; left unchanged`);
+      }
+      continue;
+    }
+    report.categories.missing++;
+    if (!dryRun) {
+      const created = await db.category.create({
+        data: {
+          name: category.name,
+          slug: category.slug,
+          description: category.description,
+          status: 'ACTIVE',
+          code: category.code,
+          skuTemplate: category.skuTemplate,
+          parentId: category.parent ? (categoryIds.get(category.parent) ?? null) : null,
+        },
       });
+      categoryIds.set(category.slug, created.id);
     }
   }
 
   for (const collection of COLLECTIONS) {
-    await prisma.collection.upsert({
-      where: { slug: collection.slug },
-      update: { name: collection.name, description: collection.description, status: 'ACTIVE', deletedAt: null },
-      create: { name: collection.name, slug: collection.slug, description: collection.description, status: 'ACTIVE' },
-    });
+    const existing = await db.collection.findUnique({ where: { slug: collection.slug } });
+    if (existing) {
+      report.collections.existing++;
+      if (existing.deletedAt !== null) {
+        report.warnings.push(`Collection '${collection.slug}' is soft-deleted; left unchanged`);
+      }
+      continue;
+    }
+    report.collections.missing++;
+    if (!dryRun) {
+      await db.collection.create({
+        data: { name: collection.name, slug: collection.slug, description: collection.description, status: 'ACTIVE' },
+      });
+    }
   }
 
   const attributeIds = new Map<string, string>();
   const valueIds = new Map<string, string>();
   for (const [name, values] of Object.entries(ATTRIBUTE_VALUES)) {
-    const attribute = await prisma.attribute.upsert({
-      where: { slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-') },
-      update: { name },
-      create: { name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), type: 'STRING' },
-    });
-    attributeIds.set(name, attribute.id);
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const existingAttr = await db.attribute.findUnique({ where: { slug } });
+    if (existingAttr) {
+      attributeIds.set(name, existingAttr.id);
+      report.attributes.existing++;
+    } else {
+      report.attributes.missing++;
+      if (!dryRun) {
+        const created = await db.attribute.create({
+          data: { name, slug, type: 'STRING' },
+        });
+        attributeIds.set(name, created.id);
+      }
+    }
+    const attributeId = attributeIds.get(name);
+    if (!attributeId) continue;
     for (const { value, code } of values) {
-      const record = await prisma.attributeValue.upsert({
-        where: { attributeId_value: { attributeId: attribute.id, value } },
-        update: { code },
-        create: { attributeId: attribute.id, value, code },
+      const existingValue = await db.attributeValue.findFirst({
+        where: { attributeId, value },
       });
-      valueIds.set(`${name}:${value}`, record.id);
+      if (existingValue) {
+        valueIds.set(`${name}:${value}`, existingValue.id);
+        report.attributeValues.existing++;
+        continue;
+      }
+      report.attributeValues.missing++;
+      if (!dryRun) {
+        const created = await db.attributeValue.create({
+          data: { attributeId, value, code },
+        });
+        valueIds.set(`${name}:${value}`, created.id);
+      }
     }
   }
 
   for (const product of PRODUCTS) {
-    const record = await prisma.product.upsert({
-      where: { slug: product.slug },
-      update: {
-        name: product.name,
-        description: product.description,
-        status: 'ACTIVE',
-        deletedAt: null,
-        basePrice: product.basePrice,
-        categoryId: categoryIds.get(product.category) ?? null,
-        createdAt: new Date(product.createdAt),
-        styleCode: product.styleCode,
-      },
-      create: {
-        name: product.name,
-        slug: product.slug,
-        description: product.description,
-        status: 'ACTIVE',
-        basePrice: product.basePrice,
-        categoryId: categoryIds.get(product.category) ?? null,
-        createdAt: new Date(product.createdAt),
-        styleCode: product.styleCode,
-      },
-    });
+    await db.$transaction(async (tx) => {
+      const existingProduct = await tx.product.findUnique({ where: { slug: product.slug } });
+      const isNewProduct = !existingProduct;
 
-    // Variants + inventory + attribute mappings (idempotent by SKU).
-    for (const variant of product.variants) {
-      const created = await prisma.productVariant.upsert({
-        where: { sku: variant.sku },
-        update: {
-          name: variant.name,
-          status: 'ACTIVE',
-          priceOverride: variant.price,
-          compareAtPrice: variant.compareAtPrice ?? null,
-          archivedAt: null,
-          deletedAt: null,
-        },
-        create: {
-          productId: record.id,
-          sku: variant.sku,
-          name: variant.name,
-          status: 'ACTIVE',
-          priceOverride: variant.price,
-          compareAtPrice: variant.compareAtPrice ?? null,
-        },
-      });
-      await prisma.inventory.upsert({
-        where: { variantId: created.id },
-        update: { quantityOnHand: variant.stock, quantityReserved: 0, lowStockThreshold: 2 },
-        create: { variantId: created.id, quantityOnHand: variant.stock, quantityReserved: 0, lowStockThreshold: 2 },
-      });
-      for (const [attrName, attrValue] of Object.entries(variant.attrs)) {
-        const attributeId = attributeIds.get(attrName);
-        const attributeValueId = valueIds.get(`${attrName}:${attrValue}`);
-        if (!attributeId || !attributeValueId) throw new Error(`Unknown attribute mapping ${attrName}:${attrValue}`);
-        await prisma.variantAttributeValue.upsert({
-          where: { variantId_attributeId_attributeValueId: { variantId: created.id, attributeId, attributeValueId } },
-          update: {},
-          create: { variantId: created.id, attributeId, attributeValueId },
+      let productId: string | undefined = existingProduct?.id;
+
+      if (existingProduct) {
+        report.products.existing++;
+        if (existingProduct.deletedAt !== null || existingProduct.status !== 'ACTIVE') {
+          report.products.skippedInactive++;
+          report.warnings.push(`Product '${product.slug}' is inactive or soft-deleted; left unchanged (no reactivation)`);
+        }
+        // Never rewrite existing product fields (name, description, price, category, styleCode, createdAt).
+      } else {
+        report.products.missing++;
+        if (!dryRun) {
+          const created = await tx.product.create({
+            data: {
+              name: product.name,
+              slug: product.slug,
+              description: product.description,
+              status: 'ACTIVE',
+              basePrice: product.basePrice,
+              categoryId: categoryIds.get(product.category) ?? null,
+              createdAt: new Date(product.createdAt),
+              styleCode: product.styleCode,
+            },
+          });
+          productId = created.id;
+        }
+      }
+
+      // resolvedProductId is real for existing products and newly created (live) products.
+      // For dry-run new products it is undefined; writes that need it are skipped.
+      const resolvedProductId = productId;
+
+      // Read pass: validate SKU ownership before any variant writes.
+      const variantConflicts: SkuConflict[] = [];
+      for (const variant of product.variants) {
+        const existingVariant = await tx.productVariant.findUnique({ where: { sku: variant.sku } });
+        if (existingVariant && existingVariant.productId !== resolvedProductId) {
+          variantConflicts.push({ sku: variant.sku });
+        }
+      }
+      if (variantConflicts.length > 0) {
+        report.variants.conflicts.push(...variantConflicts);
+        report.blocked = true;
+        report.blockReason = 'SKU ownership conflict: one or more seed SKUs are owned by a different product';
+        throw new Error(report.blockReason);
+      }
+
+      for (const variant of product.variants) {
+        const existingVariant = await tx.productVariant.findUnique({ where: { sku: variant.sku } });
+        if (existingVariant) {
+          report.variants.existing++;
+          // Preserve existing variant: never reactivate, never change price/status/ownership.
+          if (existingVariant.deletedAt !== null || existingVariant.archivedAt !== null || existingVariant.status !== 'ACTIVE') {
+            report.warnings.push(`Variant '${variant.sku}' is archived/inactive/deleted; left unchanged`);
+          }
+          continue;
+        }
+        report.variants.missing++;
+        if (!dryRun) {
+          const createdVariant = await tx.productVariant.create({
+            data: {
+              productId: resolvedProductId,
+              sku: variant.sku,
+              name: variant.name,
+              status: 'ACTIVE',
+              priceOverride: variant.price,
+              compareAtPrice: variant.compareAtPrice ?? null,
+            },
+          });
+
+          // Initialize inventory only for a brand-new variant with no existing inventory row.
+          const existingInventory = await tx.inventory.findUnique({ where: { variantId: createdVariant.id } });
+          if (!existingInventory) {
+            report.inventory.newWouldInitialize++;
+            try {
+              await tx.inventory.create({
+                data: {
+                  variantId: createdVariant.id,
+                  quantityOnHand: variant.stock,
+                  quantityReserved: 0,
+                  lowStockThreshold: 2,
+                },
+              });
+            } catch (err: unknown) {
+              // Concurrent creation race: another process won the unique variantId constraint.
+              // Treat as already-existing; never overwrite with demo quantities.
+              const prismaErr = err as { code?: string };
+              if (prismaErr.code !== 'P2002') throw err;
+              report.inventory.existingPreserved++;
+            }
+          } else {
+            report.inventory.existingPreserved++;
+          }
+
+          for (const [attrName, attrValue] of Object.entries(variant.attrs)) {
+            const attributeId = attributeIds.get(attrName);
+            const attributeValueId = valueIds.get(`${attrName}:${attrValue}`);
+            if (!attributeId || !attributeValueId) {
+              throw new Error(`Unknown attribute mapping ${attrName}:${attrValue}`);
+            }
+            await tx.variantAttributeValue.upsert({
+              where: { variantId_attributeId_attributeValueId: { variantId: createdVariant.id, attributeId, attributeValueId } },
+              update: {},
+              create: { variantId: createdVariant.id, attributeId, attributeValueId },
+            });
+          }
+        }
+      }
+
+      // Images: create only for brand-new products; never touch existing galleries.
+      if (isNewProduct && !dryRun) {
+        report.images.newWouldCreate += product.images.length;
+        for (const [index, url] of product.images.entries()) {
+          await tx.productImage.create({
+            data: {
+              productId: resolvedProductId,
+              url,
+              altText: product.name,
+              isPrimary: index === 0,
+              sortOrder: index,
+            },
+          });
+        }
+      } else if (!isNewProduct) {
+        const existingImages = await tx.productImage.count({ where: { productId: resolvedProductId } });
+        report.images.existingPreserved += existingImages;
+        // Existing products with zero images are left empty (no silent gallery initialization).
+      } else {
+        report.images.newWouldCreate += product.images.length;
+      }
+
+      // Collection memberships: add missing only; never delete existing.
+      const wanted = new Set(product.collections ?? []);
+      if (product.featured) wanted.add('featured');
+      if (!dryRun) {
+        const existingMemberships = await tx.productCollection.findMany({
+          where: { productId: resolvedProductId },
+          select: { collectionId: true },
         });
+        const existingCollectionIds = new Set(existingMemberships.map((m) => m.collectionId));
+        const collectionSlugs = Array.from(wanted);
+        const collections = await tx.collection.findMany({
+          where: { slug: { in: collectionSlugs } },
+          select: { id: true, slug: true },
+        });
+        const collectionBySlug = new Map(collections.map((c) => [c.slug, c.id]));
+        for (const slug of collectionSlugs) {
+          const collectionId = collectionBySlug.get(slug);
+          if (!collectionId) continue; // collection does not exist; cannot create membership
+          if (existingCollectionIds.has(collectionId)) {
+            report.memberships.existingPreserved++;
+            continue;
+          }
+          report.memberships.missingWouldAdd++;
+          await tx.productCollection.create({
+            data: { productId: resolvedProductId, collectionId },
+          });
+        }
+      } else {
+        const wantedSlugs = Array.from(wanted);
+        const existingMemberships = await tx.productCollection.count({ where: { productId: resolvedProductId } });
+        report.memberships.existingPreserved += existingMemberships;
+        const existingSlugs = await tx.productCollection.findMany({
+          where: { productId: resolvedProductId },
+          select: { collection: { select: { slug: true } } },
+        });
+        const existingSlugSet = new Set(existingSlugs.map((m) => m.collection.slug));
+        for (const slug of wantedSlugs) {
+          if (existingSlugSet.has(slug)) continue;
+          report.memberships.missingWouldAdd++;
+        }
       }
-    }
-
-    // Images: rebuild deterministically from the seed (external URLs only).
-    await prisma.productImage.deleteMany({ where: { productId: record.id } });
-    for (const [index, url] of product.images.entries()) {
-      await prisma.productImage.create({
-        data: {
-          productId: record.id,
-          url,
-          altText: product.name,
-          isPrimary: index === 0,
-          sortOrder: index,
-        },
-      });
-    }
-
-    // Collection memberships.
-    const wanted = new Set(product.collections ?? []);
-    if (product.featured) wanted.add('featured');
-    await prisma.productCollection.deleteMany({ where: { productId: record.id } });
-    for (const slug of wanted) {
-      const collection = await prisma.collection.findUnique({ where: { slug } });
-      if (collection) {
-        await prisma.productCollection.create({ data: { productId: record.id, collectionId: collection.id } });
-      }
-    }
+    });
   }
 
-  console.log(`Seeded ${CATEGORIES.length} categories, ${COLLECTIONS.length} collections, ${PRODUCTS.length} products.`);
+  reportSummary(report, dryRun);
+
+  if (report.blocked) {
+    process.exit(1);
+  }
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+// Run only when invoked directly as a script (`tsx prisma/seed.catalogue.ts`),
+// so importing this module in tests does not execute the seed.
+if (process.argv[1] && process.argv[1].endsWith('seed.catalogue.ts')) {
+  main()
+    .catch((e) => {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}
