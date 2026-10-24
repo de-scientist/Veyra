@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { PrismaClient } from '@prisma/client';
 
-import { main } from '../../../prisma/seed.catalogue.js';
+import { main } from '../../../prisma/seed.catalogue';
 import { prisma } from '../lib/prisma.js';
 
 const stamp = `sc-${Date.now().toString(36)}`;
