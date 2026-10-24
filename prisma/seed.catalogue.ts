@@ -317,8 +317,10 @@ export async function main({
     blocked: false,
   };
 
-  // Bootstrap reference data additively: create missing, never rewrite existing.
   const categoryIds = new Map<string, string>();
+  const attributeIds = new Map<string, string>();
+  const valueIds = new Map<string, string>();
+
   for (const category of CATEGORIES) {
     const existing = await db.category.findUnique({ where: { slug: category.slug } });
     if (existing) {
@@ -327,22 +329,8 @@ export async function main({
       if (existing.deletedAt !== null) {
         report.warnings.push(`Category '${category.slug}' is soft-deleted; left unchanged`);
       }
-      continue;
-    }
-    report.categories.missing++;
-    if (!dryRun) {
-      const created = await db.category.create({
-        data: {
-          name: category.name,
-          slug: category.slug,
-          description: category.description,
-          status: 'ACTIVE',
-          code: category.code,
-          skuTemplate: category.skuTemplate,
-          parentId: category.parent ? (categoryIds.get(category.parent) ?? null) : null,
-        },
-      });
-      categoryIds.set(category.slug, created.id);
+    } else {
+      report.categories.missing++;
     }
   }
 
@@ -353,18 +341,11 @@ export async function main({
       if (existing.deletedAt !== null) {
         report.warnings.push(`Collection '${collection.slug}' is soft-deleted; left unchanged`);
       }
-      continue;
-    }
-    report.collections.missing++;
-    if (!dryRun) {
-      await db.collection.create({
-        data: { name: collection.name, slug: collection.slug, description: collection.description, status: 'ACTIVE' },
-      });
+    } else {
+      report.collections.missing++;
     }
   }
 
-  const attributeIds = new Map<string, string>();
-  const valueIds = new Map<string, string>();
   for (const [name, values] of Object.entries(ATTRIBUTE_VALUES)) {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const existingAttr = await db.attribute.findUnique({ where: { slug } });
@@ -373,219 +354,213 @@ export async function main({
       report.attributes.existing++;
     } else {
       report.attributes.missing++;
-      if (!dryRun) {
-        const created = await db.attribute.create({
-          data: { name, slug, type: 'STRING' },
-        });
-        attributeIds.set(name, created.id);
-      }
     }
-    const attributeId = attributeIds.get(name);
+
+    const attributeId = attributeIds.get(name) ?? existingAttr?.id;
     if (!attributeId) continue;
-    for (const { value, code } of values) {
-      const existingValue = await db.attributeValue.findFirst({
-        where: { attributeId, value },
-      });
+    for (const { value } of values) {
+      const existingValue = await db.attributeValue.findFirst({ where: { attributeId, value } });
       if (existingValue) {
         valueIds.set(`${name}:${value}`, existingValue.id);
         report.attributeValues.existing++;
+      } else {
+        report.attributeValues.missing++;
+      }
+    }
+  }
+
+  const productIds = new Map<string, string>();
+  for (const product of PRODUCTS) {
+    const existingProduct = await db.product.findUnique({ where: { slug: product.slug } });
+    const productId = existingProduct?.id;
+    if (productId) productIds.set(product.slug, productId);
+
+    if (existingProduct) {
+      report.products.existing++;
+      if (existingProduct.deletedAt !== null || existingProduct.status !== 'ACTIVE') {
+        report.products.skippedInactive++;
+        report.warnings.push(`Product '${product.slug}' is inactive or soft-deleted; left unchanged (no reactivation)`);
+      }
+      continue;
+    }
+
+    report.products.missing++;
+    report.images.newWouldCreate += product.images.length;
+    const wanted = new Set(product.collections ?? []);
+    if (product.featured) wanted.add('featured');
+    for (const slug of wanted) report.memberships.missingWouldAdd++;
+
+    for (const variant of product.variants) {
+      const existingVariant = await db.productVariant.findUnique({ where: { sku: variant.sku } });
+      if (existingVariant) {
+        report.variants.existing++;
+        if (existingVariant.deletedAt !== null || existingVariant.archivedAt !== null || existingVariant.status !== 'ACTIVE') {
+          report.warnings.push(`Variant '${variant.sku}' is archived/inactive/deleted; left unchanged`);
+        }
+        if (existingVariant.productId !== undefined) {
+          report.variants.conflicts.push({ sku: variant.sku });
+        }
+      } else {
+        report.variants.missing++;
+      }
+    }
+  }
+
+  if (report.variants.conflicts.length > 0) {
+    report.blocked = true;
+    report.blockReason = 'SKU ownership conflict: one or more seed SKUs are owned by a different product';
+    reportSummary(report, dryRun);
+    throw new Error(report.blockReason);
+  }
+
+  if (dryRun) {
+    reportSummary(report, true);
+    return;
+  }
+
+  for (const category of CATEGORIES) {
+    const existing = await db.category.findUnique({ where: { slug: category.slug } });
+    if (existing) {
+      categoryIds.set(category.slug, existing.id);
+      continue;
+    }
+    const created = await db.category.create({
+      data: {
+        name: category.name,
+        slug: category.slug,
+        description: category.description,
+        status: 'ACTIVE',
+        code: category.code,
+        skuTemplate: category.skuTemplate,
+        parentId: category.parent ? (categoryIds.get(category.parent) ?? null) : null,
+      },
+    });
+    categoryIds.set(category.slug, created.id);
+  }
+
+  for (const collection of COLLECTIONS) {
+    const existing = await db.collection.findUnique({ where: { slug: collection.slug } });
+    if (existing) continue;
+    await db.collection.create({
+      data: { name: collection.name, slug: collection.slug, description: collection.description, status: 'ACTIVE' },
+    });
+  }
+
+  for (const [name, values] of Object.entries(ATTRIBUTE_VALUES)) {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    let attributeId = attributeIds.get(name);
+    if (!attributeId) {
+      const created = await db.attribute.create({ data: { name, slug, type: 'STRING' } });
+      attributeId = created.id;
+      attributeIds.set(name, created.id);
+    }
+    for (const { value, code } of values) {
+      const existingValue = await db.attributeValue.findFirst({ where: { attributeId, value } });
+      if (existingValue) {
+        valueIds.set(`${name}:${value}`, existingValue.id);
         continue;
       }
-      report.attributeValues.missing++;
-      if (!dryRun) {
-        const created = await db.attributeValue.create({
-          data: { attributeId, value, code },
-        });
-        valueIds.set(`${name}:${value}`, created.id);
-      }
+      const created = await db.attributeValue.create({ data: { attributeId, value, code } });
+      valueIds.set(`${name}:${value}`, created.id);
     }
   }
 
   for (const product of PRODUCTS) {
     await db.$transaction(async (tx) => {
       const existingProduct = await tx.product.findUnique({ where: { slug: product.slug } });
-      const isNewProduct = !existingProduct;
-
-      let productId: string | undefined = existingProduct?.id;
-
       if (existingProduct) {
-        report.products.existing++;
-        if (existingProduct.deletedAt !== null || existingProduct.status !== 'ACTIVE') {
-          report.products.skippedInactive++;
-          report.warnings.push(`Product '${product.slug}' is inactive or soft-deleted; left unchanged (no reactivation)`);
-        }
-        // Never rewrite existing product fields (name, description, price, category, styleCode, createdAt).
-      } else {
-        report.products.missing++;
-        if (!dryRun) {
-          const created = await tx.product.create({
-            data: {
-              name: product.name,
-              slug: product.slug,
-              description: product.description,
-              status: 'ACTIVE',
-              basePrice: product.basePrice,
-              categoryId: categoryIds.get(product.category) ?? null,
-              createdAt: new Date(product.createdAt),
-              styleCode: product.styleCode,
-            },
-          });
-          productId = created.id;
-        }
+        return;
       }
 
-      // resolvedProductId is real for existing products and newly created (live) products.
-      // For dry-run new products it is undefined; writes that need it are skipped.
-      const resolvedProductId = productId;
-
-      // Read pass: validate SKU ownership before any variant writes.
-      const variantConflicts: SkuConflict[] = [];
-      for (const variant of product.variants) {
-        const existingVariant = await tx.productVariant.findUnique({ where: { sku: variant.sku } });
-        if (existingVariant && existingVariant.productId !== resolvedProductId) {
-          variantConflicts.push({ sku: variant.sku });
-        }
-      }
-      if (variantConflicts.length > 0) {
-        report.variants.conflicts.push(...variantConflicts);
-        report.blocked = true;
-        report.blockReason = 'SKU ownership conflict: one or more seed SKUs are owned by a different product';
-        throw new Error(report.blockReason);
-      }
+      const created = await tx.product.create({
+        data: {
+          name: product.name,
+          slug: product.slug,
+          description: product.description,
+          status: 'ACTIVE',
+          basePrice: product.basePrice,
+          categoryId: categoryIds.get(product.category) ?? null,
+          createdAt: new Date(product.createdAt),
+          styleCode: product.styleCode,
+        },
+      });
 
       for (const variant of product.variants) {
         const existingVariant = await tx.productVariant.findUnique({ where: { sku: variant.sku } });
-        if (existingVariant) {
-          report.variants.existing++;
-          // Preserve existing variant: never reactivate, never change price/status/ownership.
-          if (existingVariant.deletedAt !== null || existingVariant.archivedAt !== null || existingVariant.status !== 'ACTIVE') {
-            report.warnings.push(`Variant '${variant.sku}' is archived/inactive/deleted; left unchanged`);
-          }
-          continue;
-        }
-        report.variants.missing++;
-        if (!dryRun) {
-          const createdVariant = await tx.productVariant.create({
+        if (existingVariant) continue;
+
+        const createdVariant = await tx.productVariant.create({
+          data: {
+            productId: created.id,
+            sku: variant.sku,
+            name: variant.name,
+            status: 'ACTIVE',
+            priceOverride: variant.price,
+            compareAtPrice: variant.compareAtPrice ?? null,
+          },
+        });
+
+        const existingInventory = await tx.inventory.findUnique({ where: { variantId: createdVariant.id } });
+        if (!existingInventory) {
+          await tx.inventory.create({
             data: {
-              productId: resolvedProductId,
-              sku: variant.sku,
-              name: variant.name,
-              status: 'ACTIVE',
-              priceOverride: variant.price,
-              compareAtPrice: variant.compareAtPrice ?? null,
-            },
-          });
-
-          // Initialize inventory only for a brand-new variant with no existing inventory row.
-          const existingInventory = await tx.inventory.findUnique({ where: { variantId: createdVariant.id } });
-          if (!existingInventory) {
-            report.inventory.newWouldInitialize++;
-            try {
-              await tx.inventory.create({
-                data: {
-                  variantId: createdVariant.id,
-                  quantityOnHand: variant.stock,
-                  quantityReserved: 0,
-                  lowStockThreshold: 2,
-                },
-              });
-            } catch (err: unknown) {
-              // Concurrent creation race: another process won the unique variantId constraint.
-              // Treat as already-existing; never overwrite with demo quantities.
-              const prismaErr = err as { code?: string };
-              if (prismaErr.code !== 'P2002') throw err;
-              report.inventory.existingPreserved++;
-            }
-          } else {
-            report.inventory.existingPreserved++;
-          }
-
-          for (const [attrName, attrValue] of Object.entries(variant.attrs)) {
-            const attributeId = attributeIds.get(attrName);
-            const attributeValueId = valueIds.get(`${attrName}:${attrValue}`);
-            if (!attributeId || !attributeValueId) {
-              throw new Error(`Unknown attribute mapping ${attrName}:${attrValue}`);
-            }
-            await tx.variantAttributeValue.upsert({
-              where: { variantId_attributeId_attributeValueId: { variantId: createdVariant.id, attributeId, attributeValueId } },
-              update: {},
-              create: { variantId: createdVariant.id, attributeId, attributeValueId },
-            });
-          }
-        }
-      }
-
-      // Images: create only for brand-new products; never touch existing galleries.
-      if (isNewProduct && !dryRun) {
-        report.images.newWouldCreate += product.images.length;
-        for (const [index, url] of product.images.entries()) {
-          await tx.productImage.create({
-            data: {
-              productId: resolvedProductId,
-              url,
-              altText: product.name,
-              isPrimary: index === 0,
-              sortOrder: index,
+              variantId: createdVariant.id,
+              quantityOnHand: variant.stock,
+              quantityReserved: 0,
+              lowStockThreshold: 2,
             },
           });
         }
-      } else if (!isNewProduct) {
-        const existingImages = await tx.productImage.count({ where: { productId: resolvedProductId } });
-        report.images.existingPreserved += existingImages;
-        // Existing products with zero images are left empty (no silent gallery initialization).
-      } else {
-        report.images.newWouldCreate += product.images.length;
+
+        for (const [attrName, attrValue] of Object.entries(variant.attrs)) {
+          const attributeId = attributeIds.get(attrName);
+          const attributeValueId = valueIds.get(`${attrName}:${attrValue}`);
+          if (!attributeId || !attributeValueId) {
+            throw new Error(`Unknown attribute mapping ${attrName}:${attrValue}`);
+          }
+          await tx.variantAttributeValue.upsert({
+            where: { variantId_attributeId_attributeValueId: { variantId: createdVariant.id, attributeId, attributeValueId } },
+            update: {},
+            create: { variantId: createdVariant.id, attributeId, attributeValueId },
+          });
+        }
       }
 
-      // Collection memberships: add missing only; never delete existing.
+      for (const [index, url] of product.images.entries()) {
+        await tx.productImage.create({
+          data: {
+            productId: created.id,
+            url,
+            altText: product.name,
+            isPrimary: index === 0,
+            sortOrder: index,
+          },
+        });
+      }
+
       const wanted = new Set(product.collections ?? []);
       if (product.featured) wanted.add('featured');
-      if (!dryRun) {
-        const existingMemberships = await tx.productCollection.findMany({
-          where: { productId: resolvedProductId },
-          select: { collectionId: true },
+      const existingMemberships = await tx.productCollection.findMany({
+        where: { productId: created.id },
+        select: { collectionId: true },
+      });
+      const existingCollectionIds = new Set(existingMemberships.map((m) => m.collectionId));
+      const collections = await tx.collection.findMany({
+        where: { slug: { in: Array.from(wanted) } },
+        select: { id: true, slug: true },
+      });
+      const collectionBySlug = new Map(collections.map((c) => [c.slug, c.id]));
+      for (const slug of wanted) {
+        const collectionId = collectionBySlug.get(slug);
+        if (!collectionId || existingCollectionIds.has(collectionId)) continue;
+        await tx.productCollection.create({
+          data: { productId: created.id, collectionId },
         });
-        const existingCollectionIds = new Set(existingMemberships.map((m) => m.collectionId));
-        const collectionSlugs = Array.from(wanted);
-        const collections = await tx.collection.findMany({
-          where: { slug: { in: collectionSlugs } },
-          select: { id: true, slug: true },
-        });
-        const collectionBySlug = new Map(collections.map((c) => [c.slug, c.id]));
-        for (const slug of collectionSlugs) {
-          const collectionId = collectionBySlug.get(slug);
-          if (!collectionId) continue; // collection does not exist; cannot create membership
-          if (existingCollectionIds.has(collectionId)) {
-            report.memberships.existingPreserved++;
-            continue;
-          }
-          report.memberships.missingWouldAdd++;
-          await tx.productCollection.create({
-            data: { productId: resolvedProductId, collectionId },
-          });
-        }
-      } else {
-        const wantedSlugs = Array.from(wanted);
-        const existingMemberships = await tx.productCollection.count({ where: { productId: resolvedProductId } });
-        report.memberships.existingPreserved += existingMemberships;
-        const existingSlugs = await tx.productCollection.findMany({
-          where: { productId: resolvedProductId },
-          select: { collection: { select: { slug: true } } },
-        });
-        const existingSlugSet = new Set(existingSlugs.map((m) => m.collection.slug));
-        for (const slug of wantedSlugs) {
-          if (existingSlugSet.has(slug)) continue;
-          report.memberships.missingWouldAdd++;
-        }
       }
     });
   }
 
-  reportSummary(report, dryRun);
-
-  if (report.blocked) {
-    process.exit(1);
-  }
+  reportSummary(report, false);
 }
 
 // Run only when invoked directly as a script (`tsx prisma/seed.catalogue.ts`),

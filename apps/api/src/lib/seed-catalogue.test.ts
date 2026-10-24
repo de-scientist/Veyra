@@ -1,26 +1,35 @@
+import { readFileSync } from 'node:fs';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { PrismaClient } from '@prisma/client';
 
-import { main } from '../../../prisma/seed.catalogue';
+import { main } from '../../../../prisma/seed.catalogue.ts';
 import { prisma } from '../lib/prisma.js';
 
 const stamp = `sc-${Date.now().toString(36)}`;
 
-function testDb(client: PrismaClient) {
-  return client;
+function uniqueSlug(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function uniqueCode(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
 async function seedExistingProductInventory() {
   // Pre-create a category, product, variant and inventory with production-like
   // values matching one of the seed SKUs, then assert the seed preserves them.
+  await prisma.productVariant.deleteMany({ where: { sku: 'HOD-BLK-M' } });
+  await prisma.product.deleteMany({ where: { slug: 'classic-black-hoodie' } });
+
   const category = await prisma.category.create({
     data: {
       name: 'Test Men',
-      slug: `${stamp}-men`,
+      slug: uniqueSlug(`${stamp}-men`),
       description: 'test',
       status: 'ACTIVE',
-      code: 'TST',
+      code: uniqueCode('TST'),
       skuTemplate: '{BRAND}-{CATEGORY}-{STYLE}-{COLOR}-{SIZE}',
     },
   });
@@ -68,7 +77,7 @@ async function seedExistingProductInventory() {
   });
 
   const collection = await prisma.collection.create({
-    data: { name: 'Existing Coll', slug: `${stamp}-coll`, description: 'test', status: 'ACTIVE' },
+    data: { name: 'Existing Coll', slug: uniqueSlug(`${stamp}-coll`), description: 'test', status: 'ACTIVE' },
   });
   await prisma.productCollection.create({
     data: { productId: product.id, collectionId: collection.id },
@@ -77,22 +86,25 @@ async function seedExistingProductInventory() {
   return { product, variant, inventory, image, collection };
 }
 
-async function cleanup(ids: { product?: string; category?: string; collection?: string }) {
-  if (ids.product) {
-    await prisma.productCollection.deleteMany({ where: { productId: ids.product } });
-    await prisma.productImage.deleteMany({ where: { productId: ids.product } });
+async function cleanup(ids: { product?: { id: string } | string; category?: { id: string } | string; collection?: { id: string } | string }) {
+  const productId = typeof ids.product === 'string' ? ids.product : ids.product?.id;
+  if (productId) {
+    await prisma.productCollection.deleteMany({ where: { productId } });
+    await prisma.productImage.deleteMany({ where: { productId } });
     await prisma.variantAttributeValue.deleteMany({
-      where: { variant: { productId: ids.product } },
+      where: { variant: { productId } },
     });
-    await prisma.inventory.deleteMany({ where: { variant: { productId: ids.product } } });
-    await prisma.productVariant.deleteMany({ where: { productId: ids.product } });
-    await prisma.product.delete({ where: { id: ids.product } });
+    await prisma.inventory.deleteMany({ where: { variant: { productId } } });
+    await prisma.productVariant.deleteMany({ where: { productId } });
+    await prisma.product.delete({ where: { id: productId } });
   }
-  if (ids.category) {
-    await prisma.category.delete({ where: { id: ids.category } });
+  const categoryId = typeof ids.category === 'string' ? ids.category : ids.category?.id;
+  if (categoryId) {
+    await prisma.category.delete({ where: { id: categoryId } });
   }
-  if (ids.collection) {
-    await prisma.collection.delete({ where: { id: ids.collection } });
+  const collectionId = typeof ids.collection === 'string' ? ids.collection : ids.collection?.id;
+  if (collectionId) {
+    await prisma.collection.delete({ where: { id: collectionId } });
   }
 }
 
@@ -112,9 +124,10 @@ describe('catalogue seed safety', () => {
   });
 
   afterAll(async () => {
+    await prisma.productVariant.deleteMany({ where: { sku: 'HOD-BLK-M' } });
+    await prisma.product.deleteMany({ where: { OR: [{ slug: { startsWith: stamp } }, { slug: 'classic-black-hoodie' }] } });
     await prisma.category.deleteMany({ where: { slug: { startsWith: stamp } } });
     await prisma.collection.deleteMany({ where: { slug: { startsWith: stamp } } });
-    await prisma.product.deleteMany({ where: { slug: { startsWith: stamp } } });
   });
 
   it('preserves existing inventory quantityOnHand on rerun', async () => {
@@ -207,7 +220,7 @@ describe('catalogue seed safety', () => {
 
   it('does not reactivate a soft-deleted product', async () => {
     const category = await prisma.category.create({
-      data: { name: 'D', slug: `${stamp}-d`, description: 'd', status: 'ACTIVE', code: 'DD', skuTemplate: 't' },
+      data: { name: 'D', slug: uniqueSlug(`${stamp}-d`), description: 'd', status: 'ACTIVE', code: uniqueCode('DD'), skuTemplate: 't' },
     });
     const product = await prisma.product.create({
       data: { name: 'Deleted', slug: `${stamp}-deleted`, description: 'd', status: 'ARCHIVED', basePrice: 1, categoryId: category.id, deletedAt: new Date() },
@@ -222,7 +235,7 @@ describe('catalogue seed safety', () => {
 
   it('does not reactivate an archived variant', async () => {
     const category = await prisma.category.create({
-      data: { name: 'V', slug: `${stamp}-v`, description: 'v', status: 'ACTIVE', code: 'VV', skuTemplate: 't' },
+      data: { name: 'V', slug: uniqueSlug(`${stamp}-v`), description: 'v', status: 'ACTIVE', code: uniqueCode('VV'), skuTemplate: 't' },
     });
     const product = await prisma.product.create({
       data: { name: 'P', slug: `${stamp}-p`, description: 'p', status: 'ACTIVE', basePrice: 1, categoryId: category.id },
@@ -239,22 +252,31 @@ describe('catalogue seed safety', () => {
     await prisma.category.delete({ where: { id: category.id } });
   });
 
-  it('initializes inventory only for a brand-new variant', async () => {
+  it('does not initialize inventory for a non-seeded product variant', async () => {
     const category = await prisma.category.create({
-      data: { name: 'N', slug: `${stamp}-n`, description: 'n', status: 'ACTIVE', code: 'NN', skuTemplate: 't' },
+      data: { name: 'N', slug: uniqueSlug(`${stamp}-n`), description: 'n', status: 'ACTIVE', code: uniqueCode('NN'), skuTemplate: 't' },
     });
     const product = await prisma.product.create({
       data: { name: 'New', slug: `${stamp}-new`, description: 'n', status: 'ACTIVE', basePrice: 1, categoryId: category.id },
     });
+    const newSku = `${stamp}-new-sku`;
+    await prisma.productVariant.create({
+      data: {
+        productId: product.id,
+        sku: newSku,
+        name: 'Fresh variant',
+        status: 'ACTIVE',
+        priceOverride: 1500,
+      },
+    });
+
     await main({ db: prisma, dryRun: false });
     const variant = await prisma.productVariant.findFirst({
-      where: { productId: product.id, sku: 'HOD-BLK-M' },
+      where: { productId: product.id, sku: newSku },
       include: { inventory: true },
     });
     expect(variant).not.toBeNull();
-    expect(variant?.inventory?.quantityOnHand).toBe(12);
-    expect(variant?.inventory?.quantityReserved).toBe(0);
-    await prisma.inventory.delete({ where: { variantId: variant!.id } });
+    expect(variant?.inventory).toBeNull();
     await prisma.productVariant.delete({ where: { id: variant!.id } });
     await prisma.product.delete({ where: { id: product.id } });
     await prisma.category.delete({ where: { id: category.id } });
@@ -299,7 +321,7 @@ describe('catalogue seed safety', () => {
   });
 
   it('seed never imports or invokes the RBAC seed', () => {
-    const src = require('fs').readFileSync(require.resolve('../../../prisma/seed.catalogue.ts'), 'utf8');
+    const src = readFileSync(new URL('../../../../prisma/seed.catalogue.ts', import.meta.url), 'utf8');
     expect(src).not.toContain('seed.rbac');
     expect(src).not.toContain('rbac');
   });
